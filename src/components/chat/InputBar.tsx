@@ -1,9 +1,8 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
+import { Lightbulb, CaretDown, Check, X, Stop, PaperPlaneRight, Paperclip, ArrowsClockwise } from '@phosphor-icons/react';
 import { useChatStore, useActiveTab, getActiveTabState, generateMessageId, isSessionBusy, registerLiveComposerSnapshotProvider, type ChatMessage } from '../../stores/chatStore';
 import { useSettingsStore, MODEL_OPTIONS, mapSessionModeToPermissionMode, setSessionModeLocal, type ThinkingLevel } from '../../stores/settingsStore';
 import { bridge, type UnifiedCommand } from '../../lib/tauri-bridge';
-import { ModelSelector } from './ModelSelector';
-// import { ModeSelector } from './ModeSelector';
 import { FileUploadChips } from './FileUploadChips';
 import { RewindPanel } from './RewindPanel';
 import { useFileAttachments } from '../../hooks/useFileAttachments';
@@ -18,7 +17,6 @@ import { envFingerprint, resolveModelForProvider, resolveModelOrError, spawnConf
 import { useProviderStore } from '../../stores/providerStore';
 import { PROVIDER_PRESETS } from '../../lib/provider-presets';
 import { stripAnsi } from '../../lib/strip-ansi';
-import { usePlanPanelStore } from './ChatPanel';
 import { PlanReviewCard } from './PlanReviewCard';
 import { PermissionCard } from './PermissionCard';
 import { QuestionCard } from './QuestionCard';
@@ -41,11 +39,11 @@ function buildInterruptedContinuationPrompt(interruptedAssistantText: string, ne
   const cleanNext = nextUserText.trim();
   if (!cleanInterrupted) return cleanNext;
   return [
-    '系统注记：你上一条回复在用户手动停止前，已经输出了下面这段未完成正文。',
-    '请把它视为本会话里你刚刚已经写出的内容，在此基础上继续，不要声称之前没有写过这些内容。',
-    '已输出正文：',
+    'System note: your previous reply was interrupted by the user before it finished. The incomplete output is shown below.',
+    'Treat this as content you have already written in this conversation. Continue from where you left off — do not claim you never wrote it.',
+    'Output so far:',
     cleanInterrupted,
-    '用户接下来的消息是基于这段已输出内容的后续指令：',
+    'The user\'s next message is a follow-up instruction based on the output above:',
     cleanNext,
   ].join('\n\n');
 }
@@ -97,18 +95,10 @@ function ThinkLevelSelector({ disabled = false }: { disabled?: boolean }) {
             : 'border-accent/30 bg-accent/10 text-accent'
           }`}
       >
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-          stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="8" cy="6" r="4" />
-          <path d="M5.5 9.5C5.5 11.5 6 13 8 13s2.5-1.5 2.5-3.5" />
-          <path d="M6.5 14h3" />
-        </svg>
+        <Lightbulb size={12} weight="light" />
         <span className="font-medium">{t(current.labelKey)}</span>
-        <svg width="8" height="8" viewBox="0 0 8 8" fill="none"
-          stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
-          className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`}>
-          <path d="M1.5 3L4 5.5 6.5 3" />
-        </svg>
+        <CaretDown size={8} weight="light"
+          className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
@@ -130,16 +120,13 @@ function ThinkLevelSelector({ disabled = false }: { disabled?: boolean }) {
               >
                 {t(level.labelKey)}
                 {isActive && (
-                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none"
-                    stroke="currentColor" strokeWidth="1.5" className="ml-auto">
-                    <path d="M2.5 6l2.5 2.5 4.5-4.5" />
-                  </svg>
+                  <Check size={10} weight="light" className="ml-auto" />
                 )}
               </button>
             );
           })}
           {thinkingSupport === 'ignored' && (
-            <div className="px-3 py-1.5 text-[10px] text-text-tertiary border-t border-border-subtle mt-1">
+            <div className="px-3 py-1.5 text-xs text-text-tertiary border-t border-border-subtle mt-1">
               {t('think.providerIgnored')}
             </div>
           )}
@@ -149,36 +136,6 @@ function ThinkLevelSelector({ disabled = false }: { disabled?: boolean }) {
   );
 }
 
-function PlanToggleButton() {
-  const t = useT();
-  const isOpen = usePlanPanelStore((s) => s.open);
-  const toggle = usePlanPanelStore((s) => s.toggle);
-  const hasPlanMessages = useActiveTab((t) =>
-    t.messages.some((m) => m.type === 'plan_review' || m.type === 'plan' || m.planContent),
-  );
-  const inPlanMode = useSettingsStore((s) => s.sessionMode) === 'plan';
-
-  // Only show when in plan mode or there are plan-related messages
-  if (!inPlanMode && !hasPlanMessages) return null;
-
-  return (
-    <button
-      onClick={toggle}
-      className={`p-1.5 rounded-lg transition-smooth flex items-center gap-1
-        ${isOpen
-          ? 'bg-accent/10 text-accent'
-          : 'text-text-tertiary hover:text-text-primary hover:bg-bg-secondary'
-        }`}
-      title={t('msg.viewPlan')}
-    >
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-        stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-        <path d="M3 4h10M3 8h8M3 12h5" />
-      </svg>
-      <span className="text-[10px]">Plan</span>
-    </button>
-  );
-}
 
 /* PlanApprovalBar removed — PlanReviewCard (triggered by ExitPlanMode detection)
    is the proper plan approval UI. The fallback bar was too broad: it appeared on
@@ -310,8 +267,8 @@ export function InputBar() {
   // Listen for plan-execute events from PlanReviewCard and Enter shortcut
   useEffect(() => {
     const handler = () => handlePlanApprove();
-    window.addEventListener('tokenicode:plan-execute', handler);
-    return () => window.removeEventListener('tokenicode:plan-execute', handler);
+    window.addEventListener('stavebak:plan-execute', handler);
+    return () => window.removeEventListener('stavebak:plan-execute', handler);
   }, [handlePlanApprove]);
 
   // Floating approval cards — unresolved plan_review / question messages
@@ -364,8 +321,8 @@ export function InputBar() {
 
       textareaRef.current.insertFileChip({ fullPath, label: displayPath });
     };
-    window.addEventListener('tokenicode:tree-file-inline', onTreeFileInline);
-    return () => window.removeEventListener('tokenicode:tree-file-inline', onTreeFileInline);
+    window.addEventListener('stavebak:tree-file-inline', onTreeFileInline);
+    return () => window.removeEventListener('stavebak:tree-file-inline', onTreeFileInline);
   }, []);
 
   // Slash command state
@@ -402,11 +359,11 @@ export function InputBar() {
         }
       }
     };
-    window.addEventListener('tokenicode:rewind', handler);
-    return () => window.removeEventListener('tokenicode:rewind', handler);
+    window.addEventListener('stavebak:rewind', handler);
+    return () => window.removeEventListener('stavebak:rewind', handler);
   }, [canRewind, t]);
 
-  // Double-Esc rewind shortcut disabled (#36 / #71) — rewind feature is hidden in TOKENICODE
+  // Double-Esc rewind shortcut disabled (#36 / #71) — rewind feature is hidden in Stavebak
 
   // Drag state (file drop)
   const [isDragging, setIsDragging] = useState(false);
@@ -528,7 +485,7 @@ export function InputBar() {
         return;
 
       case 'rewind':
-        window.dispatchEvent(new CustomEvent('tokenicode:rewind'));
+        window.dispatchEvent(new CustomEvent('stavebak:rewind'));
         return;
 
       // /compact is handled in the session stdin commands group below
@@ -658,7 +615,7 @@ export function InputBar() {
 
 
       // --- All CLI commands: pass through to active session via stdin ---
-      // TOKENICODE is a GUI wrapper — all slash commands are handled by Claude Code CLI.
+      // Stavebak is a GUI wrapper — all slash commands are handled by Claude Code CLI.
       default: {
         const stdinId = getActiveTabState().sessionMeta.stdinId;
         if (stdinId && tabId) {
@@ -760,7 +717,7 @@ export function InputBar() {
         resolved: true,
         interactionState: 'resolved',
       });
-      window.dispatchEvent(new CustomEvent('tokenicode:plan-execute'));
+      window.dispatchEvent(new CustomEvent('stavebak:plan-execute'));
       return;
     }
 
@@ -1006,7 +963,6 @@ export function InputBar() {
       // stdinId exists when: (a) a pre-warmed process is waiting, or (b) follow-up in active session.
       const submitTabState = getActiveTabState();
       let stdinId = submitTabState.sessionMeta.stdinId;
-      let stdinReady = submitTabState.sessionMeta.stdinReady === true;
       let sentViaStdin = false;
 
       // Phase 2 §2.1/§2.2: unified config-mismatch check. If ANY of
@@ -1030,7 +986,7 @@ export function InputBar() {
         const currentFp = envFingerprint();
         const sessionFp = getActiveTabState().sessionMeta.envFingerprint;
         if (currentFp !== sessionFp) {
-          console.warn('[TOKENICODE] API provider config changed, killing stale session');
+          console.warn('[Stavebak] API provider config changed, killing stale session');
           // Use lifecycle teardown — properly unregisters stdinTab mapping
           await teardownSession(stdinId, tabId, 'switch');
           await waitForStdinCleared(tabId, stdinId);
@@ -1039,7 +995,7 @@ export function InputBar() {
           // stream error handler will auto-retry without resume.
           setSessionMeta(tabId, { envFingerprint: undefined, providerSwitched: true, providerSwitchPendingText: text });
           stdinId = undefined;
-          stdinReady = false;
+
         } else {
           // Check if model changed since this process was spawned.
           // If so, kill the stale process and fall through to spawn a new one with --resume.
@@ -1048,7 +1004,7 @@ export function InputBar() {
           if (spawnedModel && currentModel !== spawnedModel) {
             const oldShort = MODEL_OPTIONS.find((m) => m.id === spawnedModel)?.short ?? spawnedModel;
             const newShort = MODEL_OPTIONS.find((m) => m.id === currentModel)?.short ?? currentModel;
-            console.warn(`[TOKENICODE] Model changed (${oldShort} → ${newShort}), killing stale session`);
+            console.warn(`[Stavebak] Model changed (${oldShort} → ${newShort}), killing stale session`);
             // Use lifecycle teardown — properly unregisters stdinTab mapping
             await teardownSession(stdinId, tabId, 'switch');
             await waitForStdinCleared(tabId, stdinId);
@@ -1056,7 +1012,7 @@ export function InputBar() {
             // Keep cliResumeId so we attempt resume (preserving context).
             setSessionMeta(tabId, { spawnedModel: undefined, modelSwitched: true, modelSwitchPendingText: text });
             stdinId = undefined;
-            stdinReady = false;
+  
           } else {
             // Phase 2 §2.1/§2.2: catch-all config-drift check covering dimensions
             // not caught by the envFingerprint / spawnedModel gates above —
@@ -1066,22 +1022,18 @@ export function InputBar() {
             const catchAllHash = spawnConfigHash();
             const sessionHash = getActiveTabState().sessionMeta.spawnConfigHash;
             if (sessionHash !== undefined && catchAllHash !== sessionHash) {
-              console.warn('[TOKENICODE] spawnConfigHash changed (thinking/misc), respawning');
+              console.warn('[Stavebak] spawnConfigHash changed (thinking/misc), respawning');
               await teardownSession(stdinId, tabId, 'switch');
               await waitForStdinCleared(tabId, stdinId);
               // Unlike provider/model switch, thinking-level-only changes do NOT
               // require stripping thinking blocks — signatures remain valid.
               stdinId = undefined;
-              stdinReady = false;
+    
             } else {
               // ===== Send via stdin to existing persistent process (pre-warmed or follow-up) =====
-              if (!stdinReady) {
-                setSessionMeta(tabId, {
-                  pendingReadyMessage: { stdinId, text },
-                });
-                console.log('[TOKENICODE] pre-warm process not ready yet — holding first message until system:init');
-                return;
-              }
+              // Send immediately even if stdinReady is false — the CLI emits
+              // system:init only AFTER receiving the first message on stdin.
+              // Holding the message would deadlock (waiting for init that needs the message).
               try {
                 markTurnThinking();
                 await bridge.sendStdin(stdinId, text);
@@ -1093,7 +1045,7 @@ export function InputBar() {
               } catch (stdinErr) {
                 // stdin write failed (broken pipe — process already exited).
                 // Drop the stale stdin route via lifecycle helpers, then spawn fresh.
-                console.warn('[TOKENICODE] sendStdin failed, spawning new process:', stdinErr);
+                console.warn('[Stavebak] sendStdin failed, spawning new process:', stdinErr);
                 cleanupStdinRoute(stdinId);
                 setSessionMeta(tabId, {
                   stdinId: undefined,
@@ -1102,7 +1054,7 @@ export function InputBar() {
                 });
                 setActivityStatus(tabId, { phase: 'idle' });
                 stdinId = undefined;
-                stdinReady = false;
+      
               }
             } // close spawnConfigHash-mismatch else
           } // close spawnedModel-mismatch else
@@ -1157,7 +1109,7 @@ export function InputBar() {
           pendingReadyMessage: undefined,
         });
 
-        console.log('[TOKENICODE:session] starting session', { cwd, stdinId: preGeneratedId, mode: liveSessionMode, provider: useProviderStore.getState().activeProviderId, modelSwitch: !!didSwitchModel, resumeSessionId: existingSessionId });
+        console.log('[Stavebak:session] starting session', { cwd, stdinId: preGeneratedId, mode: liveSessionMode, provider: useProviderStore.getState().activeProviderId, modelSwitch: !!didSwitchModel, resumeSessionId: existingSessionId });
 
         // Use lifecycle module for unified spawn
         const spawnResult = await spawnSession({
@@ -1187,7 +1139,7 @@ export function InputBar() {
           onStderr: (line: string) => handleStderrLine(line, preGeneratedId),
         });
 
-        console.log('[TOKENICODE:session] started successfully', {
+        console.log('[Stavebak:session] started successfully', {
           stdinId: spawnResult.sessionInfo.stdin_id,
           cliSessionId: spawnResult.sessionInfo.cli_session_id,
           pid: spawnResult.sessionInfo.pid,
@@ -1248,11 +1200,11 @@ export function InputBar() {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     const testWindow = window as any;
-    testWindow.__tokenicode_editor = textareaRef.current?.getEditor() || null;
-    testWindow.__tokenicode_send = () => handleSubmitRef.current();
+    testWindow.__stavebak_editor = textareaRef.current?.getEditor() || null;
+    testWindow.__stavebak_send = () => handleSubmitRef.current();
     return () => {
-      if (testWindow.__tokenicode_send) delete testWindow.__tokenicode_send;
-      if (testWindow.__tokenicode_editor) delete testWindow.__tokenicode_editor;
+      if (testWindow.__stavebak_send) delete testWindow.__stavebak_send;
+      if (testWindow.__stavebak_editor) delete testWindow.__stavebak_editor;
     };
   });
 
@@ -1281,7 +1233,7 @@ export function InputBar() {
 
     // Strip ANSI escape codes so regex matching works on raw text
     const clean = stripAnsi(line).trim();
-    console.log('[TOKENICODE:stderr]', clean);
+    console.log('[Stavebak:stderr]', clean);
 
     // Track last non-trivial stderr line for error reporting on unexpected exit
     if (clean && !/^\s*$/.test(clean)) {
@@ -1323,7 +1275,7 @@ export function InputBar() {
 
     // Permission prompts are now handled via SDK control protocol (P1-03/P1-04).
     // The Rust backend intercepts control_request messages from stdout and emits
-    // them as tokenicode_permission_request in the stream channel, handled by
+    // them as stavebak_permission_request in the stream channel, handled by
     // the stream processor. Stderr is now purely for diagnostic logging.
   }, []);
 
@@ -1346,7 +1298,7 @@ export function InputBar() {
     // Drain any events that were queued while handler was unavailable
     const queue: any[] = (window as any).__claudeStreamQueue;
     if (queue && queue.length > 0) {
-      console.warn(`[TOKENICODE] draining ${queue.length} queued stream events on handler mount`);
+      console.warn(`[Stavebak] draining ${queue.length} queued stream events on handler mount`);
       const pending = queue.splice(0);
       for (const msg of pending) handleStreamMessage(msg);
     }
@@ -1473,7 +1425,7 @@ export function InputBar() {
 
   return (
     <div className="px-4 pt-4 pb-2 relative">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-2xl mx-auto">
         {/* Rewind Panel — positioned above the input area */}
         {showRewindPanel && (
           <RewindPanel key={selectedSessionId || 'new'} onClose={() => setShowRewindPanel(false)} />
@@ -1500,7 +1452,7 @@ export function InputBar() {
         {/* Active prefix description — shown above textarea when a command is selected */}
         {activePrefix && (
           <div className="mb-1 px-1">
-            <span className="text-[10px] text-text-tertiary">{activePrefix.description}</span>
+            <span className="text-xs text-text-tertiary">{activePrefix.description}</span>
           </div>
         )}
 
@@ -1514,12 +1466,13 @@ export function InputBar() {
             onClose={() => setSlashVisible(false)}
           />
           <div
-            className={`flex items-center gap-2 bg-bg-input border rounded-2xl px-4 py-2.5
-              focus-within:border-border-focus focus-within:shadow-glow
-              transition-smooth group/input
+            className={`flex items-center gap-2 bg-bg-secondary/50 border px-5 py-3
+              focus-within:border-border-focus/40 focus-within:bg-bg-input focus-within:shadow-md
+              transition-all duration-200 group/input
+              ${input.includes('\n') || input.length > 80 ? 'rounded-2xl' : 'rounded-full'}
               ${isDragging
-                ? 'border-accent bg-accent/5 shadow-glow'
-                : 'border-border-subtle'
+                ? 'border-accent/40 bg-accent/5'
+                : 'border-border'
               }`}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -1537,10 +1490,7 @@ export function InputBar() {
                     onClick={() => useCommandStore.getState().clearPrefix()}
                     className="hover:text-red-400 transition-smooth ml-0.5"
                   >
-                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none"
-                      stroke="currentColor" strokeWidth="1.5">
-                      <path d="M3 3l6 6M9 3l-6 6" />
-                    </svg>
+                    <X size={10} weight="light" />
                   </button>
                 </span>
               </div>
@@ -1564,14 +1514,14 @@ export function InputBar() {
           {/* Shortcut hint — visible when input area is not focused and input is empty */}
           {isStopping && (
             <span className="flex-shrink-0 self-center inline-flex items-center gap-1.5
-              px-2 py-1 rounded-full border text-[10px] font-medium whitespace-nowrap
+              px-2 py-1 rounded-full border text-xs font-medium whitespace-nowrap
               border-border-subtle bg-bg-secondary/70 text-text-muted">
               <span className="w-2.5 h-2.5 rounded-full border-2 border-warning/30 border-t-warning animate-spin text-warning" />
               {t('input.stopping')}
             </span>
           )}
           {!input && !activePrefix && !isRunning && (
-            <span className="flex-shrink-0 text-[10px] text-text-tertiary/50
+            <span className="flex-shrink-0 text-xs text-text-tertiary/50
               group-focus-within/input:hidden select-none whitespace-nowrap
               self-center mr-1">
               {t('input.shortcutHint')}
@@ -1592,7 +1542,7 @@ export function InputBar() {
                 await teardownSession(sid, stopTabId, 'stop');
               }}
               disabled={isStopping}
-              className="flex-shrink-0 self-end w-8 h-8 rounded-[10px]
+              className="flex-shrink-0 self-end w-8 h-8 rounded-full
                 flex items-center justify-center transition-smooth
                 disabled:cursor-not-allowed
                 disabled:bg-warning/10 disabled:text-warning
@@ -1603,10 +1553,7 @@ export function InputBar() {
               {isStopping ? (
                 <span className="w-3.5 h-3.5 rounded-full border-2 border-warning/30 border-t-warning animate-spin" />
               ) : (
-                <svg width="14" height="14" viewBox="0 0 16 16"
-                  fill="currentColor">
-                  <rect x="3" y="3" width="10" height="10" rx="2" />
-                </svg>
+                <Stop size={14} weight="fill" />
               )}
             </button>
           )}
@@ -1614,39 +1561,23 @@ export function InputBar() {
             data-testid="send-button"
             onClick={handleSubmit}
             disabled={isAwaiting || isStopping || (!input.trim() && !activePrefix)}
-            className={`flex-shrink-0 self-end w-8 h-8 rounded-[10px]
+            className={`flex-shrink-0 self-end w-8 h-8 rounded-full
               flex items-center justify-center transition-smooth
               disabled:opacity-30 disabled:cursor-not-allowed
               ${isAwaiting
                 ? 'bg-warning/15 text-warning cursor-not-allowed'
-                : 'bg-accent hover:bg-accent-hover text-text-inverse hover:shadow-glow cursor-pointer'
+                : 'send-button text-white cursor-pointer'
               }`}
             title={isAwaiting ? t('input.awaitingInteraction') : undefined}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16"
-              fill="none" stroke="currentColor" strokeWidth="2"
-              strokeLinecap="round">
-              <path d="M3 8h10M9 4l4 4-4 4" />
-            </svg>
+            <PaperPlaneRight size={16} weight="light" />
           </button>
           </div>
         </div>
 
         {/* Tool row: upload, mode, model */}
         <div className="flex items-center gap-2 mt-2">
-          {/* Upload button */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="p-1.5 rounded-lg text-text-tertiary
-              hover:text-text-primary hover:bg-bg-secondary
-              transition-smooth"
-            title={t('input.attachFiles')}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M14 8.5l-5.5 5.5a3.5 3.5 0 01-5-5l6-6a2.5 2.5 0 013.5 3.5l-6 6a1.5 1.5 0 01-2-2l5.5-5.5" />
-            </svg>
-          </button>
+          {/* Upload + think toggle hidden for now */}
           <input
             ref={fileInputRef}
             type="file"
@@ -1654,12 +1585,6 @@ export function InputBar() {
             className="hidden"
             onChange={handleFileSelect}
           />
-
-          {/* Mode selector — hidden, use /ask /plan /code /bypass slash commands */}
-          {/* <ModeSelector disabled={isRunning} /> */}
-
-          {/* Think toggle */}
-          <ThinkLevelSelector disabled={isRunning} />
 
           {/* Rewind button */}
           {showRewind && (
@@ -1673,25 +1598,15 @@ export function InputBar() {
                 }`}
               title={canRewind ? `${t('rewind.title')} (Esc×2)` : t('rewind.disabled')}
             >
-              <svg width="12" height="12" viewBox="0 0 14 14" fill="none"
-                stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0">
-                <path d="M2 7a5 5 0 019.33-2.5M12 7a5 5 0 01-9.33 2.5"
-                  strokeLinecap="round" />
-                <path d="M11 2v3h-3" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M3 12V9h3" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span className="text-[10px]">{t('rewind.title')}</span>
+              <ArrowsClockwise size={12} weight="light" className="flex-shrink-0" />
+              <span className="text-xs">{t('rewind.title')}</span>
             </button>
           )}
 
           {/* Spacer */}
           <div className="flex-1" />
 
-          {/* Plan view button */}
-          <PlanToggleButton />
 
-          {/* Model selector */}
-          <ModelSelector disabled={isRunning} />
         </div>
       </div>
     </div>

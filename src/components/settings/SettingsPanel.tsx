@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { GearSix, Lock, Terminal, HardDrives, X } from '@phosphor-icons/react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useT } from '../../lib/i18n';
 import { APP_NAME } from '../../lib/edition';
@@ -8,44 +9,14 @@ import { GeneralTab } from './GeneralTab';
 import { ProviderTab } from './ProviderTab';
 import { CliTab } from './CliTab';
 import { McpTab } from './McpTab';
-import { FeedbackTab } from './FeedbackTab';
 
-type SettingsTab = 'general' | 'provider' | 'cli' | 'mcp' | 'feedback';
+type SettingsTab = 'general' | 'provider' | 'cli' | 'mcp';
 
 const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
-  general: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <circle cx="8" cy="8" r="3" />
-      <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" />
-    </svg>
-  ),
-  provider: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <rect x="3" y="7" width="10" height="7" rx="1.5" />
-      <path d="M5 7V5a3 3 0 016 0v2" />
-      <circle cx="8" cy="11" r="1" fill="currentColor" />
-    </svg>
-  ),
-  cli: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="1" y="2" width="14" height="12" rx="2" />
-      <path d="M4 6l3 2.5L4 11M9 11h3" />
-    </svg>
-  ),
-  mcp: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <rect x="1" y="3" width="14" height="4" rx="1.5" />
-      <rect x="1" y="9" width="14" height="4" rx="1.5" />
-      <circle cx="4" cy="5" r="0.75" fill="currentColor" />
-      <circle cx="4" cy="11" r="0.75" fill="currentColor" />
-    </svg>
-  ),
-  feedback: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 3h12a1 1 0 011 1v7a1 1 0 01-1 1H6l-3 3V4a1 1 0 011-1z" />
-      <path d="M5 6.5h6M5 9h4" />
-    </svg>
-  ),
+  general: <GearSix size={14} weight="light" />,
+  provider: <Lock size={14} weight="light" />,
+  cli: <Terminal size={14} weight="light" />,
+  mcp: <HardDrives size={14} weight="light" />,
 };
 
 const TAB_ITEMS: { id: SettingsTab; labelKey: string }[] = [
@@ -53,7 +24,6 @@ const TAB_ITEMS: { id: SettingsTab; labelKey: string }[] = [
   { id: 'provider', labelKey: 'settings.tab.provider' },
   { id: 'cli', labelKey: 'settings.tab.cli' },
   { id: 'mcp', labelKey: 'settings.tab.mcp' },
-  { id: 'feedback', labelKey: 'settings.tab.feedback' },
 ];
 
 export function SettingsPanel() {
@@ -94,10 +64,7 @@ export function SettingsPanel() {
             {...(import.meta.env.DEV && { 'data-testid': 'settings-close-button' })}
             className="p-1.5 rounded-lg hover:bg-bg-tertiary
               text-text-tertiary transition-smooth">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5">
-              <path d="M4 4l8 8M12 4l-8 8" />
-            </svg>
+            <X size={16} weight="light" />
           </button>
         </div>
 
@@ -110,7 +77,7 @@ export function SettingsPanel() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 {...(import.meta.env.DEV && { 'data-testid': `settings-tab-${tab.id}` })}
-                className={`w-full flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[13px]
+                className={`w-full flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm
                   font-medium transition-smooth text-left whitespace-nowrap
                   ${activeTab === tab.id
                     ? 'bg-accent/10 text-accent'
@@ -132,7 +99,7 @@ export function SettingsPanel() {
             {activeTab === 'provider' && <ProviderTab />}
             {activeTab === 'cli' && <CliTab />}
             {activeTab === 'mcp' && <McpTab />}
-            {activeTab === 'feedback' && <FeedbackTab />}
+
           </div>
         </div>
 
@@ -314,12 +281,12 @@ function SettingsFooter() {
                 {t('update.error')}
               </span>
               {isPermissionError(errorMsg) && (
-                <span className="text-[10px] text-amber-500">
+                <span className="text-xs text-amber-500">
                   {t('error.permissionHint')}
                 </span>
               )}
               {isNetworkError(errorMsg) && (
-                <span className="text-[10px] text-amber-500">
+                <span className="text-xs text-amber-500">
                   {t('network.firewallHint')}
                 </span>
               )}

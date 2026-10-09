@@ -144,7 +144,7 @@ export function parseSessionMessages(rawMessages: any[]): LoadedSession {
       let content = userTexts.join('');
       // Extract file attachments from text
       const attachments: Array<{ name: string; path: string; isImage: boolean }> = [];
-      const attachRegex = /\n?\n?\[(?:附加的文件|Attached files)\]\n([\s\S]+)$/;
+      const attachRegex = /\n?\n?\[(?:Attached files|附加的文件)\]\n([\s\S]+)$/;
       const attachMatch = content.match(attachRegex);
       if (attachMatch) {
         content = content.slice(0, attachMatch.index!).trimEnd();

@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { create } from 'zustand';
+import { X, ArrowSquareOut, SpinnerGap } from '@phosphor-icons/react';
 import { bridge } from '../../lib/tauri-bridge';
 
 /* ================================================================
@@ -81,10 +82,7 @@ export function ImageLightbox() {
           bg-white/10 hover:bg-white/20 text-white
           transition-smooth z-10"
       >
-        <svg width="20" height="20" viewBox="0 0 14 14" fill="none"
-          stroke="currentColor" strokeWidth="2">
-          <path d="M4 4l6 6M10 4l-6 6" />
-        </svg>
+        <X size={20} weight="light" />
       </button>
 
       {/* Open externally button */}
@@ -98,11 +96,7 @@ export function ImageLightbox() {
             bg-white/10 hover:bg-white/20 text-white text-xs font-medium
             transition-smooth z-10"
         >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-            stroke="currentColor" strokeWidth="1.5" className="inline mr-1.5">
-            <path d="M5 1H2a1 1 0 00-1 1v8a1 1 0 001 1h8a1 1 0 001-1V7" />
-            <path d="M7 1h4v4M11 1L5.5 6.5" />
-          </svg>
+          <ArrowSquareOut size={12} weight="light" className="inline mr-1.5" />
           Open
         </button>
       )}
@@ -120,10 +114,7 @@ export function ImageLightbox() {
       ) : (
         /* Loading spinner */
         <div className="flex items-center justify-center">
-          <svg className="animate-spin-slow" width="32" height="32"
-            viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-          </svg>
+          <SpinnerGap size={32} weight="light" className="animate-spin text-white" />
         </div>
       )}
 

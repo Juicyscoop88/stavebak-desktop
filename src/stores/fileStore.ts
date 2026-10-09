@@ -18,9 +18,7 @@ interface FileState {
   previewMode: PreviewMode;
   rootPath: string;
 
-  // 文件树展开状态（提到全局：让「聊天点击路径 → 定位」能驱动文件树展开）
   expandedFolders: Set<string>;
-  // 当前被定位高亮的路径（文件或文件夹，与「预览选中」解耦）
   revealTarget: string | null;
 
   // Editing state
@@ -69,9 +67,7 @@ interface FileState {
   createFolder: (parentDir: string, name: string) => Promise<void>;
   // External drag state
   setDragOverTree: (v: boolean) => void;
-  // 展开/折叠单个文件夹
   toggleFolder: (path: string) => void;
-  // 定位到某路径：展开其所有父目录（文件夹则连自身）并高亮
   revealPath: (path: string) => void;
 }
 
@@ -341,7 +337,7 @@ export const useFileStore = create<FileState>()((set, get) => ({
 
   setDragOverTree: (v: boolean) => set({ isDragOverTree: v }),
 
-  // --- 文件树展开 / 定位 ---
+  // --- Tree expand / reveal ---
 
   toggleFolder: (path: string) => {
     const next = new Set(get().expandedFolders);
@@ -352,10 +348,9 @@ export const useFileStore = create<FileState>()((set, get) => ({
 
   revealPath: (path: string) => {
     const { tree, rootPath, expandedFolders } = get();
-    // 容错：AI 给的绝对全路径前缀可能和真实文件系统不一致（iCloud 的
-    // com~apple~CloudDocs 常被写成 com-apple-CloudDocs 或整段缺失）→ 按工作区名对齐回真实 rootPath。
+    // Reconcile path prefix (AI paths may differ from real FS, e.g. iCloud)
     const target = reconcilePathToRoot(path, rootPath);
-    // 判断目标是文件还是文件夹：先在已加载的树里查，查不到回退到「末尾斜杠」
+    // Check tree first; fall back to trailing-slash heuristic
     const node = findNodeByPath(tree, target);
     const isDir = node ? node.is_dir : /\/$/.test(path);
     const toExpand = computeRevealExpansions(target, rootPath, isDir);

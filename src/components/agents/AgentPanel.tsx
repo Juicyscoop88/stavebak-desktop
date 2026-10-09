@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { UsersThree } from '@phosphor-icons/react';
 import { useAgentStore, AgentNode, AgentPhase } from '../../stores/agentStore';
 import { useT } from '../../lib/i18n';
 
@@ -126,13 +127,13 @@ function AgentTreeNode({
             ${isFinished ? 'text-text-muted' : 'text-text-primary'}`}>
             {label}
           </span>
-          <span className="text-[10px] text-text-tertiary font-mono flex-shrink-0 tabular-nums">
+          <span className="text-xs text-text-tertiary font-mono flex-shrink-0 tabular-nums">
             <ElapsedTime startTime={agent.startTime} endTime={agent.endTime} />
           </span>
         </div>
         {/* Bottom line: phase text */}
         <div className="flex items-center gap-2 pl-4">
-          <span className={`text-[10px] truncate
+          <span className={`text-xs truncate
             ${agent.phase === 'error' ? 'text-red-400' : 'text-text-tertiary'}`}>
             {phaseText}
           </span>
@@ -177,19 +178,12 @@ export function AgentPanel() {
     return (
       <div className="flex flex-col h-full">
         <div className="flex items-center px-3 py-2 border-b border-border-subtle">
-          <span className="text-[11px] font-semibold text-text-tertiary
+          <span className="text-xs font-semibold text-text-tertiary
             uppercase tracking-wider">{t('agents.title')}</span>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center
           px-4 text-center">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none"
-            stroke="currentColor" strokeWidth="1.2"
-            className="text-text-tertiary/40 mb-3">
-            <circle cx="16" cy="12" r="5" />
-            <path d="M8 26a8 8 0 0116 0" />
-            <circle cx="26" cy="10" r="3" />
-            <path d="M22 20a5 5 0 0110 0" strokeDasharray="2 2" />
-          </svg>
+          <UsersThree size={32} weight="light" className="text-text-tertiary/40 mb-3" />
           <p className="text-xs text-text-tertiary leading-relaxed">
             {t('agents.empty')}
           </p>
@@ -204,7 +198,7 @@ export function AgentPanel() {
       <div className="flex items-center justify-between px-3 py-2
         border-b border-border-subtle">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold text-text-tertiary
+          <span className="text-xs font-semibold text-text-tertiary
             uppercase tracking-wider">{t('agents.title')}</span>
           {activeCount > 0 && (
             <span className="text-[9px] px-1.5 py-0.5 rounded-full
@@ -213,7 +207,7 @@ export function AgentPanel() {
             </span>
           )}
         </div>
-        <span className="text-[10px] text-text-tertiary">
+        <span className="text-xs text-text-tertiary">
           {totalCount} {totalCount === 1 ? 'agent' : 'agents'}
         </span>
       </div>

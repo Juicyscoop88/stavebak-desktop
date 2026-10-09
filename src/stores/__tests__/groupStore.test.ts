@@ -12,39 +12,39 @@ describe('groupStore', () => {
 
   describe('createGroup', () => {
     it('creates a group under the given workspace with the given label', () => {
-      const id = useGroupStore.getState().createGroup('~/Projects/app', '阅读管线');
+      const id = useGroupStore.getState().createGroup('~/Projects/app', 'Reading pipeline');
       const groups = useGroupStore.getState().getGroupsForWorkspace('~/Projects/app');
       expect(groups).toHaveLength(1);
       expect(groups[0].id).toBe(id);
-      expect(groups[0].label).toBe('阅读管线');
+      expect(groups[0].label).toBe('Reading pipeline');
       expect(groups[0].workspace).toBe('~/Projects/app');
       expect(groups[0].sessionIds).toEqual([]);
       expect(groups[0].pinnedInGroup).toEqual([]);
     });
 
     it('puts a newly created group at the top of its workspace', () => {
-      useGroupStore.getState().createGroup('~/ws', '老组');
-      const newId = useGroupStore.getState().createGroup('~/ws', '新组');
+      useGroupStore.getState().createGroup('~/ws', 'Old group');
+      const newId = useGroupStore.getState().createGroup('~/ws', 'New group');
       const groups = useGroupStore.getState().getGroupsForWorkspace('~/ws');
       expect(groups[0].id).toBe(newId);
-      expect(groups[0].label).toBe('新组');
+      expect(groups[0].label).toBe('New group');
     });
 
     it('isolates groups by workspace', () => {
-      useGroupStore.getState().createGroup('~/ws-a', 'A组');
-      useGroupStore.getState().createGroup('~/ws-b', 'B组');
+      useGroupStore.getState().createGroup('~/ws-a', 'Group A');
+      useGroupStore.getState().createGroup('~/ws-b', 'Group B');
       const a = useGroupStore.getState().getGroupsForWorkspace('~/ws-a');
       const b = useGroupStore.getState().getGroupsForWorkspace('~/ws-b');
       expect(a).toHaveLength(1);
       expect(b).toHaveLength(1);
-      expect(a[0].label).toBe('A组');
-      expect(b[0].label).toBe('B组');
+      expect(a[0].label).toBe('Group A');
+      expect(b[0].label).toBe('Group B');
     });
   });
 
   describe('addToGroup (single membership)', () => {
     it('adds a session to a group', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组1');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group 1');
       useGroupStore.getState().addToGroup('s1', g);
       const group = useGroupStore.getState().getGroupOfSession('s1');
       expect(group?.id).toBe(g);
@@ -64,7 +64,7 @@ describe('groupStore', () => {
     });
 
     it('appends new members to the end of the group order', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().addToGroup('s1', g);
       useGroupStore.getState().addToGroup('s2', g);
       const group = useGroupStore.getState().getGroupOfSession('s2')!;
@@ -72,7 +72,7 @@ describe('groupStore', () => {
     });
 
     it('does not duplicate a session already in the group', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().addToGroup('s1', g);
       useGroupStore.getState().addToGroup('s1', g);
       const group = useGroupStore.getState().getGroupOfSession('s1')!;
@@ -80,7 +80,7 @@ describe('groupStore', () => {
     });
 
     it('is a no-op when the target group does not exist (session stays put)', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().addToGroup('s1', g);
       useGroupStore.getState().addToGroup('s1', 'no-such-group');
       expect(useGroupStore.getState().getGroupOfSession('s1')?.id).toBe(g);
@@ -89,15 +89,15 @@ describe('groupStore', () => {
 
   describe('renameGroup', () => {
     it('renames a group', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '旧名');
-      useGroupStore.getState().renameGroup(g, '新名');
-      expect(useGroupStore.getState().getGroupsForWorkspace('~/ws')[0].label).toBe('新名');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Old name');
+      useGroupStore.getState().renameGroup(g, 'New name');
+      expect(useGroupStore.getState().getGroupsForWorkspace('~/ws')[0].label).toBe('New name');
     });
   });
 
   describe('removeFromGroup', () => {
     it('removes a session back to ungrouped', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().addToGroup('s1', g);
       useGroupStore.getState().removeFromGroup('s1');
       expect(useGroupStore.getState().getGroupOfSession('s1')).toBeUndefined();
@@ -106,7 +106,7 @@ describe('groupStore', () => {
     });
 
     it('is a no-op for a session that is in no group', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().addToGroup('s1', g);
       useGroupStore.getState().removeFromGroup('s2');
       expect(useGroupStore.getState().getGroupOfSession('s1')?.id).toBe(g);
@@ -115,13 +115,13 @@ describe('groupStore', () => {
 
   describe('deleteGroup', () => {
     it('deletes the group', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().deleteGroup(g);
       expect(useGroupStore.getState().getGroupsForWorkspace('~/ws')).toHaveLength(0);
     });
 
     it('returns its members to ungrouped (sessions themselves survive)', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().addToGroup('s1', g);
       useGroupStore.getState().addToGroup('s2', g);
       useGroupStore.getState().deleteGroup(g);
@@ -141,7 +141,7 @@ describe('groupStore', () => {
 
   describe('reorderInGroup', () => {
     it('fixes the manual order of sessions within a group', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().addToGroup('s1', g);
       useGroupStore.getState().addToGroup('s2', g);
       useGroupStore.getState().addToGroup('s3', g);
@@ -173,7 +173,7 @@ describe('groupStore', () => {
 
   describe('pinInGroup / unpinInGroup', () => {
     it('pins a session within its group', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().addToGroup('s1', g);
       useGroupStore.getState().pinInGroup(g, 's1');
       const group = useGroupStore.getState().groups.find((x) => x.id === g)!;
@@ -181,7 +181,7 @@ describe('groupStore', () => {
     });
 
     it('unpins a session within its group', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().addToGroup('s1', g);
       useGroupStore.getState().pinInGroup(g, 's1');
       useGroupStore.getState().unpinInGroup(g, 's1');
@@ -190,7 +190,7 @@ describe('groupStore', () => {
     });
 
     it('does not duplicate a pin', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().addToGroup('s1', g);
       useGroupStore.getState().pinInGroup(g, 's1');
       useGroupStore.getState().pinInGroup(g, 's1');
@@ -209,7 +209,7 @@ describe('groupStore', () => {
     });
 
     it('clears the in-group pin when the session is removed from the group', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().addToGroup('s1', g);
       useGroupStore.getState().pinInGroup(g, 's1');
       useGroupStore.getState().removeFromGroup('s1');
@@ -218,16 +218,16 @@ describe('groupStore', () => {
     });
 
     it('does not pin a session that is not a member of the group', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().pinInGroup(g, 'not-a-member');
       const group = useGroupStore.getState().groups.find((x) => x.id === g)!;
       expect(group.pinnedInGroup).not.toContain('not-a-member');
     });
   });
 
-  describe('replaceSessionId (draft → 真实 id 同步)', () => {
-    it('把组内成员 id 从旧换成新（promote 后会话不掉出组）', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+  describe('replaceSessionId (draft -> real id sync)', () => {
+    it('replaces old member id with new in the group (session stays in group after promote)', () => {
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().addToGroup('draft_1', g);
       useGroupStore.getState().pinInGroup(g, 'draft_1');
       useGroupStore.getState().replaceSessionId('draft_1', 'real-uuid');
@@ -236,8 +236,8 @@ describe('groupStore', () => {
       expect(group.pinnedInGroup).toEqual(['real-uuid']);
     });
 
-    it('保留组内顺序，只替换目标 id', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+    it('preserves order within group, only replaces the target id', () => {
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().addToGroup('a', g);
       useGroupStore.getState().addToGroup('draft_1', g);
       useGroupStore.getState().addToGroup('b', g);
@@ -246,8 +246,8 @@ describe('groupStore', () => {
       expect(group.sessionIds).toEqual(['a', 'real-uuid', 'b']);
     });
 
-    it('旧 id 不在任何组时安全 no-op', () => {
-      const g = useGroupStore.getState().createGroup('~/ws', '组');
+    it('safe no-op when old id is not in any group', () => {
+      const g = useGroupStore.getState().createGroup('~/ws', 'Group');
       useGroupStore.getState().addToGroup('s1', g);
       useGroupStore.getState().replaceSessionId('ghost', 'x');
       const group = useGroupStore.getState().groups.find((x) => x.id === g)!;

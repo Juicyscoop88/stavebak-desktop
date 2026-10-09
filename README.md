@@ -1,33 +1,29 @@
 <div align="center">
 
-<img src="public/app-icon.png" alt="TOKENICODE Logo" width="120" />
+<img src="public/app-icon.png" alt="Stavebak Logo" width="120" />
 
-# TOKENICODE
+# Stavebak
 
 ### A Beautiful Desktop Client for Claude Code
 
-[![Version](https://img.shields.io/github/v/release/yiliqi78/TOKENICODE?style=flat-square&color=blue)](https://github.com/yiliqi78/TOKENICODE/releases)
+[![Version](https://img.shields.io/github/v/release/Juicyscoop88/stavebak-desktop?style=flat-square&color=blue)](https://github.com/Juicyscoop88/stavebak-desktop/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=flat-square)](#installation)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 
-**TOKENICODE** wraps the powerful [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) in a polished desktop interface — bring your own API key, connect any provider, and get a native coding experience with file exploration, session management, and structured permission control.
+**Stavebak** wraps the powerful [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) in a polished desktop interface — bring your own API key, connect any provider, and get a native coding experience with file exploration, session management, and structured permission control.
 
-[**Download**](https://github.com/yiliqi78/TOKENICODE/releases) · [**Features**](#features) · [**Screenshots**](#screenshots)
-
----
-
-**[English](README.md)** | **[中文](README_zh.md)**
+[**Download**](https://github.com/Juicyscoop88/stavebak-desktop/releases) · [**Features**](#features) · [**Screenshots**](#screenshots)
 
 </div>
 
-## Why TOKENICODE?
+## Why Stavebak?
 
-| | | | |
-|:---:|:---:|:---:|:---:|
-| 🔑 **Bring Your Own API** | 🇨🇳 **China-Ready** | 🛡️ **SDK Control Protocol** | 🎨 **Beautiful & Native** |
-| 6 preset providers + custom endpoints. One-click config import/export. | Gitee mirror for updates, pre-configured Chinese API providers (DeepSeek, Zhipu GLM, Qwen, Kimi, MiniMax). | Structured permission approval — 4 work modes (code / ask / plan / bypass) with typed allow/deny over stdin. | Tauri 2 native desktop experience. Multiple themes × light/dark mode. |
+| | | |
+|:---:|:---:|:---:|
+| 🔑 **Bring Your Own API** | 🛡️ **SDK Control Protocol** | 🎨 **Beautiful & Native** |
+| 6 preset providers + custom endpoints. One-click config import/export. | Structured permission approval — 4 work modes (code / ask / plan / bypass) with typed allow/deny over stdin. | Tauri 2 native desktop experience. Multiple themes × light/dark mode. |
 
 <div align="center">
 
@@ -39,27 +35,25 @@
 
 ### Prerequisites
 
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) — TOKENICODE can auto-detect, install, and authenticate it for you on first launch
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) — Stavebak can auto-detect, install, and authenticate it for you on first launch
 
 ### macOS
 
-Download the latest `.dmg` from [Releases](https://github.com/yiliqi78/TOKENICODE/releases), open it, and drag **TOKENICODE** to your Applications folder.
+Download the latest `.dmg` from [Releases](https://github.com/Juicyscoop88/stavebak-desktop/releases), open it, and drag **Stavebak** to your Applications folder.
 
 Available for both Apple Silicon (arm64) and Intel (x86_64). The app is code-signed and notarized — no extra steps needed.
 
 ### Windows
 
-Download the latest `.msi` or `.exe` installer from [Releases](https://github.com/yiliqi78/TOKENICODE/releases) and run it. Requires Windows 10 or later.
+Download the latest `.msi` or `.exe` installer from [Releases](https://github.com/Juicyscoop88/stavebak-desktop/releases) and run it. Requires Windows 10 or later.
 
 ### Linux
 
-Download the `.AppImage`, `.deb`, or `.rpm` package from [Releases](https://github.com/yiliqi78/TOKENICODE/releases). Requires WebKit2GTK.
-
-> **China users:** If GitHub downloads are slow, grab releases from the [Gitee mirror](https://gitee.com/yiliqiseven/TOKENICODE/releases). The app also checks Gitee for updates when GitHub is unreachable.
+Download the `.AppImage`, `.deb`, or `.rpm` package from [Releases](https://github.com/Juicyscoop88/stavebak-desktop/releases). Requires WebKit2GTK.
 
 ## Getting Started
 
-1. **Open TOKENICODE** — if the Claude Code CLI is not installed, the setup wizard guides you through installation and login, no terminal required
+1. **Open Stavebak** — if the Claude Code CLI is not installed, the setup wizard guides you through installation and login, no terminal required
 2. **Select a project folder** from the welcome screen or input bar
 3. **Start chatting** — the Claude CLI session runs seamlessly in the background
 4. **Configure your API** (optional) — open Settings → API Provider to add third-party keys or import a config
@@ -70,24 +64,15 @@ Download the `.AppImage`, `.deb`, or `.rpm` package from [Releases](https://gith
 
 Use Claude through any compatible API endpoint — not just Anthropic's official API.
 
-- **6 preset providers** in a visual 2×3 grid: Anthropic, DeepSeek, Zhipu GLM, Qwen Coder, Kimi k2, MiniMax
+- **6 preset providers** in a visual 2×3 grid: Anthropic, OpenRouter, Gemini, and more
 - **Custom endpoints** with Anthropic or OpenAI-compatible format
 - **One-click JSON import** to share configs across machines
 - **Quick connection test** with response time display (e.g. `326ms`)
 - **Per-card export** for easy backup
 
-### China-Ready
-
-TOKENICODE is designed to work well behind the Great Firewall:
-
-- **Gitee update mirror** — when GitHub is unreachable, auto-update falls back to Gitee
-- **Chinese API presets** — DeepSeek, Zhipu GLM, Qwen Coder, Kimi k2, MiniMax are pre-configured with correct endpoints
-- **Proxy auto-detection** — inherits system proxy environment variables on macOS
-- **Full Chinese UI** — switch to Chinese from Settings at any time
-
 ### SDK Control Protocol
 
-TOKENICODE v0.8.0 uses Claude CLI's native control protocol for permission handling:
+Stavebak uses Claude CLI's native control protocol for permission handling:
 
 - Permission requests flow as structured JSON through stdout
 - Responses are typed `allow` / `deny` messages via stdin
@@ -152,7 +137,7 @@ Manage Claude Code skills (edit, enable/disable, right-click context menu) and M
 ### Customization
 
 - **Themes** — multiple accent colors with light, dark, and system-following modes
-- **Languages** — full Chinese and English support, switchable from Settings
+- **Languages** — English and other languages, switchable from Settings
 - **Font size** — adjustable with keyboard shortcuts
 - **Thinking depth** — 5-level thinking depth control
 
@@ -239,6 +224,6 @@ This project is licensed under the **Apache License 2.0** — see the [LICENSE](
 
 <div align="center">
 
-**If you find TOKENICODE useful, please consider giving it a ⭐!**
+**If you find Stavebak useful, please consider giving it a star!**
 
 </div>

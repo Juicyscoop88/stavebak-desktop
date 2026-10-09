@@ -34,7 +34,7 @@ export function ChangelogModal({ version, onClose }: Props) {
           <h2 className="text-base font-semibold text-text-primary">
             {t('changelog.title')}
           </h2>
-          <p className="text-[11px] text-text-tertiary mt-1">
+          <p className="text-xs text-text-tertiary mt-1">
             v{entry.version} · {entry.date}
           </p>
         </div>
@@ -48,12 +48,12 @@ export function ChangelogModal({ version, onClose }: Props) {
                 const catLabel = cat.label[locale] || cat.label.en;
                 return (
                   <div key={ci}>
-                    <h3 className="text-[12px] font-semibold text-text-tertiary uppercase tracking-wider mb-2">
+                    <h3 className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">
                       {catLabel}
                     </h3>
                     <ul className="space-y-2">
                       {catItems.map((item: string, i: number) => (
-                        <li key={i} className="flex gap-2.5 text-[13px] text-text-secondary leading-relaxed">
+                        <li key={i} className="flex gap-2.5 text-sm text-text-secondary leading-relaxed">
                           <span className="text-accent mt-0.5 flex-shrink-0">•</span>
                           <span>{item}</span>
                         </li>
@@ -66,7 +66,7 @@ export function ChangelogModal({ version, onClose }: Props) {
           ) : (
             <ul className="space-y-2.5">
               {(entry.highlights[locale] || entry.highlights.en).map((item: string, i: number) => (
-                <li key={i} className="flex gap-2.5 text-[13px] text-text-secondary leading-relaxed">
+                <li key={i} className="flex gap-2.5 text-sm text-text-secondary leading-relaxed">
                   <span className="text-accent mt-0.5 flex-shrink-0">•</span>
                   <span>{item}</span>
                 </li>

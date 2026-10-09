@@ -15,6 +15,7 @@ import { partitionWorkspaceSessions } from '../../stores/groupSelectors';
 import { reorderByDragEnd } from '../../stores/groupDnd';
 import type { SessionGroup as GroupData } from '../../stores/groupStore';
 import { useT } from '../../lib/i18n';
+import { CaretRight, Plus } from '@phosphor-icons/react';
 
 /** Determine date category for a timestamp */
 function getDateCategory(ms: number): 'today' | 'yesterday' | 'thisWeek' | 'earlier' {
@@ -161,17 +162,14 @@ export function SessionGroup({
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onToggleCollapse(projectKey); }}
       >
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-          stroke="currentColor" strokeWidth="1.5"
+        <CaretRight size={10} weight="light"
           className={`text-accent transition-transform flex-shrink-0
-            ${isExpanded ? 'rotate-90' : ''}`}>
-          <path d="M3 1l4 4-4 4" />
-        </svg>
-        <span className="text-[13px] font-extrabold text-text-primary
+            ${isExpanded ? 'rotate-90' : ''}`} />
+        <span className="text-sm font-extrabold text-text-primary
           truncate flex-1 text-left min-w-0">
           {label}
         </span>
-        <span className="text-[11px] text-text-tertiary flex-shrink-0">
+        <span className="text-xs text-text-tertiary flex-shrink-0">
           {sessions.length} {t('conv.sessions')}
         </span>
         <button
@@ -180,17 +178,14 @@ export function SessionGroup({
             hover:bg-bg-tertiary transition-smooth text-text-tertiary hover:text-accent"
           title={t('conv.newChat')}
         >
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M8 3v10M3 8h10" />
-          </svg>
+          <Plus size={12} weight="light" />
         </button>
       </div>
 
       {/* Project path */}
       {isExpanded && projectKey !== label && (
         <div className="px-7 pb-0.5">
-          <span className="text-[10px] text-text-tertiary truncate block">
+          <span className="text-xs text-text-tertiary truncate block">
             {projectPath}
           </span>
         </div>
@@ -265,13 +260,13 @@ export function SessionGroup({
 
           {/* Ungrouped — date-grouped sessions */}
           {dateGroups.length > 0 && taskGroups.length > 0 && (
-            <div className="px-7 pt-1.5 pb-0.5 text-[10px] text-text-tertiary/80 select-none">
-              未归类
+            <div className="px-7 pt-1.5 pb-0.5 text-xs text-text-tertiary/80 select-none">
+              Ungrouped
             </div>
           )}
           {dateGroups.map(({ category, label: dateLabel, items }) => (
             <div key={category}>
-              <div className="text-[11px] text-text-tertiary font-medium px-7 py-1 mt-1
+              <div className="text-xs text-text-tertiary font-medium px-7 py-1 mt-1
                 select-none">
                 {dateLabel}
               </div>

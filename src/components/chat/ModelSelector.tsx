@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, Fragment } from 'react';
+import { Clock, CaretDown, Check } from '@phosphor-icons/react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useChatStore, generateMessageId } from '../../stores/chatStore';
 import { useSessionStore } from '../../stores/sessionStore';
@@ -45,16 +46,9 @@ export function ModelSelector({ disabled = false }: { disabled?: boolean }) {
           hover:bg-bg-secondary transition-smooth
           disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-          stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0">
-          <circle cx="8" cy="8" r="5.5" />
-          <path d="M8 5v3l2 1.5" strokeLinecap="round" />
-        </svg>
+        <Clock size={12} weight="light" className="flex-shrink-0" />
         {current.short}
-        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"
-          stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <path d="M4 6l4 4 4-4" />
-        </svg>
+        <CaretDown size={10} weight="light" />
       </button>
 
       {open && (
@@ -99,10 +93,7 @@ export function ModelSelector({ disabled = false }: { disabled?: boolean }) {
                   <div className={`font-medium truncate ${option.mapped ? 'font-mono' : ''}`}>{option.label}</div>
                 </div>
                 {option.id === selectedOptionId && (
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 ml-2">
-                    <path d="M3 8l3.5 3.5L13 5" />
-                  </svg>
+                  <Check size={14} weight="light" className="shrink-0 ml-2" />
                 )}
               </button>
             </Fragment>

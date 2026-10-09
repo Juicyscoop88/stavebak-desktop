@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { MagnifyingGlass } from '@phosphor-icons/react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useSessionStore } from '../../stores/sessionStore';
@@ -145,12 +146,7 @@ export function CommandPalette() {
         {/* Search input */}
         <div className="flex items-center gap-3 px-4 py-3
           border-b border-border-subtle">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5"
-            className="text-text-tertiary flex-shrink-0">
-            <circle cx="7" cy="7" r="4.5" />
-            <path d="M10.5 10.5L14 14" />
-          </svg>
+          <MagnifyingGlass size={16} weight="light" className="text-text-tertiary flex-shrink-0" />
           <input
             ref={inputRef}
             type="text"
@@ -161,7 +157,7 @@ export function CommandPalette() {
             className="flex-1 bg-transparent text-sm text-text-primary
               placeholder:text-text-tertiary outline-none"
           />
-          <kbd className="text-[10px] px-1.5 py-0.5 rounded border
+          <kbd className="text-xs px-1.5 py-0.5 rounded border
             border-border-subtle text-text-tertiary bg-bg-secondary">
             ESC
           </kbd>
@@ -192,11 +188,11 @@ export function CommandPalette() {
                 </svg>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium">{t(cmd.labelKey)}</div>
-                  <div className="text-[11px] text-text-muted truncate">
+                  <div className="text-xs text-text-muted truncate">
                     {t(cmd.descKey)}
                   </div>
                 </div>
-                <span className="text-[10px] text-text-tertiary
+                <span className="text-xs text-text-tertiary
                   flex-shrink-0">{t(cmd.categoryKey)}</span>
               </button>
             ))

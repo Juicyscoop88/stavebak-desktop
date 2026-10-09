@@ -1,30 +1,30 @@
-# TOKENICODE
+# Stavebak
 
-TOKENICODE 是 Claude Code（`claude` CLI）的桌面图形客户端。本术语表记录这个项目特有的领域概念，统一叫法，避免同物多名 / 同名多物。所有 skill 开工前先读这里。
+Stavebak is a desktop GUI client for Claude Code (`claude` CLI). This glossary documents domain concepts specific to this project, unifying terminology to avoid ambiguity. All skills should read this before starting work.
 
 ## Language
 
-### 会话与分组
+### Sessions and Groups
 
-**会话 (Session)**：
-用户与 Claude 的一次连续对话，落地为 Claude Code 的一个 `.jsonl` 文件。
-_Avoid_: 对话记录、聊天记录（口语可说「对话」，术语统一用「会话 / session」）
+**Session**:
+A single continuous conversation between the user and Claude, stored as a `.jsonl` file by Claude Code.
+_Avoid_: chat log, conversation record (use "session" consistently)
 
-**组 (Group)**：
-用户手动创建、用来收纳会话的逻辑分组。它是贴在会话上的标记，**不对应磁盘上任何真实目录**。层级上它在「工作区」之下：**工作区（一级，真实 cwd 目录）› 组（二级，tag）› 会话**；组隶属某个工作区，只收该工作区的会话。**一个会话同时只属于一个组**（单属）；移入新组即从原组移出，不留副本。组不改变会话的 cwd，所以组里的会话照常继承所在工作区的 `CLAUDE.md` 等上下文。用户可自由新建、命名、拖拽。
-_Avoid_: 文件夹、收纳夹、任务夹、folder —— 一律不用，这些词会和「工作区」撞概念
+**Group**:
+A user-created logical grouping for organizing sessions. It is a tag applied to sessions and **does not correspond to any real directory on disk**. Hierarchy: **Project (tier 1, real cwd directory) > Group (tier 2, tag) > Session**. A group belongs to a specific project and only contains sessions from that project. **A session belongs to at most one group** (single membership); moving to a new group removes it from the old one, with no copy left behind. Groups do not change a session's cwd, so sessions in a group still inherit the parent project's `CLAUDE.md` and other context. Users can freely create, name, and drag sessions between groups.
+_Avoid_: folder, collection, task folder — never use these terms, as they conflict with the "project" concept
 
-**工作区 (Project)**：
-Claude Code 按会话的工作目录（cwd）**自动**划分的分组（**一级**），对应 `~/.claude/projects/` 下的真实目录。属于引擎底层概念，非用户手动维护；用户口语里也叫「根目录」「文件夹」「个人工作区」。
-_Avoid_: 把「工作区文件夹」当成用户的「组」来指代
+**Project (Workspace)**:
+The automatic first-level grouping that Claude Code creates based on a session's working directory (cwd), corresponding to real directories under `~/.claude/projects/`. This is an engine-level concept, not user-maintained. Users may colloquially call it "root directory" or "workspace".
+_Avoid_: using "workspace folder" to refer to a user's "group"
 
-**导出 (Export)**：
-把某个「组」里的会话**复制**成 Finder 中一个真实文件夹的副本，供用户备份、存档、迁移。原会话文件不受影响。
-_Avoid_: 同步、镜像（指另一种已被否决的实时方案，不要混用）
+**Export**:
+Copying sessions from a group into a real Finder folder as a backup. Original session files remain untouched.
+_Avoid_: sync, mirror (refers to a rejected real-time approach, do not conflate)
 
 ## Example dialogue
 
-> **开发**：她说「把这个会话归到报销组」，这「组」是工作区吗？
-> **领域**：不是。工作区是引擎按工作目录自动分的、磁盘上真有目录；「组」是她手动拉的、只贴在会话上的标记，磁盘上没有对应文件夹。
-> **开发**：那「导出报销组」会动到原始会话文件吗？
-> **领域**：不会。导出是复制一份到 Finder，原文件留在引擎那套目录里不动 —— 一挪，续聊就接不上了。
+> **Dev**: The user says "put this session into the Expenses group" — is "group" the same as a project?
+> **Domain**: No. A project is automatically created by the engine based on the working directory and has a real directory on disk. A "group" is a user-created tag applied to sessions — there is no corresponding folder on disk.
+> **Dev**: Will "export the Expenses group" affect the original session files?
+> **Domain**: No. Export copies them to Finder. The originals stay in the engine's directory structure — moving them would break session resumption.

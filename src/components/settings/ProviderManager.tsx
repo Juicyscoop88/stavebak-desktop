@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState, useCallback, useRef } from 'react';
+import { CaretRight, X, Plus } from '@phosphor-icons/react';
 import { useProviderStore } from '../../stores/providerStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { bridge } from '../../lib/tauri-bridge';
@@ -198,12 +199,9 @@ export function ProviderManager({ alwaysExpanded = false }: { alwaysExpanded?: b
             onClick={() => setCollapsed(!collapsed)}
             className="flex items-center gap-1.5"
           >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-              stroke="currentColor" strokeWidth="1.5"
-              className={`text-text-tertiary transition-transform ${collapsed ? '' : 'rotate-90'}`}>
-              <path d="M3 1l4 4-4 4" />
-            </svg>
-            <h3 className="text-[13px] font-medium text-text-primary">
+            <CaretRight size={10} weight="light"
+              className={`text-text-tertiary transition-transform ${collapsed ? '' : 'rotate-90'}`} />
+            <h3 className="text-sm font-medium text-text-primary">
               {t('provider.title')}
             </h3>
             <span className="text-xs text-text-tertiary">
@@ -216,12 +214,12 @@ export function ProviderManager({ alwaysExpanded = false }: { alwaysExpanded?: b
       {isExpanded && (
         <div className="space-y-3 ml-0">
           {/* CC Switch coexistence notice */}
-          <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">
+          <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
             {t('provider.ccswitchNotice')}
           </div>
 
           {/* Inherit system config option */}
-          <div className={`rounded-lg text-[13px] transition-smooth border
+          <div className={`rounded-lg text-sm transition-smooth border
             ${!activeProviderId
               ? 'bg-accent/10 border-accent/30'
               : 'border-border-subtle hover:bg-bg-secondary'
@@ -270,10 +268,7 @@ export function ProviderManager({ alwaysExpanded = false }: { alwaysExpanded?: b
                       onClick={() => setDeleteTarget(null)}
                       className="text-text-tertiary hover:text-text-muted transition-smooth px-2 py-0.5"
                     >
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-                        stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                        <path d="M2 2l6 6M8 2l-6 6" />
-                      </svg>
+                      <X size={10} weight="light" />
                     </button>
                   </div>
                 )}
@@ -299,14 +294,11 @@ export function ProviderManager({ alwaysExpanded = false }: { alwaysExpanded?: b
             <button
               ref={addBtnRef}
               onClick={() => setMenuOpen(!menuOpen)}
-              className="px-3 py-2 rounded-lg text-[13px] font-medium transition-smooth
+              className="px-3 py-2 rounded-lg text-sm font-medium transition-smooth
                 border border-border-subtle text-text-muted hover:bg-bg-secondary
                 flex items-center gap-1.5"
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <path d="M6 1v10M1 6h10" />
-              </svg>
+              <Plus size={12} weight="light" />
               {t('provider.addProvider')}
             </button>
 

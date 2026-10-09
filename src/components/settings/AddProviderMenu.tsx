@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { Plus, DownloadSimple } from '@phosphor-icons/react';
 import { useT } from '../../lib/i18n';
 import { PROVIDER_PRESETS, type PresetProvider } from '../../lib/provider-presets';
 import type { ApiProvider } from '../../stores/providerStore';
@@ -87,12 +88,12 @@ export function AddProviderMenu({
                   onAddFromPreset(preset);
                   onClose();
                 }}
-                className="text-left px-2.5 py-2 rounded-lg text-[13px] transition-smooth
+                className="text-left px-2.5 py-2 rounded-lg text-sm transition-smooth
                   text-text-muted hover:bg-bg-secondary border border-transparent hover:border-border-subtle"
               >
                 {preset.name}
                 {addedCount > 0 && (
-                  <span className="text-[11px] text-text-tertiary ml-1">
+                  <span className="text-xs text-text-tertiary ml-1">
                     ×{addedCount}
                   </span>
                 )}
@@ -109,24 +110,18 @@ export function AddProviderMenu({
       <div className="space-y-0.5">
         <button
           onClick={() => { onAddCustom(); onClose(); }}
-          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[13px]
+          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm
             text-text-muted hover:bg-bg-secondary transition-smooth"
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <path d="M8 3v10M3 8h10" />
-          </svg>
+          <Plus size={14} weight="light" />
           {t('provider.customConfig')}
         </button>
         <button
           onClick={() => { onImport(); onClose(); }}
-          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[13px]
+          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm
             text-text-muted hover:bg-bg-secondary transition-smooth"
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <path d="M2 10v3a1 1 0 001 1h10a1 1 0 001-1v-3M8 2v8M5 7l3 3 3-3" />
-          </svg>
+          <DownloadSimple size={14} weight="light" />
           {t('provider.importFile')}
         </button>
       </div>

@@ -154,7 +154,7 @@ export function CliTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <span className="text-[13px] font-medium text-text-primary">Claude Code CLI</span>
+        <span className="text-sm font-medium text-text-primary">Claude Code CLI</span>
         {cliVersion && status !== 'not_found' && status !== 'install_failed' && (
           <span className="text-xs text-text-tertiary">v{cliVersion}</span>
         )}
@@ -163,7 +163,7 @@ export function CliTab() {
       {/* Status + path display */}
       {(status === 'found' || status === 'idle') && cliPath && (
         <div className="py-1 space-y-1">
-          <span className={`text-[13px] font-medium ${gitBashMissing ? 'text-amber-500' : 'text-green-500'}`}>
+          <span className={`text-sm font-medium ${gitBashMissing ? 'text-amber-500' : 'text-green-500'}`}>
             {gitBashMissing ? '⚠' : '✓'} {t('cli.installed')}
           </span>
           <p className="text-xs text-text-tertiary truncate" title={cliPath}>
@@ -175,7 +175,7 @@ export function CliTab() {
       {/* CLI update available */}
       {useSettingsStore.getState().cliUpdateAvailable && (status === 'found' || status === 'idle') && (
         <div className="py-2 px-3 rounded-lg bg-accent/10">
-          <p className="text-[13px] text-accent font-medium">
+          <p className="text-sm text-accent font-medium">
             {t('cli.update')} — v{useSettingsStore.getState().cliLatestVersion} {t('update.available') || 'available'}
           </p>
         </div>
@@ -184,14 +184,14 @@ export function CliTab() {
       {/* Git Bash missing warning (Windows) */}
       {gitBashMissing && (status === 'found' || status === 'idle') && (
         <div className="py-2 px-3 rounded-lg bg-amber-500/10">
-          <p className="text-[13px] text-amber-500 font-medium">
+          <p className="text-sm text-amber-500 font-medium">
             {t('setup.gitBashMissing')} — {t('cli.reinstallHint') || 'Click reinstall to fix'}
           </p>
         </div>
       )}
 
       {status === 'not_found' && (
-        <p className="text-[13px] text-amber-500">{t('cli.notFound')}</p>
+        <p className="text-sm text-amber-500">{t('cli.notFound')}</p>
       )}
 
       {/* Action buttons */}
@@ -200,7 +200,7 @@ export function CliTab() {
           {status !== 'not_found' && (
             <button
               onClick={handleUpdate}
-              className="flex-1 py-2 text-[13px] font-medium rounded-lg
+              className="flex-1 py-2 text-sm font-medium rounded-lg
                 border border-border-subtle text-text-muted
                 hover:bg-bg-secondary hover:text-text-primary transition-smooth"
             >
@@ -209,7 +209,7 @@ export function CliTab() {
           )}
           <button
             onClick={handleCheck}
-            className="flex-1 py-2 text-[13px] font-medium rounded-lg
+            className="flex-1 py-2 text-sm font-medium rounded-lg
               border border-border-subtle text-text-muted
               hover:bg-bg-secondary hover:text-text-primary transition-smooth"
           >
@@ -224,7 +224,7 @@ export function CliTab() {
               }
               handleInstall();
             }}
-            className={`flex-1 py-2 text-[13px] font-medium rounded-lg transition-smooth
+            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-smooth
               ${(status === 'not_found' || gitBashMissing)
                 ? 'bg-accent text-text-inverse hover:bg-accent-hover'
                 : 'border border-border-subtle text-text-muted hover:bg-bg-secondary hover:text-text-primary'
@@ -238,14 +238,14 @@ export function CliTab() {
       {status === 'updating' && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[13px] text-text-muted">
+            <span className="text-sm text-text-muted">
               {phase === 'npm_fallback' ? t('setup.npmFallback')
                 : phase === 'native_download' ? t('setup.nativeDownload')
                 : phase === 'configuring' ? t('cli.configuring')
                 : t('cli.updating')}
             </span>
             {downloadPercent > 0 && downloadPercent < 100 && (
-              <span className="text-[13px] text-text-tertiary">{downloadPercent}%</span>
+              <span className="text-sm text-text-tertiary">{downloadPercent}%</span>
             )}
           </div>
           <div className="w-full h-2 rounded-full bg-bg-tertiary overflow-hidden">
@@ -263,12 +263,12 @@ export function CliTab() {
 
       {status === 'updated' && (
         <div className="py-2 text-center space-y-3">
-          <span className="text-[13px] text-green-500 font-medium">
+          <span className="text-sm text-green-500 font-medium">
             ✓ {t('cli.updateDone')} {cliVersion && `v${cliVersion}`}
           </span>
           <button
             onClick={handleRestart}
-            className="w-full py-2 text-[13px] font-medium rounded-lg
+            className="w-full py-2 text-sm font-medium rounded-lg
               bg-accent text-text-inverse hover:bg-accent-hover transition-smooth"
           >
             {t('cli.restart')}
@@ -278,7 +278,7 @@ export function CliTab() {
 
       {status === 'update_failed' && errorMsg && (
         <div className="py-2 px-3 rounded-lg bg-red-500/10">
-          <p className="text-[13px] text-red-500 truncate" title={errorMsg}>{errorMsg}</p>
+          <p className="text-sm text-red-500 truncate" title={errorMsg}>{errorMsg}</p>
         </div>
       )}
 
@@ -286,14 +286,14 @@ export function CliTab() {
         <div className="flex items-center justify-center gap-2 py-2">
           <div className="w-4 h-4 border-2 border-text-tertiary/30
             border-t-text-tertiary rounded-full animate-spin" />
-          <span className="text-[13px] text-text-muted">{t('cli.checking')}</span>
+          <span className="text-sm text-text-muted">{t('cli.checking')}</span>
         </div>
       )}
 
       {status === 'installing' && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[13px] text-text-muted">
+            <span className="text-sm text-text-muted">
               {phase === 'native_version' ? t('setup.nativeVersion')
                 : phase === 'native_manifest' ? t('setup.nativeManifest')
                 : phase === 'native_download' ? t('setup.nativeDownload')
@@ -308,7 +308,7 @@ export function CliTab() {
                 : t('cli.installing')}
             </span>
             {(phase === 'native_download' || phase === 'downloading' || phase === 'node_downloading' || phase === 'git_downloading') && downloadPercent > 0 && (
-              <span className="text-[13px] text-text-tertiary">{downloadPercent}%</span>
+              <span className="text-sm text-text-tertiary">{downloadPercent}%</span>
             )}
           </div>
           <div className="w-full h-2 rounded-full bg-bg-tertiary overflow-hidden">
@@ -326,7 +326,7 @@ export function CliTab() {
 
       {status === 'installed' && (
         <div className="py-2 text-center space-y-3">
-          <span className="text-[13px] text-green-500 font-medium">
+          <span className="text-sm text-green-500 font-medium">
             ✓ {t('cli.installDone')}
           </span>
           {cliPath && (
@@ -336,7 +336,7 @@ export function CliTab() {
           )}
           <button
             onClick={handleRestart}
-            className="w-full py-2 text-[13px] font-medium rounded-lg
+            className="w-full py-2 text-sm font-medium rounded-lg
               bg-accent text-text-inverse hover:bg-accent-hover transition-smooth"
           >
             {t('cli.restart')}
@@ -346,7 +346,7 @@ export function CliTab() {
 
       {status === 'install_failed' && (
         <div className="space-y-2">
-          <p className="text-[13px] text-red-500 text-center">{t('cli.installFail')}</p>
+          <p className="text-sm text-red-500 text-center">{t('cli.installFail')}</p>
           {errorMsg && (
             <p className="text-xs text-text-tertiary text-center truncate" title={errorMsg}>
               {errorMsg}
@@ -364,7 +364,7 @@ export function CliTab() {
           )}
           <button
             onClick={handleInstall}
-            className="w-full py-2 text-[13px] font-medium rounded-lg
+            className="w-full py-2 text-sm font-medium rounded-lg
               border border-border-subtle text-text-muted
               hover:bg-bg-secondary transition-smooth"
           >
@@ -480,7 +480,7 @@ function CliDiagnostics() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <span className="text-[13px] font-medium text-text-primary">{t('cli.environment')}</span>
+        <span className="text-sm font-medium text-text-primary">{t('cli.environment')}</span>
         <div className="flex items-center gap-3">
           <button
             onClick={handleRepair}
@@ -504,12 +504,12 @@ function CliDiagnostics() {
         <div className="flex items-center justify-center gap-2 py-3">
           <div className="w-4 h-4 border-2 border-text-tertiary/30
             border-t-text-tertiary rounded-full animate-spin" />
-          <span className="text-[13px] text-text-muted">{t('cli.scanning')}</span>
+          <span className="text-sm text-text-muted">{t('cli.scanning')}</span>
         </div>
       )}
 
       {!scanning && candidates.length === 0 && (
-        <p className="text-[13px] text-text-tertiary py-2">{t('cli.noCliFound')}</p>
+        <p className="text-sm text-text-tertiary py-2">{t('cli.noCliFound')}</p>
       )}
 
       <div className="space-y-2">
@@ -527,24 +527,24 @@ function CliDiagnostics() {
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded
+                  <span className={`text-xs font-medium px-1.5 py-0.5 rounded
                     ${SOURCE_COLORS[c.source] || 'text-text-tertiary'}
                     ${active ? 'bg-accent/10' : 'bg-bg-tertiary/50'}`}
                   >
                     {t(SOURCE_I18N_KEYS[c.source] || '') || c.source}
                   </span>
                   {c.version && (
-                    <span className="text-[13px] text-text-secondary font-medium">v{c.version}</span>
+                    <span className="text-sm text-text-secondary font-medium">v{c.version}</span>
                   )}
                   {c.isNative && (
-                    <span className="text-[11px] text-text-tertiary">native</span>
+                    <span className="text-xs text-text-tertiary">native</span>
                   )}
                   {active && pinnedPath && (
-                    <span className="text-[11px] text-accent font-medium">★</span>
+                    <span className="text-xs text-accent font-medium">★</span>
                   )}
                 </div>
                 {active && (
-                  <span className="text-[11px] text-accent font-medium shrink-0">{t('cli.inUse')}</span>
+                  <span className="text-xs text-accent font-medium shrink-0">{t('cli.inUse')}</span>
                 )}
               </div>
               <p className="text-xs text-text-tertiary truncate mt-1" title={c.path}>

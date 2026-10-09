@@ -19,7 +19,7 @@ export function FileChipView({ node }: NodeViewProps) {
       e.preventDefault();
       e.stopPropagation();
       window.dispatchEvent(
-        new CustomEvent('tokenicode:open-file', { detail: fullPath }),
+        new CustomEvent('stavebak:open-file', { detail: fullPath }),
       );
     },
     [fullPath],
@@ -51,14 +51,14 @@ export function FileChipView({ node }: NodeViewProps) {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <span className="text-[10px]">{icon}</span>
+        <span className="text-xs">{icon}</span>
         <span className="max-w-[180px] truncate">{label}</span>
       </span>
 
       {/* Tooltip — fixed position to escape overflow clipping */}
       {tooltip && (
         <span
-          className="fixed px-2 py-1 rounded-md text-[10px] font-normal
+          className="fixed px-2 py-1 rounded-md text-xs font-normal
             bg-bg-card border border-border-subtle shadow-lg
             text-text-secondary whitespace-nowrap z-[9999]
             pointer-events-none animate-fade-in"

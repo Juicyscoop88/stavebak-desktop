@@ -7,6 +7,8 @@ interface AppShellProps {
   sidebar: React.ReactNode;
   main: React.ReactNode;
   secondary?: React.ReactNode;
+  bottomBar?: React.ReactNode;
+  forceCollapseSidebar?: boolean;
 }
 
 const MIN_PANEL_WIDTH = 200;
@@ -22,13 +24,12 @@ const SIDEBAR_COLLAPSE_THRESHOLD = 100;
 const MIN_PREVIEW_WIDTH = 300;
 const MAX_PREVIEW_WIDTH = 1200;
 
-export function AppShell({ sidebar, main, secondary }: AppShellProps) {
-  const sidebarOpen = useSettingsStore((s) => s.sidebarOpen);
+export function AppShell({ sidebar, main, secondary, bottomBar, forceCollapseSidebar }: AppShellProps) {
+  const sidebarOpenStore = useSettingsStore((s) => s.sidebarOpen);
+  const sidebarOpen = forceCollapseSidebar ? false : sidebarOpenStore;
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
-  const toggleSidebar = useSettingsStore((s) => s.toggleSidebar);
   const secondaryPanelOpen = useSettingsStore((s) => s.secondaryPanelOpen);
   const secondaryPanelWidth = useSettingsStore((s) => s.secondaryPanelWidth);
-  const toggleSecondaryPanel = useSettingsStore((s) => s.toggleSecondaryPanel);
 
   /* File preview state — when a file is selected, we enter "preview mode" */
   const selectedFile = useFileStore((s) => s.selectedFile);
@@ -44,32 +45,14 @@ export function AppShell({ sidebar, main, secondary }: AppShellProps) {
     Math.round(window.innerWidth * 0.5)
   );
 
-  /* Remember panel states before entering preview mode so we can restore them on exit */
-  const panelStateBeforePreview = useRef<{ sidebar: boolean; secondary: boolean } | null>(null);
-
-  /* Re-calculate default when entering preview mode */
+  /* Re-calculate default preview width when entering preview mode */
   const prevPreviewMode = useRef(false);
   useEffect(() => {
     if (isFilePreviewMode && !prevPreviewMode.current) {
-      // Entering preview mode — save current panel state and collapse them
       setPreviewWidth(Math.round(window.innerWidth * 0.5));
-      panelStateBeforePreview.current = {
-        sidebar: sidebarOpen,
-        secondary: secondaryPanelOpen,
-      };
-      if (sidebarOpen) toggleSidebar();
-      if (secondaryPanelOpen) toggleSecondaryPanel();
-    } else if (!isFilePreviewMode && prevPreviewMode.current) {
-      // Exiting preview mode — restore panels to their previous state
-      const saved = panelStateBeforePreview.current;
-      if (saved) {
-        if (saved.sidebar && !sidebarOpen) toggleSidebar();
-        if (saved.secondary && !secondaryPanelOpen) toggleSecondaryPanel();
-        panelStateBeforePreview.current = null;
-      }
     }
     prevPreviewMode.current = isFilePreviewMode;
-  }, [isFilePreviewMode, sidebarOpen, toggleSidebar, secondaryPanelOpen, toggleSecondaryPanel]);
+  }, [isFilePreviewMode]);
 
   // Refs to avoid re-registering global listeners when these values change
   const isFilePreviewModeRef = useRef(isFilePreviewMode);
@@ -197,137 +180,101 @@ export function AppShell({ sidebar, main, secondary }: AppShellProps) {
     };
   }, []);
 
-  /* Compute sidebar visibility: hidden when file preview is active (reclaim space) */
-  const showSidebar = sidebarOpen && !isFilePreviewMode;
-  const showFloatingSidebar = sidebarOpen && isFilePreviewMode;
-  /* Secondary panel: normal mode when no preview, floating overlay when preview is active */
+  const showSidebar = sidebarOpen;
   const showSecondary = secondaryPanelOpen && !isFilePreviewMode;
-  const showFloatingSecondary = secondaryPanelOpen && isFilePreviewMode;
 
   return (
-    <div className="flex h-full w-full overflow-hidden gradient-bg">
+    <div className="flex flex-col h-full w-full overflow-hidden gradient-bg">
       {/* Drag region — data-tauri-drag-region handles both drag and double-click-to-maximize natively */}
       <div
         data-tauri-drag-region
         className="fixed top-0 left-0 right-0 h-[28px] z-50"
       />
 
-      {/* Sidebar — animates to w-0 when hidden or preview mode */}
-      <div
-        className="flex-shrink-0 transition-all duration-300 ease-out overflow-hidden"
-        style={{ width: showSidebar ? `${sidebarWidth}px` : '0px' }}
-      >
+      {/* Content row — sidebar + main + panels */}
+      <div className="flex flex-1 min-h-0">
+        {/* Sidebar — animates to w-0 when hidden or preview mode */}
         <div
-          className="h-full overflow-hidden bg-bg-sidebar"
-          style={{ width: `${sidebarWidth}px` }}
-        >
-          {sidebar}
-        </div>
-      </div>
-      {/* Sidebar resize handle — outside overflow-hidden so hit area isn't clipped */}
-      {showSidebar && (
-        <div
-          onMouseDown={handleSidebarMouseDown}
-          className="w-px h-full flex-shrink-0 relative cursor-col-resize z-20
-            bg-border-subtle hover:bg-accent/40 transition-colors group"
-        >
-          {/* 拖拽热区：向两侧各扩 4px，绝对定位不占布局宽度 → 侧栏紧贴聊天区，只留 1px 分隔线 */}
-          <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
-        </div>
-      )}
-
-      {/* Main Panel — full-height, separated by vertical border lines */}
-      <div className="flex-1 min-w-0 flex flex-col bg-bg-chat overflow-hidden">
-        {main}
-      </div>
-
-      {/* File Preview resize handle — w-px 分隔线本体 + 悬浮热区，与侧栏手柄一致，避免 7px 透明缝隙露出背景 */}
-      {isFilePreviewMode && (
-        <div
-          onMouseDown={handleRightMouseDown}
-          className="w-px h-full flex-shrink-0 relative cursor-col-resize z-10
-            bg-border-subtle hover:bg-accent/40 transition-colors group"
-        >
-          {/* 拖拽热区：向两侧各扩 4px，绝对定位不占布局宽度 */}
-          <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
-        </div>
-      )}
-      {/* File Preview Panel — animates in/out */}
-      <div
-        className="flex-shrink-0 overflow-hidden transition-all duration-300 ease-out"
-        style={{ width: isFilePreviewMode ? `${previewWidth}px` : '0px' }}
-      >
-        <div className="h-full overflow-hidden flex flex-col bg-bg-chat"
-          style={{ width: `${previewWidth}px` }}>
-          <FilePreview />
-        </div>
-      </div>
-
-      {/* Secondary Panel resize handle — 同上：w-px 分隔线本体 + 悬浮热区，三处分隔线统一 */}
-      {secondary && showSecondary && (
-        <div
-          onMouseDown={handleRightMouseDown}
-          className="w-px h-full flex-shrink-0 relative cursor-col-resize z-10
-            bg-border-subtle hover:bg-accent/40 transition-colors group"
-        >
-          {/* 拖拽热区：向两侧各扩 4px，绝对定位不占布局宽度 */}
-          <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
-        </div>
-      )}
-      {/* Secondary Panel — animates to w-0 when hidden or preview mode */}
-      {secondary && (
-        <div
-          className="flex-shrink-0 transition-all duration-300 ease-out overflow-hidden"
-          style={{ width: showSecondary ? `${secondaryPanelWidth}px` : '0px' }}
+          className="flex-shrink-0  overflow-hidden"
+          style={{ width: showSidebar ? `${sidebarWidth}px` : '0px' }}
         >
           <div
-            className="h-full overflow-y-auto overflow-x-hidden bg-bg-sidebar"
-            style={{ width: `${secondaryPanelWidth}px` }}
-          >
-            {secondary}
-          </div>
-        </div>
-      )}
-
-      {/* Floating Sidebar — overlay when file preview is active */}
-      {showFloatingSidebar && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/10"
-            onClick={toggleSidebar}
-          />
-          <div
-            className="fixed top-0 left-0 h-full z-50 flex animate-in slide-in-from-left duration-200"
+            className="h-full overflow-hidden bg-bg-chat"
             style={{ width: `${sidebarWidth}px` }}
           >
-            <div className="flex-1 h-full overflow-y-auto bg-bg-sidebar
-              border-r border-border-subtle shadow-lg">
-              {sidebar}
-            </div>
+            {sidebar}
           </div>
-        </>
-      )}
-
-      {/* Floating Secondary Panel — overlay when file preview is active */}
-      {secondary && showFloatingSecondary && (
-        <>
-          {/* Backdrop — click to dismiss */}
+        </div>
+        {/* Sidebar resize handle */}
+        {showSidebar && (
           <div
-            className="fixed inset-0 z-40 bg-black/10"
-            onClick={toggleSecondaryPanel}
-          />
-          {/* Floating panel — anchored to right edge */}
-          <div
-            className="fixed top-0 right-0 h-full z-50 flex animate-in slide-in-from-right duration-200"
-            style={{ width: `${secondaryPanelWidth}px` }}
+            onMouseDown={handleSidebarMouseDown}
+            className="w-px h-full flex-shrink-0 relative cursor-col-resize z-20
+              bg-border-subtle hover:bg-accent/40 group"
           >
-            <div className="flex-1 h-full overflow-y-auto overflow-x-hidden bg-bg-sidebar
-              border-l border-border-subtle shadow-lg">
+            <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
+          </div>
+        )}
+
+        {/* Main Panel */}
+        <div className="flex-1 min-w-0 flex flex-col bg-bg-chat overflow-hidden">
+          {main}
+        </div>
+
+        {/* File Preview resize handle */}
+        {isFilePreviewMode && (
+          <div
+            onMouseDown={handleRightMouseDown}
+            className="w-px h-full flex-shrink-0 relative cursor-col-resize z-10
+              bg-border-subtle hover:bg-accent/40 group"
+          >
+            <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
+          </div>
+        )}
+        {/* File Preview Panel */}
+        <div
+          className="flex-shrink-0 overflow-hidden "
+          style={{ width: isFilePreviewMode ? `${previewWidth}px` : '0px' }}
+        >
+          <div className="h-full overflow-hidden flex flex-col bg-bg-chat"
+            style={{ width: `${previewWidth}px` }}>
+            <FilePreview />
+          </div>
+        </div>
+
+        {/* Secondary Panel resize handle */}
+        {secondary && showSecondary && (
+          <div
+            onMouseDown={handleRightMouseDown}
+            className="w-px h-full flex-shrink-0 relative cursor-col-resize z-10
+              bg-border-subtle hover:bg-accent/40 group"
+          >
+            <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
+          </div>
+        )}
+        {/* Secondary Panel */}
+        {secondary && (
+          <div
+            className="flex-shrink-0  overflow-hidden"
+            style={{ width: showSecondary ? `${secondaryPanelWidth}px` : '0px' }}
+          >
+            <div
+              className="h-full overflow-y-auto overflow-x-hidden bg-bg-chat"
+              style={{ width: `${secondaryPanelWidth}px` }}
+            >
               {secondary}
             </div>
           </div>
-        </>
+        )}
+      </div>
+
+      {/* Bottom bar — full width */}
+      {bottomBar && (
+        <div className="flex-shrink-0 bg-bg-chat">
+          {bottomBar}
+        </div>
       )}
+
     </div>
   );
 }

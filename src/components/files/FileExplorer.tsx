@@ -12,6 +12,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { FileIcon } from '../shared/FileIcon';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { showToast } from '../shared/Toast';
+import { FilePlus, FolderPlus, ClipboardText, CopySimple, Copy, PencilSimple, Trash, Folder, ArrowSquareOut, CaretRight, ShareNetwork, Play } from '@phosphor-icons/react';
 
 function getChangeBadge(kind: FileChangeKind | undefined) {
   if (!kind) return null;
@@ -92,89 +93,69 @@ function ContextMenu({ menu, onClose, callbacks }: {
     ...(menu.isDir ? [
       {
         label: t('files.newFile'),
-        icon: <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M9 2H4v12h8V5l-3-3z" /><path d="M8 7v4M6 9h4" /></svg>,
+        icon: <FilePlus size={12} weight="light" />,
         action: () => { callbacks.onNewFile(menu.path); onClose(); },
       },
       {
         label: t('files.newFolder'),
-        icon: <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M2 4h4l2 2h6v7H2V4z" /><path d="M7 8v3M5.5 9.5h3" /></svg>,
+        icon: <FolderPlus size={12} weight="light" />,
         action: () => { callbacks.onNewFolder(menu.path); onClose(); },
       },
       'separator' as const,
     ] as MenuItem[] : []),
     ...(!menu.isDir ? [{
       label: t('files.insertToChat'),
-      icon: <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M2 14l4-2 8-8-2-2-8 8-2 4z" /><path d="M10 4l2 2" /></svg>,
+      icon: <ClipboardText size={12} weight="light" />,
       action: () => { callbacks.onInsertToChat(menu.path); onClose(); },
     }] as MenuItem[] : []),
     {
       label: t('files.copyPath'),
-      icon: <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M5 2H2v12h8v-3" /><path d="M6 6h8v8H6V6z" /></svg>,
+      icon: <CopySimple size={12} weight="light" />,
       action: () => { callbacks.onCopyPath(menu.path); onClose(); },
     },
     ...(!menu.isDir ? [{
       label: t('files.copyFile'),
-      icon: <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="5" y="5" width="9" height="9" rx="1.5" /><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-6A1.5 1.5 0 013.5 2h6A1.5 1.5 0 0111 3.5V5" /></svg>,
+      icon: <Copy size={12} weight="light" />,
       action: () => { callbacks.onCopyFile(menu.path); onClose(); },
     }] as MenuItem[] : []),
     ...(menu.isDir && callbacks.clipboardPath ? [{
       label: t('files.paste'),
-      icon: <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M10 2H6a1 1 0 00-1 1v1H3a1 1 0 00-1 1v8a1 1 0 001 1h10a1 1 0 001-1V5a1 1 0 00-1-1h-2V3a1 1 0 00-1-1z" /></svg>,
+      icon: <ClipboardText size={12} weight="light" />,
       action: () => { callbacks.onPaste(menu.path); onClose(); },
     }] as MenuItem[] : []),
     'separator',
     {
       label: t('files.rename'),
-      icon: <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M11 2l3 3-9 9H2v-3l9-9z" /></svg>,
+      icon: <PencilSimple size={12} weight="light" />,
       action: () => { callbacks.onRename(menu.path); onClose(); },
     },
     {
       label: t('files.delete'),
-      icon: <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 4h10M6 4V2h4v2M5 4v9h6V4" /></svg>,
+      icon: <Trash size={12} weight="light" />,
       action: () => { callbacks.onDelete(menu.path, menu.isDir); onClose(); },
       danger: true,
     },
     'separator',
     {
       label: t('files.revealInFinder'),
-      icon: <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M2 4h4l2 2h6v7H2V4z" /></svg>,
+      icon: <Folder size={12} weight="light" />,
       action: () => { bridge.revealInFinder(menu.path); onClose(); },
     },
     {
       label: t('files.openDefault'),
-      icon: <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M12 9v4H4V5h4" /><path d="M8 8l6-6M10 2h4v4" /></svg>,
+      icon: <ArrowSquareOut size={12} weight="light" />,
       action: () => { bridge.openWithDefaultApp(menu.path); onClose(); },
     },
     ...(isMac() ? [
       {
         label: t('files.share'),
-        icon: <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M8 2v8" /><path d="M5 5l3-3 3 3" /><path d="M3 9v4h10V9" /></svg>,
+        icon: <ShareNetwork size={12} weight="light" />,
         action: () => { bridge.shareFile(menu.path); onClose(); },
       },
     ] : []),
     {
-      label: t('files.shareToWechat'),
-      icon: <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M6.5 4C4 4 2 5.8 2 8c0 1.2.6 2.2 1.6 2.9L3.2 13l2-1.2c.4.1.8.2 1.3.2 2.5 0 4.5-1.8 4.5-4S9 4 6.5 4z" /><path d="M10 7.5c-1.8 0-3.3 1.3-3.3 2.9 0 1.6 1.5 2.9 3.3 2.9.3 0 .7-.1 1-.1L12.5 14l-.3-1.5c.7-.5 1.1-1.3 1.1-2.1 0-1.6-1.5-2.9-3.3-2.9z" /></svg>,
-      action: () => {
-        const filePath = menu.path;
-        onClose();
-        // Delay IPC to let menu close + main thread settle before presenting share UI
-        setTimeout(() => {
-          bridge.shareToWechat(filePath)
-            .then((result) => {
-              if (result === 'fallback') {
-                showToast(t('files.shareToWechatFallback'), 'success');
-              } else if (!isMac()) {
-                showToast(t('files.shareToWechatSuccess'), 'success');
-              }
-            })
-            .catch((err) => showToast(`${t('files.shareToWechatFailed')}: ${err}`, 'error'));
-        }, 100);
-      },
-    },
-    {
       label: t('files.openVscodeShort'),
-      icon: <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M4 3l8 5-8 5V3z" /></svg>,
+      icon: <Play size={12} weight="light" />,
       action: () => { bridge.openInVscode(menu.path); onClose(); },
     },
   ];
@@ -193,7 +174,7 @@ function ContextMenu({ menu, onClose, callbacks }: {
           <button
             key={i}
             onClick={item.action}
-            className={`w-full flex items-center gap-2 px-3 py-2 text-[13px]
+            className={`w-full flex items-center gap-2 px-3 py-2 text-xs
               hover:bg-bg-secondary transition-smooth text-left cursor-pointer
               ${item.danger ? 'text-error hover:bg-error/10' : 'text-text-primary'}`}
           >
@@ -206,72 +187,6 @@ function ContextMenu({ menu, onClose, callbacks }: {
       )}
     </div>,
     document.body,
-  );
-}
-
-// --- Search Result Item (flat list) ---
-interface FlatMatch {
-  node: FileNode;
-  /** Relative directory path for context, e.g. "src/components" */
-  relDir: string;
-}
-
-function collectMatches(nodes: FileNode[], query: string, rootPrefix: string): FlatMatch[] {
-  const results: FlatMatch[] = [];
-  function walk(node: FileNode) {
-    if (node.name.toLowerCase().includes(query)) {
-      // Compute relative directory (parent path minus root prefix)
-      const lastSep = node.path.lastIndexOf('/');
-      const parentPath = lastSep > 0 ? node.path.slice(0, lastSep) : '';
-      const relDir = parentPath.startsWith(rootPrefix)
-        ? parentPath.slice(rootPrefix.length).replace(/^\//, '')
-        : parentPath;
-      results.push({ node, relDir });
-    }
-    if (node.children) {
-      for (const child of node.children) walk(child);
-    }
-  }
-  for (const n of nodes) walk(n);
-  return results;
-}
-
-function SearchResultItem({
-  match,
-  onContextMenu,
-}: {
-  match: FlatMatch;
-  onContextMenu: (e: React.MouseEvent, path: string, isDir: boolean) => void;
-}) {
-  const { node, relDir } = match;
-  const selectedFile = useFileStore((s) => s.selectedFile);
-  const selectFile = useFileStore((s) => s.selectFile);
-  const changeKind = useFileStore((s) => s.changedFiles.get(node.path));
-  const isSelected = selectedFile === node.path;
-  return (
-    <button
-      onClick={() => { if (!node.is_dir) selectFile(node.path); }}
-      onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, node.path, node.is_dir); }}
-      className={`w-full flex items-center gap-1.5 py-1.5 px-3 rounded-md
-        text-left text-[13px] transition-smooth group
-        ${isSelected
-          ? 'bg-accent/10 text-accent'
-          : changeKind
-            ? 'text-success'
-            : 'text-text-muted hover:bg-bg-secondary hover:text-text-primary'
-        }`}
-    >
-      <span className="flex-shrink-0 w-4 flex items-center justify-center">
-        <FileIcon name={node.name} isDir={node.is_dir} size={14} className="text-accent" />
-      </span>
-      <span className="truncate">{node.name}</span>
-      {relDir && (
-        <span className="ml-auto text-xs text-text-tertiary truncate max-w-[40%] flex-shrink-0">
-          {relDir}
-        </span>
-      )}
-      {getChangeBadge(changeKind)}
-    </button>
   );
 }
 
@@ -309,7 +224,7 @@ function TreeNode({
   const expanded = useFileStore((s) => s.expandedFolders.has(node.path));
   const toggleFolder = useFileStore((s) => s.toggleFolder);
   const selectFile = useFileStore((s) => s.selectFile);
-  // 高亮统一看 revealTarget（文件夹也能高亮）；selectFile 会同步设置它
+  // Highlight based on revealTarget (folders can be highlighted too); selectFile sets it
   const isActive = useFileStore((s) => s.revealTarget === node.path);
   const changeKind = useFileStore((s) => s.changedFiles.get(node.path));
   const dirPrefix = node.path + '/';
@@ -322,7 +237,7 @@ function TreeNode({
   const isExpanded = expanded;
   const rowRef = useRef<HTMLButtonElement>(null);
 
-  // 被「定位」命中时滚动到可见处
+  // Scroll into view when this node is the reveal target
   useEffect(() => {
     if (isActive) rowRef.current?.scrollIntoView({ block: 'nearest' });
   }, [isActive]);
@@ -384,7 +299,7 @@ function TreeNode({
                 } else if (!result.droppedInTree) {
                   // Drop outside file tree → insert file chip in chat
                   window.dispatchEvent(
-                    new CustomEvent('tokenicode:tree-file-inline', { detail: result.sourcePath }),
+                    new CustomEvent('stavebak:tree-file-inline', { detail: result.sourcePath }),
                   );
                 }
               }
@@ -399,24 +314,21 @@ function TreeNode({
           onContextMenu(e, node.path, node.is_dir);
         }}
         {...(node.is_dir ? { 'data-dir-path': node.path } : {})}
-        className={`w-full flex items-center gap-1.5 py-1.5 px-2 rounded-md
-          text-left text-[13px] transition-smooth group
+        className={`w-full flex items-center gap-2.5 py-2 px-2.5 rounded-lg
+          text-left text-xs group
           ${isActive
             ? 'bg-accent/10 text-accent'
             : changeKind
               ? 'text-success'
               : 'text-text-muted hover:bg-bg-secondary hover:text-text-primary'
           }`}
-        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+        style={{ paddingLeft: `${depth * 16 + 10}px` }}
       >
         <span className="flex-shrink-0 w-3.5 flex items-center">
           {node.is_dir ? (
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-              stroke="currentColor" strokeWidth="1.5"
+            <CaretRight size={10} weight="light"
               className={`text-text-tertiary transition-transform duration-150
-                ${isExpanded ? 'rotate-90' : ''}`}>
-              <path d="M3 2l4 3-4 3" />
-            </svg>
+                ${isExpanded ? 'rotate-90' : ''}`} />
           ) : (
             <FileIcon name={node.name} size={14} className="text-accent" />
           )}
@@ -433,7 +345,7 @@ function TreeNode({
             }}
             onBlur={onRenameCancel}
             onClick={(e) => e.stopPropagation()}
-            className="flex-1 min-w-0 text-[13px] bg-bg-input border border-border-focus
+            className="flex-1 min-w-0 text-xs bg-bg-input border border-border-focus
               rounded-lg px-1.5 py-0.5 outline-none text-text-primary"
           />
         ) : (
@@ -448,8 +360,8 @@ function TreeNode({
       {node.is_dir && isExpanded && node.children && (
         <div>
           {creatingIn?.dir === node.path && (
-            <div className="flex items-center gap-2 py-1 px-2"
-              style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}>
+            <div className="flex items-center gap-2.5 py-2 px-2.5"
+              style={{ paddingLeft: `${(depth + 1) * 16 + 10}px` }}>
               <FileIcon name={creatingIn.type === 'folder' ? '' : createName}
                 isDir={creatingIn.type === 'folder'} size={14}
                 className="flex-shrink-0 text-text-tertiary" />
@@ -464,7 +376,7 @@ function TreeNode({
                 }}
                 onBlur={onCreateCancel}
                 placeholder={creatingIn.type === 'folder' ? 'folder name' : 'file name'}
-                className="flex-1 min-w-0 text-[13px] bg-bg-input border border-border-focus
+                className="flex-1 min-w-0 text-xs bg-bg-input border border-border-focus
                   rounded-lg px-1.5 py-0.5 outline-none text-text-primary"
               />
             </div>
@@ -507,9 +419,7 @@ export function FileExplorer() {
   const isDragOverTree = useFileStore((s) => s.isDragOverTree);
   const showHiddenFiles = useSettingsStore((s) => s.showHiddenFiles);
 
-  const [searchQuery, setSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
 
   // Right-click menu state
   const [clipboardPath, setClipboardPath] = useState<string | null>(null);
@@ -661,16 +571,12 @@ export function FileExplorer() {
     return (
       <div className="flex flex-col h-full">
         <div className="flex items-center px-3 py-2 border-b border-border-subtle">
-          <span className="text-[13px] font-medium text-text-tertiary
+          <span className="text-xs font-medium text-text-tertiary
             uppercase tracking-wider">{t('files.title')}</span>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center
           px-4 text-center">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none"
-            stroke="currentColor" strokeWidth="1.2"
-            className="text-text-tertiary/40 mb-3">
-            <path d="M4 8h8l4 4h12v14H4V8z" />
-          </svg>
+          <Folder size={32} weight="light" className="text-text-tertiary/40 mb-3" />
           <p className="text-xs text-text-tertiary leading-relaxed">
             {t('files.selectProject')}
           </p>
@@ -691,40 +597,19 @@ export function FileExplorer() {
             </span>
           </div>
         )}
-        <div className="h-full overflow-y-auto py-1">
+        <div className="h-full overflow-y-auto p-1.5">
         {isLoading && filteredTree.length === 0 ? (
           <div className="flex items-center justify-center py-8">
             <div className="w-5 h-5 border-2 border-accent/30
               border-t-accent rounded-full animate-spin" />
           </div>
         ) : filteredTree.length > 0 ? (
-          searchQuery ? (
-            // --- Flat search results ---
-            (() => {
-              const matches = collectMatches(filteredTree, searchQuery.toLowerCase(), rootPath || '');
-              return matches.length > 0 ? (
-                <div className="py-1">
-                  {matches.map((m) => (
-                    <SearchResultItem
-                      key={m.node.path}
-                      match={m}
-                      onContextMenu={handleContextMenu}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-xs text-text-tertiary">
-                  {t('files.noFiles')}
-                </div>
-              );
-            })()
-          ) : (
-            // --- Normal tree view ---
+          (
             <>
               {/* Inline creation input at root level */}
               {creatingIn && creatingIn.dir === (workingDirectory || rootPath) && (
-                <div className="flex items-center gap-2 py-1.5 px-2"
-                  style={{ paddingLeft: '8px' }}>
+                <div className="flex items-center gap-2.5 py-2 px-2.5"
+                  style={{ paddingLeft: '10px' }}>
                   <FileIcon name={creatingIn.type === 'folder' ? '__dir__' : 'untitled'}
                     isDir={creatingIn.type === 'folder'} size={14}
                     className="flex-shrink-0 text-text-tertiary" />
@@ -739,7 +624,7 @@ export function FileExplorer() {
                     }}
                     onBlur={handleCreateCancel}
                     placeholder={creatingIn.type === 'file' ? t('files.newFile') : t('files.newFolder')}
-                    className="flex-1 min-w-0 text-[13px] bg-bg-input border border-border-focus
+                    className="flex-1 min-w-0 text-xs bg-bg-input border border-border-focus
                       rounded-lg px-1.5 py-0.5 outline-none text-text-primary
                       placeholder:text-text-tertiary"
                   />
@@ -766,49 +651,38 @@ export function FileExplorer() {
             </>
           )
         ) : (
-          <div className="text-center py-8 text-xs text-text-tertiary">
-            {t('files.noFiles')}
+          <div className="px-3 pt-4 opacity-20 select-none pointer-events-none">
+            <div className="flex flex-col gap-1.5 text-xs text-text-tertiary">
+              <div className="flex items-center gap-2 pl-2">
+                <span className="w-3 h-3 rounded border border-current opacity-50" />
+                <span>dokumentace/</span>
+              </div>
+              <div className="flex items-center gap-2 pl-6">
+                <span className="w-2 h-2 rounded-sm border border-current opacity-40" />
+                <span>průvodní-zpráva.md</span>
+              </div>
+              <div className="flex items-center gap-2 pl-6">
+                <span className="w-2 h-2 rounded-sm border border-current opacity-40" />
+                <span>technická-zpráva.md</span>
+              </div>
+              <div className="flex items-center gap-2 pl-2">
+                <span className="w-3 h-3 rounded border border-current opacity-50" />
+                <span>podklady/</span>
+              </div>
+              <div className="flex items-center gap-2 pl-6">
+                <span className="w-2 h-2 rounded-sm border border-current opacity-40" />
+                <span>geologický-posudek.pdf</span>
+              </div>
+              <div className="flex items-center gap-2 pl-2">
+                <span className="w-2 h-2 rounded-sm border border-current opacity-40" />
+                <span>stavebak.json</span>
+              </div>
+            </div>
           </div>
         )}
         </div>{/* end scroll container */}
       </div>{/* end data-file-tree wrapper */}
 
-      {/* Search bar — moved to bottom, borderless */}
-      <div className="py-1.5">
-        <div className="relative">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5"
-            className="absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary">
-            <circle cx="7" cy="7" r="5" />
-            <path d="M11 11l3 3" />
-          </svg>
-          <input
-            ref={searchRef}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t('files.search')}
-            className="w-full pl-7 pr-7 py-1.5 text-[13px] bg-transparent
-              rounded-lg text-text-primary
-              placeholder:text-text-tertiary outline-none
-              hover:bg-bg-secondary focus:bg-bg-secondary
-              transition-smooth"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2
-                p-0.5 rounded-lg text-text-tertiary hover:text-text-primary
-                transition-smooth"
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-                stroke="currentColor" strokeWidth="1.5">
-                <path d="M2 2l6 6M8 2l-6 6" />
-              </svg>
-            </button>
-          )}
-        </div>
-      </div>
 
       {/* Context menu */}
       {contextMenu && (

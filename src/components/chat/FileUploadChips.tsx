@@ -1,5 +1,6 @@
 import type { FileAttachment } from '../../hooks/useFileAttachments';
 import { useT } from '../../lib/i18n';
+import { SpinnerGap, File, X } from '@phosphor-icons/react';
 
 interface FileUploadChipsProps {
   files: FileAttachment[];
@@ -26,11 +27,7 @@ export function FileUploadChips({ files, onRemove, isProcessing }: FileUploadChi
         <div className="inline-flex items-center gap-1.5 pl-2.5 pr-2 py-1.5
           rounded-lg border border-accent/30 bg-accent/5
           text-xs text-accent flex-shrink-0 animate-pulse">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="2"
-            className="flex-shrink-0 animate-spin">
-            <path d="M8 2a6 6 0 105.3 3.2" />
-          </svg>
+          <SpinnerGap size={12} weight="light" className="flex-shrink-0 animate-spin" />
           {t('input.processingFiles')}
         </div>
       )}
@@ -50,19 +47,14 @@ export function FileUploadChips({ files, onRemove, isProcessing }: FileUploadChi
               className="w-5 h-5 rounded object-cover flex-shrink-0"
             />
           ) : (
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5"
-              className="flex-shrink-0 text-text-tertiary">
-              <path d="M4 2h5l4 4v8H4V2z" />
-              <path d="M9 2v4h4" />
-            </svg>
+            <File size={12} weight="light" className="flex-shrink-0 text-text-tertiary" />
           )}
 
           {/* Filename (truncated) */}
           <span className="max-w-[100px] truncate">{file.name}</span>
 
           {/* Size */}
-          <span className="text-text-tertiary text-[10px]">
+          <span className="text-text-tertiary text-xs">
             {formatSize(file.size)}
           </span>
 
@@ -73,10 +65,7 @@ export function FileUploadChips({ files, onRemove, isProcessing }: FileUploadChi
               text-text-tertiary hover:text-text-primary
               transition-smooth opacity-0 group-hover:opacity-100"
           >
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M4 4l8 8M12 4l-8 8" />
-            </svg>
+            <X size={10} weight="light" />
           </button>
         </div>
       ))}

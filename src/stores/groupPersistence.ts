@@ -6,7 +6,7 @@ let saveSubscribed = false;
 /**
  * Load groups from disk into the store, then keep the disk copy in sync on every
  * change. Mirrors the pinned/archived persistence pattern
- * (bridge → Tauri command → ~/.tokenicode/groups.json). Call once on app startup.
+ * (bridge → Tauri command → ~/.stavebak/groups.json). Call once on app startup.
  */
 export async function initGroupPersistence(): Promise<void> {
   const data = await bridge.loadSessionGroups();

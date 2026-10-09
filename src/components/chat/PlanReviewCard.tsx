@@ -4,6 +4,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore, setSessionModeLocal } from '../../stores/settingsStore';
 import { useT } from '../../lib/i18n';
 import { MarkdownRenderer } from '../shared/MarkdownRenderer';
+import { CaretRight, Check, ListBullets } from '@phosphor-icons/react';
 
 interface Props {
   message: ChatMessage;
@@ -114,7 +115,7 @@ export function PlanReviewCard({ message, floating }: Props) {
     if (planTabId) {
       useChatStore.getState().updateMessage(planTabId, message.id, { resolved: true, interactionState: 'resolved' });
     }
-    window.dispatchEvent(new CustomEvent('tokenicode:plan-execute'));
+    window.dispatchEvent(new CustomEvent('stavebak:plan-execute'));
   }, [isResolved, approving, message.id, message.permissionData]);
 
   const handleModify = useCallback(() => {
@@ -141,33 +142,24 @@ export function PlanReviewCard({ message, floating }: Props) {
           className="w-full flex items-center gap-2 px-3 py-2.5 cursor-pointer
             hover:bg-accent/5 transition-smooth"
         >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-            stroke="currentColor" strokeWidth="1.5"
+          <CaretRight size={10} weight="light"
             className={`flex-shrink-0 text-accent transition-transform
-              duration-150 ${expanded ? 'rotate-90' : ''}`}>
-            <path d="M3 2l4 3-4 3" />
-          </svg>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
-            stroke="currentColor" strokeWidth="1.5" className="text-accent flex-shrink-0">
-            <path d="M2 3.5h10M2 7h8M2 10.5h5" />
-          </svg>
+              duration-150 ${expanded ? 'rotate-90' : ''}`} />
+          <ListBullets size={14} weight="light" className="text-accent flex-shrink-0" />
           <span className="text-xs font-semibold text-text-primary">
             {t('msg.planReview')}
           </span>
           {/* Step count badge */}
           {stepCount > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full
+            <span className="text-xs px-1.5 py-0.5 rounded-full
               bg-accent/10 text-accent font-medium">
               {t('msg.planStepCount').replace('{n}', String(stepCount))}
             </span>
           )}
           {isResolved && (
             <span className="flex items-center gap-1 ml-auto">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-                stroke="currentColor" strokeWidth="1.5" className="text-success">
-                <path d="M2.5 6l2.5 2.5 4.5-4.5" />
-              </svg>
-              <span className="text-[11px] text-success font-medium">
+              <Check size={12} weight="light" className="text-success" />
+              <span className="text-xs text-success font-medium">
                 {t('msg.planApproved')}
               </span>
             </span>
@@ -179,7 +171,7 @@ export function PlanReviewCard({ message, floating }: Props) {
           <div className="px-4 py-2 border-t border-border-subtle/30">
             <div className="space-y-0.5">
               {stepPreview.map((step, i) => (
-                <div key={i} className="flex items-start gap-1.5 text-[11px] text-text-tertiary">
+                <div key={i} className="flex items-start gap-1.5 text-xs text-text-tertiary">
                   <span className="font-mono text-text-tertiary/60 flex-shrink-0 w-4 text-right">
                     {i + 1}.
                   </span>
@@ -187,7 +179,7 @@ export function PlanReviewCard({ message, floating }: Props) {
                 </div>
               ))}
               {stepCount > stepPreview.length && (
-                <div className="text-[10px] text-text-tertiary/50 ml-5.5">
+                <div className="text-xs text-text-tertiary/50 ml-5.5">
                   +{stepCount - stepPreview.length} more...
                 </div>
               )}
@@ -221,10 +213,7 @@ export function PlanReviewCard({ message, floating }: Props) {
                 <span className="animate-pulse-soft">{t('msg.planApproving') || 'Approving...'}</span>
               ) : (
                 <>
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M2.5 6l2.5 2.5 4.5-4.5" />
-                  </svg>
+                  <Check size={12} weight="light" />
                   {t('msg.planApproveAndExecute')}
                 </>
               )}

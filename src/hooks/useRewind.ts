@@ -59,8 +59,8 @@ export function useRewind() {
 
   const turns = useMemo(() => parseTurns(messages), [messages]);
 
-  /** Button visible as long as there are user messages */
-  const showRewind = turns.length >= 1;
+  /** Rewind button hidden in Stavebak — feature disabled */
+  const showRewind = false;
   /** Button enabled when there is at least 1 turn and the session is not busy */
   const canRewind = turns.length >= 1 && !isSessionBusy(sessionStatus);
 

@@ -1,15 +1,4 @@
-/**
- * StreamController · §4.3.1 单点源
- *
- * 统一持有流式状态的三处来源（rAF 缓冲 / orphan 队列 / 完成标记），
- * 代替之前散落在 useStreamProcessor.ts 中的三地管理。
- *
- * 设计原则：
- *   - 纯类，通过 DI 接 router + sink + scheduler（便于 jsdom 下 fake timer 测试）
- *   - 所有 state 只能通过本类方法变更
- *   - `completeStream` 原子：先 flush，再清理，再 emit `completed`；对同一 stdinId 幂等
- *   - `clearPartial(stdinId)` 精准清理，不触其他会话
- */
+/** Single source of truth for streaming state (rAF buffer, orphan queue, completion flag). */
 
 export type StdinId = string;
 export type TabId = string;

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { type ChatMessage } from '../../stores/chatStore';
 import { ToolUseMsg } from './MessageBubble';
 import { useT } from '../../lib/i18n';
+import { CaretRight, Check, Stack } from '@phosphor-icons/react';
 
 interface Props {
   messages: ChatMessage[];
@@ -50,30 +51,20 @@ export function ToolGroup({ messages }: Props) {
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-1.5 py-1 text-left group cursor-pointer"
       >
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-          stroke="currentColor" strokeWidth="1.5"
+        <CaretRight size={10} weight="light"
           className={`flex-shrink-0 text-text-tertiary transition-transform
-            duration-150 ${expanded ? 'rotate-90' : ''}`}>
-          <path d="M3 2l4 3-4 3" />
-        </svg>
+            duration-150 ${expanded ? 'rotate-90' : ''}`} />
         {/* Stacked tool icon */}
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-          stroke="currentColor" strokeWidth="1" className="text-text-tertiary flex-shrink-0">
-          <rect x="2" y="2" width="7" height="7" rx="1.5" />
-          <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" opacity="0.5" />
-        </svg>
+        <Stack size={12} weight="light" className="text-text-tertiary flex-shrink-0" />
         <span className="text-xs font-medium text-text-muted">
           {t('msg.toolGroup').replace('{n}', String(count))}
         </span>
-        <span className="text-[11px] text-text-tertiary truncate max-w-[300px]">
+        <span className="text-xs text-text-tertiary truncate max-w-[300px]">
           ({summary})
         </span>
         {/* All-complete indicator */}
         {allHaveResults && !expanded && (
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none"
-            stroke="currentColor" strokeWidth="1.5" className="text-success flex-shrink-0 ml-0.5">
-            <path d="M2.5 6l2.5 2.5 4.5-4.5" />
-          </svg>
+          <Check size={10} weight="light" className="text-success flex-shrink-0 ml-0.5" />
         )}
       </button>
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useMemo } from 'react';
+import { Star } from '@phosphor-icons/react';
 import { useCommandStore } from '../../stores/commandStore';
 import { useT, t as tStatic } from '../../lib/i18n';
 import type { UnifiedCommand } from '../../lib/tauri-bridge';
@@ -104,7 +105,7 @@ export function SlashCommandPopover({
           {sIdx > 0 && <div className="mx-3 my-1 border-t border-border-subtle" />}
 
           {/* Section header */}
-          <div className="px-3 py-1 text-[11px] text-text-tertiary font-medium uppercase tracking-wider">
+          <div className="px-3 py-1 text-xs text-text-tertiary font-medium uppercase tracking-wider">
             {t(section.labelKey)}
           </div>
 
@@ -127,17 +128,15 @@ export function SlashCommandPopover({
                 {/* Icon: / for commands, diamond for skills */}
                 <span className={`flex-shrink-0 w-6 h-6 rounded-lg
                   bg-bg-tertiary flex items-center justify-center
-                  text-[11px] font-bold ${isSkill ? 'text-accent' : 'text-text-tertiary font-mono'}`}>
+                  text-xs font-bold ${isSkill ? 'text-accent' : 'text-text-tertiary font-mono'}`}>
                   {isSkill ? (
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M8 1l2.5 5 5.5.8-4 3.9.9 5.3L8 13.3 3.1 16l.9-5.3-4-3.9L5.5 6z" />
-                    </svg>
+                    <Star size={12} weight="fill" />
                   ) : '/'}
                 </span>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium font-mono text-[12px]">{cmd.name}</span>
+                    <span className="font-medium font-mono text-xs">{cmd.name}</span>
                     {cmd.execution === 'cli' && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-medium">
                         {t('slash.cli')}
@@ -159,7 +158,7 @@ export function SlashCommandPopover({
                       </span>
                     )}
                   </div>
-                  <div className="text-text-tertiary text-[11px] truncate mt-0.5">
+                  <div className="text-text-tertiary text-xs truncate mt-0.5">
                     {cmd.category === 'builtin'
                       ? t(`slash.desc.${cmd.name.slice(1)}`) || cmd.description
                       : cmd.description}

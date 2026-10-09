@@ -4,6 +4,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { SessionListItem } from '../../lib/tauri-bridge';
 import { SessionItem } from './SessionItem';
 import type { SessionGroup } from '../../stores/groupStore';
+import { DotsSixVertical, Plus } from '@phosphor-icons/react';
 
 interface TaskGroupProps {
   group: SessionGroup;
@@ -117,17 +118,10 @@ export function TaskGroup({
           className="flex-shrink-0 cursor-grab active:cursor-grabbing touch-none
             select-none text-text-tertiary/70 hover:text-text-tertiary
             transition-colors"
-          title="拖动调整组的顺序"
-          aria-label="拖动调整组的顺序"
+          title="Drag to reorder groups"
+          aria-label="Drag to reorder groups"
         >
-          <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" aria-hidden>
-            <circle cx="2" cy="2" r="1.3" />
-            <circle cx="8" cy="2" r="1.3" />
-            <circle cx="2" cy="7" r="1.3" />
-            <circle cx="8" cy="7" r="1.3" />
-            <circle cx="2" cy="12" r="1.3" />
-            <circle cx="8" cy="12" r="1.3" />
-          </svg>
+          <DotsSixVertical size={14} weight="light" aria-hidden />
         </span>
 
         {/* Group label or inline rename input */}
@@ -142,19 +136,19 @@ export function TaskGroup({
               if (e.key === 'Enter') commit();
               else if (e.key === 'Escape') onRenameCancel();
             }}
-            className="flex-1 min-w-0 bg-bg-tertiary text-[13px] font-semibold
+            className="flex-1 min-w-0 bg-bg-tertiary text-sm font-semibold
               text-text-primary px-1.5 py-0.5 rounded-md outline-none
               border border-border-focus"
           />
         ) : (
-          <span className="text-[13px] font-semibold text-text-primary
+          <span className="text-sm font-semibold text-text-primary
             truncate flex-1 text-left min-w-0">
             {group.label}
           </span>
         )}
 
         {/* Member count */}
-        <span className="text-[11px] text-text-tertiary flex-shrink-0 tabular-nums">
+        <span className="text-xs text-text-tertiary flex-shrink-0 tabular-nums">
           {sessions.length}
         </span>
 
@@ -163,13 +157,10 @@ export function TaskGroup({
           onClick={(e) => { e.stopPropagation(); onNewSessionInGroup(group.id); }}
           className="flex-shrink-0 p-0.5 flex items-center justify-center
             text-text-tertiary hover:text-accent transition-smooth"
-          title="在这个组里新建会话"
-          aria-label="在这个组里新建会话"
+          title="New session in this group"
+          aria-label="New session in this group"
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-            <path d="M8 3v10M3 8h10" />
-          </svg>
+          <Plus size={14} weight="light" />
         </button>
       </div>
 
@@ -201,9 +192,9 @@ export function TaskGroup({
 
       {/* Empty group hint */}
       {isExpanded && sessions.length === 0 && (
-        <div className="px-3 py-2 text-[11px] text-text-tertiary/70 select-none
+        <div className="px-3 py-2 text-xs text-text-tertiary/70 select-none
           border-t border-border-subtle/70">
-          空组 · 右键已有会话选「加入任务组」
+          Empty group · right-click a session to add it
         </div>
       )}
     </div>

@@ -138,7 +138,7 @@ export const useProviderStore = create<ProviderState>()((set, get) => ({
 function migrateFromSettingsStore(): ApiProvider | null {
   try {
     // Read old settings from localStorage (settingsStore persists there)
-    const raw = localStorage.getItem('tokenicode-settings');
+    const raw = localStorage.getItem('stavebak-settings');
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     const state = parsed?.state;
@@ -150,7 +150,7 @@ function migrateFromSettingsStore(): ApiProvider | null {
     const now = Date.now();
     const provider: ApiProvider = {
       id: generateId(),
-      name: state.customProviderName || (mode === 'official' ? 'Anthropic (官方)' : 'Custom'),
+      name: state.customProviderName || (mode === 'official' ? 'Anthropic (Official)' : 'Custom'),
       baseUrl: mode === 'official' ? 'https://api.anthropic.com' : (state.customProviderBaseUrl || ''),
       apiFormat: (state.customProviderApiFormat || 'anthropic') as 'anthropic' | 'openai',
       modelMappings: Array.isArray(state.customProviderModelMappings)

@@ -13,6 +13,7 @@
  *   5. Cancel
  */
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { CaretLeft, X, ArrowsClockwise } from '@phosphor-icons/react';
 import { useRewind, type RewindAction } from '../../hooks/useRewind';
 import { shortFilePath, relativeTime, type Turn } from '../../lib/turns';
 import { useT } from '../../lib/i18n';
@@ -179,10 +180,7 @@ export function RewindPanel({ onClose }: RewindPanelProps) {
               className="p-1 rounded-md hover:bg-bg-tertiary text-text-tertiary
                 transition-smooth"
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <path d="M8 2L4 6l4 4" />
-              </svg>
+              <CaretLeft size={12} weight="light" />
             </button>
             <span className="text-xs font-semibold text-text-primary">
               {t('rewind.confirm').replace('{n}', String(selectedTurn.index))}
@@ -193,10 +191,7 @@ export function RewindPanel({ onClose }: RewindPanelProps) {
             className="p-1 rounded-md hover:bg-bg-tertiary text-text-tertiary
               transition-smooth"
           >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-              stroke="currentColor" strokeWidth="1.5">
-              <path d="M3 3l6 6M9 3l-6 6" />
-            </svg>
+            <X size={12} weight="light" />
           </button>
         </div>
 
@@ -208,7 +203,7 @@ export function RewindPanel({ onClose }: RewindPanelProps) {
               <p className="text-xs text-text-primary leading-relaxed truncate">
                 {selectedTurn.userContent}
               </p>
-              <p className="text-[10px] text-text-tertiary mt-0.5">
+              <p className="text-xs text-text-tertiary mt-0.5">
                 {relativeTime(selectedTurn.timestamp)}
               </p>
             </div>
@@ -256,10 +251,10 @@ export function RewindPanel({ onClose }: RewindPanelProps) {
                   </span>
                   <span>{a.label}</span>
                   {isDisabled && a.hint && (
-                    <span className="ml-auto text-[10px] opacity-60">{a.hint}</span>
+                    <span className="ml-auto text-xs opacity-60">{a.hint}</span>
                   )}
                   {isPrimary && !isDisabled && (
-                    <span className="ml-auto text-[10px] opacity-60">←</span>
+                    <span className="ml-auto text-xs opacity-60">←</span>
                   )}
                 </button>
               );
@@ -281,20 +276,14 @@ export function RewindPanel({ onClose }: RewindPanelProps) {
       <div className="flex items-center justify-between px-4 py-2.5
         border-b border-border-subtle bg-amber-500/5 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
-            stroke="currentColor" strokeWidth="1.5" className="text-amber-500">
-            <path d="M2 7a5 5 0 019.33-2.5M12 7a5 5 0 01-9.33 2.5"
-              strokeLinecap="round" />
-            <path d="M11 2v3h-3" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M3 12V9h3" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <ArrowsClockwise size={14} weight="light" className="text-amber-500" />
           <span className="text-xs font-semibold text-text-primary">
             {t('rewind.title')}
           </span>
-          <span className="text-[10px] text-text-muted">
+          <span className="text-xs text-text-muted">
             ({turns.length})
           </span>
-          <span className="text-[10px] text-text-tertiary ml-1">
+          <span className="text-xs text-text-tertiary ml-1">
             ↑↓ Enter
           </span>
         </div>
@@ -303,10 +292,7 @@ export function RewindPanel({ onClose }: RewindPanelProps) {
           className="p-1 rounded-md hover:bg-bg-tertiary text-text-tertiary
             transition-smooth"
         >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-            stroke="currentColor" strokeWidth="1.5">
-            <path d="M3 3l6 6M9 3l-6 6" />
-          </svg>
+          <X size={12} weight="light" />
         </button>
       </div>
 
@@ -339,7 +325,7 @@ export function RewindPanel({ onClose }: RewindPanelProps) {
               <div className="flex items-center gap-2 min-w-0">
                 {/* Turn number badge */}
                 <span className={`flex-shrink-0 w-5 h-5 rounded-full
-                  text-[10px] font-bold flex items-center justify-center
+                  text-xs font-bold flex items-center justify-center
                   ${isActive
                     ? 'bg-accent/10 text-accent'
                     : 'bg-bg-secondary text-text-tertiary'
@@ -351,7 +337,7 @@ export function RewindPanel({ onClose }: RewindPanelProps) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     {isCurrent && (
-                      <span className="text-[10px] font-medium text-accent">
+                      <span className="text-xs font-medium text-accent">
                         {t('rewind.current')}
                       </span>
                     )}
@@ -364,7 +350,7 @@ export function RewindPanel({ onClose }: RewindPanelProps) {
                   <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                     {turn.codeChanges.length > 0 ? (
                       turn.codeChanges.slice(0, 3).map((change, ci) => (
-                        <span key={ci} className={`text-[10px] px-1.5 py-0.5 rounded
+                        <span key={ci} className={`text-xs px-1.5 py-0.5 rounded
                           ${change.action === 'terminal'
                             ? 'bg-blue-500/10 text-blue-400'
                             : change.action === 'created'
@@ -376,12 +362,12 @@ export function RewindPanel({ onClose }: RewindPanelProps) {
                         </span>
                       ))
                     ) : (
-                      <span className="text-[10px] text-text-tertiary">
+                      <span className="text-xs text-text-tertiary">
                         {t('rewind.noChanges')}
                       </span>
                     )}
                     {turn.codeChanges.length > 3 && (
-                      <span className="text-[10px] text-text-tertiary">
+                      <span className="text-xs text-text-tertiary">
                         +{turn.codeChanges.length - 3}
                       </span>
                     )}
@@ -389,7 +375,7 @@ export function RewindPanel({ onClose }: RewindPanelProps) {
                 </div>
 
                 {/* Timestamp */}
-                <span className="flex-shrink-0 text-[10px] text-text-tertiary">
+                <span className="flex-shrink-0 text-xs text-text-tertiary">
                   {relativeTime(turn.timestamp)}
                 </span>
               </div>

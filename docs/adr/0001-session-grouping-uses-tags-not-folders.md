@@ -20,7 +20,7 @@ Claude Code 的会话存储是**两层固定结构** `~/.claude/projects/<cwd �
 
 ## 决策
 
-「组」用**元数据映射**实现（tag 逻辑）：会话 `.jsonl` **永不移动**，分组归属记在 TOKENICODE 自有数据文件 `~/.tokenicode/groups.json`（与 `pinned.json` / `archived.json` 并列）。左侧按映射把会话渲染成「工作区 › 组 › 会话」三级。
+「组」用**元数据映射**实现（tag 逻辑）：会话 `.jsonl` **永不移动**，分组归属记在 Stavebak 自有数据文件 `~/.stavebak/groups.json`（与 `pinned.json` / `archived.json` 并列）。左侧按映射把会话渲染成「工作区 › 组 › 会话」三级。
 
 ## 结果
 

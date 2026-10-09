@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { Eye, EyeSlash, X, Check, Plus } from '@phosphor-icons/react';
 import { useProviderStore, type ApiProvider, type ModelMapping } from '../../stores/providerStore';
 import { bridge, type ConnectionTestResult } from '../../lib/tauri-bridge';
 import { useT } from '../../lib/i18n';
@@ -11,28 +12,15 @@ const MODEL_TIERS: { tier: 'opus' | 'sonnet' | 'haiku'; labelKey: string; placeh
   { tier: 'haiku', labelKey: 'provider.haikuModel', placeholderKey: 'provider.haikuPlaceholder' },
 ];
 
-const INPUT_CLASS = 'w-full px-3 py-2 text-[13px] bg-bg-chat border border-border-subtle rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent';
+const INPUT_CLASS = 'w-full px-3 py-2 text-sm bg-bg-chat border border-border-subtle rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent';
 
-/* SVG eye icons */
+/* Phosphor eye icons used for API key toggle */
 function EyeOpenIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
-      <circle cx="8" cy="8" r="2" />
-    </svg>
-  );
+  return <Eye size={14} weight="light" />;
 }
 
 function EyeClosedIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
-      <circle cx="8" cy="8" r="2" />
-      <path d="M2 14L14 2" />
-    </svg>
-  );
+  return <EyeSlash size={14} weight="light" />;
 }
 
 export type TestStatus = 'idle' | 'testing' | 'success' | 'auth_error' | 'failed';
@@ -198,7 +186,7 @@ export function ProviderForm({ provider, onClose, onDelete, autoTest, onTestStat
     <div className="p-4 rounded-lg border border-border-subtle bg-bg-secondary/50 space-y-3 ml-5">
       {/* Form header */}
       <div className="flex items-center justify-between">
-        <h4 className="text-[13px] font-medium text-text-primary">{t('provider.editProvider')}</h4>
+        <h4 className="text-sm font-medium text-text-primary">{t('provider.editProvider')}</h4>
         <div className="flex items-center gap-1">
           <button onClick={onDelete}
             className="px-2 py-1 rounded text-xs text-red-400 hover:text-red-300 transition-smooth">
@@ -206,10 +194,7 @@ export function ProviderForm({ provider, onClose, onDelete, autoTest, onTestStat
           </button>
           <button onClick={onClose}
             className="px-2 py-1 rounded text-xs text-text-tertiary hover:text-text-muted transition-smooth">
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-              stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M2 2l6 6M8 2l-6 6" />
-            </svg>
+            <X size={10} weight="light" />
           </button>
         </div>
       </div>
@@ -220,7 +205,7 @@ export function ProviderForm({ provider, onClose, onDelete, autoTest, onTestStat
           <button
             onClick={handleTestConnection}
             disabled={!baseUrl || testStatus === 'testing'}
-            className={`px-3 py-2 rounded-lg text-[13px] font-medium transition-smooth
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-smooth
               border border-border-subtle
               ${testStatus === 'success'
                 ? 'bg-green-500/10 text-green-500 border-green-500/30'
@@ -256,17 +241,11 @@ export function ProviderForm({ provider, onClose, onDelete, autoTest, onTestStat
               return (
                 <div key={key} className="flex items-center gap-1.5">
                   {step.ok ? (
-                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none"
-                      stroke="rgb(34 197 94)" strokeWidth="2" strokeLinecap="round">
-                      <path d="M3 8l4 4 6-7" />
-                    </svg>
+                    <Check size={10} weight="light" color="rgb(34 197 94)" />
                   ) : isSkipped ? (
                     <span className="w-2.5 h-2.5 rounded-full bg-text-tertiary/30" />
                   ) : (
-                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none"
-                      stroke="rgb(239 68 68)" strokeWidth="2" strokeLinecap="round">
-                      <path d="M4 4l8 8M12 4l-8 8" />
-                    </svg>
+                    <X size={10} weight="light" color="rgb(239 68 68)" />
                   )}
                   <span className={step.ok ? 'text-green-500' : isSkipped ? 'text-text-tertiary' : 'text-red-400'}>
                     {label}
@@ -357,25 +336,19 @@ export function ProviderForm({ provider, onClose, onDelete, autoTest, onTestStat
           ))}
           {extraMappings.map((m, i) => (
             <div key={`extra-${i}`} className="flex items-center gap-1.5">
-              <input className="flex-1 min-w-0 px-3 py-2 text-[13px] bg-bg-chat border border-border-subtle rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent font-mono"
+              <input className="flex-1 min-w-0 px-3 py-2 text-sm bg-bg-chat border border-border-subtle rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent font-mono"
                 value={m.providerModel}
                 onChange={(e) => updateExtraModel(m.tier, e.target.value)}
                 placeholder={t('provider.extraModelPlaceholder')} />
               <button onClick={() => removeExtraMapping(m.tier)}
                 className="text-text-tertiary hover:text-text-primary transition-smooth shrink-0 p-0.5">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-                  stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <path d="M4 4l8 8M12 4l-8 8" />
-                </svg>
+                <X size={12} weight="light" />
               </button>
             </div>
           ))}
           <button onClick={addExtraMapping}
             className="flex items-center gap-1 text-xs text-text-tertiary hover:text-text-muted transition-smooth mt-1">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M8 3v10M3 8h10" />
-            </svg>
+            <Plus size={12} weight="light" />
             {t('provider.addModelMapping')}
           </button>
         </div>
@@ -405,10 +378,7 @@ export function ProviderForm({ provider, onClose, onDelete, autoTest, onTestStat
                 placeholder={t('provider.extraEnvValuePlaceholder')} />
               <button onClick={() => handleExtraEnvRemove(key)}
                 className="p-1 text-text-tertiary hover:text-red-400 transition-smooth">
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-                  stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <path d="M2 2l6 6M8 2l-6 6" />
-                </svg>
+                <X size={10} weight="light" />
               </button>
             </div>
           ))}

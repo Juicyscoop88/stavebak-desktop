@@ -56,29 +56,29 @@ export function parseAndValidate(
   text = text.trim();
 
   if (!text) {
-    return { ok: false, error: '文件内容为空' };
+    return { ok: false, error: 'File content is empty' };
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
-    return { ok: false, error: '文件不是有效的 JSON 格式' };
+    return { ok: false, error: 'File is not valid JSON' };
   }
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return { ok: false, error: '配置文件格式不正确，应为 JSON 对象' };
+    return { ok: false, error: 'Invalid config format: expected a JSON object' };
   }
 
   const obj = parsed as Record<string, unknown>;
   const version = obj.version;
 
   if (version !== 1 && version !== 2) {
-    return { ok: false, error: `不支持的配置版本：${version ?? '缺失'}` };
+    return { ok: false, error: `Unsupported config version: ${version ?? 'missing'}` };
   }
 
   if (typeof obj.provider !== 'object' || obj.provider === null) {
-    return { ok: false, error: '缺少 provider 配置' };
+    return { ok: false, error: 'Missing provider configuration' };
   }
   const p = obj.provider as Record<string, unknown>;
 
@@ -96,12 +96,12 @@ export function parseAndValidate(
   const validFormats = ['anthropic', 'openai'];
   const apiFormat = typeof p.apiFormat === 'string' ? p.apiFormat : 'anthropic';
   if (!validFormats.includes(apiFormat)) {
-    return { ok: false, error: `API 格式无效：${apiFormat}，仅支持 anthropic 或 openai` };
+    return { ok: false, error: `Invalid API format: ${apiFormat}. Only 'anthropic' or 'openai' are supported` };
   }
 
   // apiKey
   if (p.apiKey !== undefined && p.apiKey !== null && typeof p.apiKey !== 'string') {
-    return { ok: false, error: 'API Key 格式不正确，应为字符串' };
+    return { ok: false, error: 'Invalid API key format: expected a string' };
   }
   const apiKey = typeof p.apiKey === 'string' ? p.apiKey.trim() : undefined;
 
@@ -109,7 +109,7 @@ export function parseAndValidate(
   let rawMappings: unknown[] = [];
   if (p.modelMappings !== undefined) {
     if (!Array.isArray(p.modelMappings)) {
-      return { ok: false, error: 'modelMappings 应为数组' };
+      return { ok: false, error: 'modelMappings must be an array' };
     }
     rawMappings = p.modelMappings;
   }
@@ -118,12 +118,12 @@ export function parseAndValidate(
   const mappings: { tier: 'opus' | 'sonnet' | 'haiku'; providerModel: string }[] = [];
   for (const item of rawMappings) {
     if (typeof item !== 'object' || item === null) {
-      return { ok: false, error: '模型映射条目格式不正确' };
+      return { ok: false, error: 'Invalid model mapping entry format' };
     }
     const m = item as Record<string, unknown>;
     const tier = String(m.tier ?? '');
     if (!validTiers.includes(tier)) {
-      return { ok: false, error: `无效的模型层级：${tier}，仅支持 opus / sonnet / haiku` };
+      return { ok: false, error: `Invalid model tier: ${tier}. Only opus / sonnet / haiku are supported` };
     }
     const model = String(m.model ?? m.providerModel ?? '');
     mappings.push({ tier: tier as 'opus' | 'sonnet' | 'haiku', providerModel: model });

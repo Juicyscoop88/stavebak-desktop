@@ -1,6 +1,7 @@
 import React, { memo, useState, useCallback, useMemo, useEffect, type ReactNode } from 'react';
 import Markdown from 'react-markdown';
-import rehypeRaw from 'rehype-raw';
+import { ImageBroken, ArrowSquareOut } from '@phosphor-icons/react';
+
 import rehypeHighlight from 'rehype-highlight';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { openUrl } from '@tauri-apps/plugin-opener';
@@ -97,23 +98,18 @@ function AsyncImage({ src, alt }: { src: string; alt?: string }) {
       <div className="my-3 rounded-xl overflow-hidden border border-border-subtle
         inline-block max-w-full bg-bg-secondary">
         <div className="flex items-center gap-3 px-4 py-3">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"
-            stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0 text-text-muted">
-            <rect x="2" y="3" width="16" height="14" rx="2" />
-            <circle cx="6.5" cy="7.5" r="1.5" />
-            <path d="M2 14l4-4 4 4 2-2 6 6" />
-          </svg>
+          <ImageBroken size={20} weight="light" className="flex-shrink-0 text-text-muted" />
           <div className="flex-1 min-w-0">
             <div className="text-xs text-text-primary truncate">{fileName}</div>
-            <div className="text-[11px] text-text-muted truncate">{filePath}</div>
+            <div className="text-xs text-text-muted truncate">{filePath}</div>
           </div>
           <button
             onClick={handleAuthorize}
-            className="px-2 py-1 rounded-md text-[11px] font-medium bg-accent/10
+            className="px-2 py-1 rounded-md text-xs font-medium bg-accent/10
               text-accent border border-accent/25 hover:bg-accent/20
               transition-smooth cursor-pointer flex-shrink-0"
           >
-            {t('msg.authorize') ?? '授权'}
+            {t('msg.authorize') ?? 'Authorize'}
           </button>
         </div>
         {alt && (
@@ -130,12 +126,7 @@ function AsyncImage({ src, alt }: { src: string; alt?: string }) {
         inline-block max-w-full">
         <div className="flex items-center justify-center gap-2 py-6 px-4
           text-xs text-text-muted bg-bg-secondary">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5">
-            <rect x="1" y="2" width="14" height="12" rx="2" />
-            <circle cx="5" cy="6" r="1.5" />
-            <path d="M1 11l4-4 3 3 2-2 5 5" />
-          </svg>
+          <ImageBroken size={16} weight="light" />
           {t('msg.imgError')}
         </div>
         {alt && (
@@ -190,7 +181,7 @@ export function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="absolute top-2 right-2 px-2 py-1 rounded-md text-[10px]
+      className="absolute top-2 right-2 px-2 py-1 rounded-md text-xs
         font-medium opacity-0 group-hover:opacity-100 transition-smooth
         bg-bg-tertiary/80 text-text-muted hover:text-text-primary
         hover:bg-bg-tertiary border border-border-subtle"
@@ -301,7 +292,7 @@ async function loadRemarkPlugins(): Promise<RemarkPlugin[]> {
   if (!supportsRemarkGfmRegex()) {
     if (!warnedAboutGfmFallback) {
       warnedAboutGfmFallback = true;
-      console.warn('[TOKENICODE] remark-gfm disabled: current JS runtime does not support its regex syntax');
+      console.warn('[Stavebak] remark-gfm disabled: current JS runtime does not support its regex syntax');
     }
     cachedRemarkPlugins = EMPTY_REMARK_PLUGINS;
     return cachedRemarkPlugins;
@@ -317,7 +308,7 @@ async function loadRemarkPlugins(): Promise<RemarkPlugin[]> {
         return cachedRemarkPlugins;
       })
       .catch((error) => {
-        console.warn('[TOKENICODE] failed to load remark plugins, falling back to basic markdown', error);
+        console.warn('[Stavebak] failed to load remark plugins, falling back to basic markdown', error);
         cachedRemarkPlugins = EMPTY_REMARK_PLUGINS;
         return cachedRemarkPlugins;
       });
@@ -327,7 +318,7 @@ async function loadRemarkPlugins(): Promise<RemarkPlugin[]> {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const REHYPE_PLUGINS: any[] = [rehypeRaw, [rehypeSanitize, SANITIZE_SCHEMA], rehypeHighlight];
+const REHYPE_PLUGINS: any[] = [[rehypeSanitize, SANITIZE_SCHEMA], rehypeHighlight];
 
 /** Error boundary scoped to a single markdown block.
  *  A malformed message (e.g. truncated table from rate-limit) crashes only
@@ -392,7 +383,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, classN
     ),
     th: ({ children }: { children?: ReactNode }) => (
       <th className="px-3 py-2 text-left font-medium text-text-muted
-        border-b border-border-subtle text-[11px]">{children}</th>
+        border-b border-border-subtle text-xs">{children}</th>
     ),
     td: ({ children }: { children?: ReactNode }) => (
       <td className="px-3 py-2 text-text-primary border-b border-border-subtle
@@ -424,11 +415,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, classN
           title={href}
         >
           {children}
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none"
-            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
-            className="flex-shrink-0 opacity-60">
-            <path d="M4.5 1.5h6v6M10.5 1.5L4 8" />
-          </svg>
+          <ArrowSquareOut size={10} weight="light" className="flex-shrink-0 opacity-60" />
         </a>
       );
     },
@@ -479,12 +466,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, classN
         />
         <div className="hidden items-center justify-center gap-2 py-6 px-4
           text-xs text-text-muted bg-bg-secondary">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5">
-            <rect x="1" y="2" width="14" height="12" rx="2" />
-            <circle cx="5" cy="6" r="1.5" />
-            <path d="M1 11l4-4 3 3 2-2 5 5" />
-          </svg>
+          <ImageBroken size={16} weight="light" />
           {t('msg.imgError')}
         </div>
         {alt && (
@@ -519,7 +501,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, classN
         return (
           <button
             onClick={() => {
-              // 纯定位：右侧文件区展开到该路径并高亮（不读内容、不预览）
+              // Navigate: expand the file tree to this path and highlight it (no preview)
               useSettingsStore.getState().setSecondaryTab('files');
               useFileStore.getState().revealPath(resolved);
             }}
@@ -531,7 +513,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, classN
               align-baseline leading-normal whitespace-nowrap"
             title={resolved}
           >
-            <span className="text-[10px] leading-none">{kind === 'folder' ? '📁' : '📄'}</span>
+            <span className="text-xs leading-none">{kind === 'folder' ? '📁' : '📄'}</span>
             <span className="max-w-[240px] truncate">{text}</span>
           </button>
         );
@@ -541,7 +523,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, classN
   }), [t, resolveBase]);
 
   return (
-    <div className={`prose prose-sm max-w-none
+    <div className={`prose max-w-none text-sm leading-loose
       prose-code:bg-bg-secondary prose-code:px-1.5 prose-code:py-0.5
       prose-code:rounded-md prose-code:text-sm prose-code:text-accent
       prose-pre:bg-bg-secondary prose-pre:rounded-xl prose-pre:p-4

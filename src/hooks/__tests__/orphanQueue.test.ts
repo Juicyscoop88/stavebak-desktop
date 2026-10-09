@@ -117,7 +117,7 @@ describe('B3 · orphan queue', () => {
     useChatStore.getState().ensureTab('tab_evt');
 
     __orphanTesting.stashEvent('stdin_evt', {
-      type: 'tokenicode_permission_request',
+      type: 'stavebak_permission_request',
       request_id: 'req_evt',
       tool_name: 'ExitPlanMode',
       __stdinId: 'stdin_evt',
@@ -127,7 +127,7 @@ describe('B3 · orphan queue', () => {
 
     expect(handled).toEqual([
       expect.objectContaining({
-        type: 'tokenicode_permission_request',
+        type: 'stavebak_permission_request',
         request_id: 'req_evt',
         __stdinId: 'stdin_evt',
       }),

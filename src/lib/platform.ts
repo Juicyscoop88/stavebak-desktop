@@ -35,8 +35,8 @@ export function modKey(): string {
 export function fileManagerName(): string {
   switch (getPlatform()) {
     case 'mac': return 'Finder';
-    case 'windows': return '资源管理器';
-    default: return '文件管理器';
+    case 'windows': return 'File Explorer';
+    default: return 'File Manager';
   }
 }
 

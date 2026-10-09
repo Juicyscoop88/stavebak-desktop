@@ -1,6 +1,6 @@
-# TOKENICODE CLI Test Tool & Batch Test Runner
+# Stavebak CLI Test Tool & Batch Test Runner
 
-CLI 工具 + 批量测试运行器，用于从命令行驱动 TOKENICODE GUI 进行端到端测试。仅在 debug 构建下可用。
+CLI 工具 + 批量测试运行器，用于从命令行驱动 Stavebak GUI 进行端到端测试。仅在 debug 构建下可用。
 
 ---
 
@@ -9,12 +9,12 @@ CLI 工具 + 批量测试运行器，用于从命令行驱动 TOKENICODE GUI 进
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  AI / 人类                                                   │
-│  ├── 直接调用: node scripts/tokenicode-cli.mjs <command>     │
+│  ├── 直接调用: node scripts/stavebak-cli.mjs <command>     │
 │  └── 批量测试: node scripts/run-tests.mjs <test.json>       │
-│       └── 内部逐条调用 tokenicode-cli.mjs                    │
+│       └── 内部逐条调用 stavebak-cli.mjs                    │
 └────────────────────────┬────────────────────────────────────┘
                          │ NDJSON over Unix socket
-                         │ /tmp/tokenicode-test.sock
+                         │ /tmp/stavebak-test.sock
                          v
 ┌─────────────────────────────────────────────────────────────┐
 │  Test harness transport (Rust, debug builds only)                  │
@@ -23,7 +23,7 @@ CLI 工具 + 批量测试运行器，用于从命令行驱动 TOKENICODE GUI 进
                          │ Tauri event system
                          v
 ┌─────────────────────────────────────────────────────────────┐
-│  Frontend JS listeners → window.__tokenicode_test            │
+│  Frontend JS listeners → window.__stavebak_test            │
 │  import.meta.env.DEV 门控，production build 自动剥离         │
 │  通过 Zustand store 直操 / DOM 查询 控制 GUI                 │
 └─────────────────────────────────────────────────────────────┘
@@ -43,9 +43,9 @@ CLI 工具 + 批量测试运行器，用于从命令行驱动 TOKENICODE GUI 进
 
 ## 二、前置条件
 
-1. 启动 TOKENICODE dev 构建：`pnpm tauri dev`
-2. 确认控制台输出：`[TOKENICODE] Test harness registered on /tmp/tokenicode-test.sock`
-3. 验证连通性：`node scripts/tokenicode-cli.mjs ping`（应返回 `{"ok":true,"pong":true}`）
+1. 启动 Stavebak dev 构建：`pnpm tauri dev`
+2. 确认控制台输出：`[Stavebak] Test harness registered on /tmp/stavebak-test.sock`
+3. 验证连通性：`node scripts/stavebak-cli.mjs ping`（应返回 `{"ok":true,"pong":true}`）
 
 ---
 
@@ -77,7 +77,7 @@ CLI 工具 + 批量测试运行器，用于从命令行驱动 TOKENICODE GUI 进
 
 ```bash
 # 检查编辑器
-node scripts/tokenicode-cli.mjs wait-for --selector '[data-testid=send-button]' --timeout 5000
+node scripts/stavebak-cli.mjs wait-for --selector '[data-testid=send-button]' --timeout 5000
 # → ok：可以 type + send
 # → timeout/error：先 switch-session <SESSION_ID>，再重试
 ```
@@ -86,17 +86,17 @@ node scripts/tokenicode-cli.mjs wait-for --selector '[data-testid=send-button]' 
 
 ```bash
 # ✅ 推荐：指定工作区创建新会话（有编辑器，可直接 type）
-node scripts/tokenicode-cli.mjs new-session --cwd ~/Documents
-node scripts/tokenicode-cli.mjs check-editor   # 确认编辑器可用
-node scripts/tokenicode-cli.mjs type "hello"
-node scripts/tokenicode-cli.mjs send
+node scripts/stavebak-cli.mjs new-session --cwd ~/Documents
+node scripts/stavebak-cli.mjs check-editor   # 确认编辑器可用
+node scripts/stavebak-cli.mjs type "hello"
+node scripts/stavebak-cli.mjs send
 
 # ✅ 备选：切到已有会话
-node scripts/tokenicode-cli.mjs switch-session <SESSION_ID>
+node scripts/stavebak-cli.mjs switch-session <SESSION_ID>
 
 # ❌ 错误：new-session 无参数后直接 type（欢迎页无编辑器，type 静默失败）
-node scripts/tokenicode-cli.mjs new-session
-node scripts/tokenicode-cli.mjs type "hello"  # 无效
+node scripts/stavebak-cli.mjs new-session
+node scripts/stavebak-cli.mjs type "hello"  # 无效
 ```
 
 `new-session` 无参数仅用于：测试欢迎页 UI、重置到空白状态。
@@ -105,20 +105,20 @@ node scripts/tokenicode-cli.mjs type "hello"  # 无效
 
 ```bash
 # 同窗口重启（webview reload，推荐）
-node scripts/tokenicode-cli.mjs restart
+node scripts/stavebak-cli.mjs restart
 
 # 硬重启（杀进程 + 新窗口，仅 Tauri 后端出问题时用）
-node scripts/tokenicode-cli.mjs relaunch
+node scripts/stavebak-cli.mjs relaunch
 ```
 
 ---
 
-## 三、CLI 工具：tokenicode-cli.mjs
+## 三、CLI 工具：stavebak-cli.mjs
 
 ### 基本用法
 
 ```bash
-node scripts/tokenicode-cli.mjs <command> [args] [--flags]
+node scripts/stavebak-cli.mjs <command> [args] [--flags]
 ```
 
 所有输出为单行 JSON：`{"ok":true, ...}` 或 `{"ok":false, "error":"..."}`。零外部依赖。
@@ -128,24 +128,24 @@ node scripts/tokenicode-cli.mjs <command> [args] [--flags]
 #### 健康检查
 
 ```bash
-# 检测 TOKENICODE 是否在运行
-node scripts/tokenicode-cli.mjs ping
+# 检测 Stavebak 是否在运行
+node scripts/stavebak-cli.mjs ping
 # → {"ok":true,"pong":true}
 
 # 全局状态快照（最常用的诊断命令）
-node scripts/tokenicode-cli.mjs status
+node scripts/stavebak-cli.mjs status
 # → {"ok":true,"session":"uuid","sessionCount":52,"model":"claude-opus-4-6",
 #    "provider":"id-or-null","active":false,"phase":null,
 #    "pendingPermission":false,"settingsOpen":false,"messageCount":16}
 
 # 同窗口重启（webview reload，不开新窗口）
-node scripts/tokenicode-cli.mjs restart
-node scripts/tokenicode-cli.mjs restart --timeout 30000
+node scripts/stavebak-cli.mjs restart
+node scripts/stavebak-cli.mjs restart --timeout 30000
 # → {"ok":true,"restarted":true,"mode":"reload","elapsed":10000}
 
 # 硬重启（杀进程 + 重新 spawn，开新窗口，仅 Tauri 后端出问题时使用）
-node scripts/tokenicode-cli.mjs relaunch
-node scripts/tokenicode-cli.mjs relaunch --timeout 120000
+node scripts/stavebak-cli.mjs relaunch
+node scripts/stavebak-cli.mjs relaunch --timeout 120000
 # → {"ok":true,"restarted":true,"elapsed":7000,"pid":12345}
 ```
 
@@ -166,7 +166,7 @@ node scripts/tokenicode-cli.mjs relaunch --timeout 120000
 `restart` 工作流程：webview `location.reload()` → 轮询 `execute_js` 直到就绪。
 
 `relaunch` 工作流程：
-1. 通过 `lsof -t -U` 查找监听 socket 的进程 PID（尊重 `TOKENICODE_SOCKET` 环境变量）
+1. 通过 `lsof -t -U` 查找监听 socket 的进程 PID（尊重 `Stavebak_SOCKET` 环境变量）
 2. 解析真实 PGID（`ps -o pgid=`），SIGTERM 杀进程组
 3. 等待进程退出（最多 10s），超时升级 SIGKILL
 4. 杀 Vite dev server（port 1420）
@@ -178,35 +178,35 @@ node scripts/tokenicode-cli.mjs relaunch --timeout 120000
 
 ```bash
 # 输入文字到 TipTap 编辑器
-node scripts/tokenicode-cli.mjs type "你好"
+node scripts/stavebak-cli.mjs type "你好"
 
 # 发送消息（触发 Claude CLI）
-node scripts/tokenicode-cli.mjs send
+node scripts/stavebak-cli.mjs send
 
 # 停止生成
-node scripts/tokenicode-cli.mjs stop
+node scripts/stavebak-cli.mjs stop
 
 # 删除当前 session（清理 tab + 终止 CLI 进程，防止 session 累积）
-node scripts/tokenicode-cli.mjs delete-session
+node scripts/stavebak-cli.mjs delete-session
 # → {"ok":true,"deleted":true,"session":"desk_..."}
 
 # 读消息（默认最后 10 条）
-node scripts/tokenicode-cli.mjs get-messages
-node scripts/tokenicode-cli.mjs get-messages --last 3
-node scripts/tokenicode-cli.mjs get-messages --all
+node scripts/stavebak-cli.mjs get-messages
+node scripts/stavebak-cli.mjs get-messages --last 3
+node scripts/stavebak-cli.mjs get-messages --all
 # → {"ok":true,"messages":[...],"total":16}
 
 # 默认返回摘要（content 截断 150 字，thinking → [thinking]，tool_result → 前 80 字）
 # 需要完整内容时加 --full
-node scripts/tokenicode-cli.mjs get-messages --last 5 --full
+node scripts/stavebak-cli.mjs get-messages --last 5 --full
 
 # 检查编辑器是否可用（type/send 前必检）
-node scripts/tokenicode-cli.mjs check-editor
+node scripts/stavebak-cli.mjs check-editor
 # → {"ok":true,"hasEditor":true,"hasChatPanel":true,"session":"uuid"}
 
 # 检查是否正在生成
-node scripts/tokenicode-cli.mjs is-streaming
-node scripts/tokenicode-cli.mjs is-streaming --tab <TAB_ID>
+node scripts/stavebak-cli.mjs is-streaming
+node scripts/stavebak-cli.mjs is-streaming --tab <TAB_ID>
 ```
 
 消息对象字段：
@@ -224,11 +224,11 @@ node scripts/tokenicode-cli.mjs is-streaming --tab <TAB_ID>
 #### Session 管理
 
 ```bash
-node scripts/tokenicode-cli.mjs get-active-session
-node scripts/tokenicode-cli.mjs get-all-sessions
-node scripts/tokenicode-cli.mjs switch-session <SESSION_ID>  # 完整加载：读 JSONL + 设 working dir + 填充消息
-node scripts/tokenicode-cli.mjs new-session                  # 无参数：导航到欢迎页（无编辑器）
-node scripts/tokenicode-cli.mjs new-session --cwd /path/to   # 有 cwd：创建可用新会话（有编辑器）
+node scripts/stavebak-cli.mjs get-active-session
+node scripts/stavebak-cli.mjs get-all-sessions
+node scripts/stavebak-cli.mjs switch-session <SESSION_ID>  # 完整加载：读 JSONL + 设 working dir + 填充消息
+node scripts/stavebak-cli.mjs new-session                  # 无参数：导航到欢迎页（无编辑器）
+node scripts/stavebak-cli.mjs new-session --cwd /path/to   # 有 cwd：创建可用新会话（有编辑器）
 ```
 
 > **`new-session` 无参数**时只导航到欢迎页（无编辑器，不可 type）。<br>
@@ -238,69 +238,69 @@ node scripts/tokenicode-cli.mjs new-session --cwd /path/to   # 有 cwd：创建�
 #### 模型和 Provider
 
 ```bash
-node scripts/tokenicode-cli.mjs get-current-model
-node scripts/tokenicode-cli.mjs get-current-provider
-node scripts/tokenicode-cli.mjs switch-model claude-sonnet-4-6
-node scripts/tokenicode-cli.mjs switch-provider <PROVIDER_ID>
-node scripts/tokenicode-cli.mjs switch-provider null   # 重置为系统默认
+node scripts/stavebak-cli.mjs get-current-model
+node scripts/stavebak-cli.mjs get-current-provider
+node scripts/stavebak-cli.mjs switch-model claude-sonnet-4-6
+node scripts/stavebak-cli.mjs switch-provider <PROVIDER_ID>
+node scripts/stavebak-cli.mjs switch-provider null   # 重置为系统默认
 ```
 
 #### 设置面板
 
 ```bash
-node scripts/tokenicode-cli.mjs open-settings
-node scripts/tokenicode-cli.mjs close-settings
-node scripts/tokenicode-cli.mjs switch-settings-tab provider   # general|provider|cli|mcp
+node scripts/stavebak-cli.mjs open-settings
+node scripts/stavebak-cli.mjs close-settings
+node scripts/stavebak-cli.mjs switch-settings-tab provider   # general|provider|cli|mcp
 ```
 
 #### 权限处理
 
 ```bash
-node scripts/tokenicode-cli.mjs allow-permission
-node scripts/tokenicode-cli.mjs deny-permission
+node scripts/stavebak-cli.mjs allow-permission
+node scripts/stavebak-cli.mjs deny-permission
 ```
 
 #### 页面内容
 
 ```bash
 # 获取页面可见文本（纯文字，无 HTML 噪音）
-node scripts/tokenicode-cli.mjs get-visible-text
-node scripts/tokenicode-cli.mjs get-visible-text --selector '[data-testid=chat-messages]'
+node scripts/stavebak-cli.mjs get-visible-text
+node scripts/stavebak-cli.mjs get-visible-text --selector '[data-testid=chat-messages]'
 
 # 截图（返回文件路径，用 Read 工具查看图片）
-node scripts/tokenicode-cli.mjs screenshot
+node scripts/stavebak-cli.mjs screenshot
 
 # 页面结构/状态/应用信息
-node scripts/tokenicode-cli.mjs query-page --mode state
-node scripts/tokenicode-cli.mjs query-page --mode info
-node scripts/tokenicode-cli.mjs query-page --mode map
+node scripts/stavebak-cli.mjs query-page --mode state
+node scripts/stavebak-cli.mjs query-page --mode info
+node scripts/stavebak-cli.mjs query-page --mode map
 
 # 精简元素查询（仅交互元素 + 不含文本内容，大幅减少输出噪音）
-node scripts/tokenicode-cli.mjs query-page --mode map --interactive-only
-node scripts/tokenicode-cli.mjs query-page --mode map --interactive-only --no-content
+node scripts/stavebak-cli.mjs query-page --mode map --interactive-only
+node scripts/stavebak-cli.mjs query-page --mode map --interactive-only --no-content
 
 # 原始 HTML
-node scripts/tokenicode-cli.mjs get-dom
+node scripts/stavebak-cli.mjs get-dom
 ```
 
 #### 等待
 
 ```bash
 # 等待文本出现
-node scripts/tokenicode-cli.mjs wait-for --text "收到" --timeout 5000
+node scripts/stavebak-cli.mjs wait-for --text "收到" --timeout 5000
 
 # 等待元素出现
-node scripts/tokenicode-cli.mjs wait-for --selector '[data-testid=permission-card]'
+node scripts/stavebak-cli.mjs wait-for --selector '[data-testid=permission-card]'
 
 # 等待消息生成完成（轮询 status，超时=失败）
-node scripts/tokenicode-cli.mjs wait-until-done --timeout 60000
+node scripts/stavebak-cli.mjs wait-until-done --timeout 60000
 
 # 等待特定 phase（如等模型进入 writing 阶段再中断）
-node scripts/tokenicode-cli.mjs wait-for-phase writing --timeout 15000
+node scripts/stavebak-cli.mjs wait-for-phase writing --timeout 15000
 # phases: thinking | writing | tool | awaiting | completed
 
 # 纯延时（不检查状态，用于时序控制）
-node scripts/tokenicode-cli.mjs delay 3000
+node scripts/stavebak-cli.mjs delay 3000
 ```
 
 `wait-until-done` 返回值：
@@ -324,8 +324,8 @@ node scripts/tokenicode-cli.mjs delay 3000
 #### 原始 JS 执行
 
 ```bash
-node scripts/tokenicode-cli.mjs exec "document.title"
-node scripts/tokenicode-cli.mjs exec "JSON.stringify(window.__tokenicode_test.status())"
+node scripts/stavebak-cli.mjs exec "document.title"
+node scripts/stavebak-cli.mjs exec "JSON.stringify(window.__stavebak_test.status())"
 ```
 
 ### 默认超时
@@ -346,7 +346,7 @@ node scripts/tokenicode-cli.mjs exec "JSON.stringify(window.__tokenicode_test.st
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `TOKENICODE_SOCKET` | `/tmp/tokenicode-test.sock` | 覆盖 socket 路径（restart 命令也遵循） |
+| `Stavebak_SOCKET` | `/tmp/stavebak-test.sock` | 覆盖 socket 路径（restart 命令也遵循） |
 
 ### 可用的 data-testid
 
@@ -396,7 +396,7 @@ bash .test/scripts/run-branch-validation.sh --cycles 3 --phases 1,2,3 --detail m
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `--report <path>` | `/tmp/tokenicode-test-report-{时间戳}.json` | 报告输出路径 |
+| `--report <path>` | `/tmp/stavebak-test-report-{时间戳}.json` | 报告输出路径 |
 | `--retry <N>` | `0` | 全局重试次数（单测定义 `retry` 优先） |
 | `--test-timeout <ms>` | `120000` | 单测超时（硬上限：step 超时被 clamp 到剩余预算） |
 | `--stop-after <N>` | `3` | 连续 N 次失败后触发 restart |
@@ -406,7 +406,7 @@ bash .test/scripts/run-branch-validation.sh --cycles 3 --phases 1,2,3 --detail m
 
 ### 运行器行为
 
-1. **预检**：启动时 `ping` 检查 TOKENICODE 是否在运行
+1. **预检**：启动时 `ping` 检查 Stavebak 是否在运行
 2. **Schema 校验**：验证所有测试定义的 `steps`/`setup`/`teardown` 格式，不合法直接退出
 3. **串行执行**：一个测试完了才跑下一个
 4. **全量记录**：每步的输入命令、输出 JSON、耗时、执行前后 UI 状态快照、可见文本
@@ -464,7 +464,7 @@ bash .test/scripts/run-branch-validation.sh --cycles 3 --phases 1,2,3 --detail m
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `cmd` | string | 是 | tokenicode-cli.mjs 命令名 |
+| `cmd` | string | 是 | stavebak-cli.mjs 命令名 |
 | `args` | string[] | 否 | 位置参数 |
 | `flags` | object | 否 | `--key value` 标志，值为字符串或 `true`（布尔标志） |
 | `timeout` | number | 否 | 该步超时（ms），默认 30s，受 testTimeout 剩余预算 clamp。**对 wait 类命令（`wait-until-done`/`wait-for-phase`/`wait-for`），必须设此值且 > flags.timeout（建议 +5s），否则 step 会在命令内部超时前被 runner 杀掉** |
@@ -653,7 +653,7 @@ python3 .test/scripts/analyze-reports.py .test/runs/<日期目录>
   "name": "writing阶段中断后发送",
   "timeout": 90000,
   "setup": [
-    {"cmd": "new-session", "flags": {"cwd": "/tmp/tokenicode-test"}},
+    {"cmd": "new-session", "flags": {"cwd": "/tmp/stavebak-test"}},
     {"cmd": "check-editor", "assert": {"hasEditor": true}},
     {"cmd": "switch-model", "args": ["claude-sonnet-4-6"]}
   ],
@@ -685,7 +685,7 @@ python3 .test/scripts/analyze-reports.py .test/runs/<日期目录>
     {
       "name": "sonnet-发送基础消息",
       "setup": [
-        {"cmd": "new-session", "flags": {"cwd": "/tmp/tokenicode-test"}},
+        {"cmd": "new-session", "flags": {"cwd": "/tmp/stavebak-test"}},
         {"cmd": "check-editor"},
         {"cmd": "switch-model", "args": ["claude-sonnet-4-6"]}
       ],
@@ -700,7 +700,7 @@ python3 .test/scripts/analyze-reports.py .test/runs/<日期目录>
     {
       "name": "opus-发送基础消息",
       "setup": [
-        {"cmd": "new-session", "flags": {"cwd": "/tmp/tokenicode-test"}},
+        {"cmd": "new-session", "flags": {"cwd": "/tmp/stavebak-test"}},
         {"cmd": "check-editor"},
         {"cmd": "switch-model", "args": ["claude-opus-4-6"]}
       ],
@@ -770,7 +770,7 @@ bash .test/scripts/run-branch-validation.sh --cycles 5 --phases 1,2,3 --detail m
 
 | 文件 | 行数 | 说明 |
 |------|------|------|
-| `scripts/tokenicode-cli.mjs` | ~715 | CLI 工具主体，30 个命令（含 restart/relaunch），零外部依赖 |
+| `scripts/stavebak-cli.mjs` | ~715 | CLI 工具主体，30 个命令（含 restart/relaunch），零外部依赖 |
 | `scripts/run-tests.mjs` | ~646 | 批量测试运行器：串行执行 + Schema 校验 + 自动重试 + 超时硬上限 + 全量记录 + 兜底 restart/relaunch |
 | `.test/scripts/run-e2e.sh` | ~230 | 分阶段运行 suites，写 `*.ndjson` + `*.report.json` + `SUMMARY.md` |
 | `.test/scripts/run-all-phases.sh` | ~20 | 全阶段入口，运行后调用分析器 |
@@ -784,7 +784,7 @@ bash .test/scripts/run-branch-validation.sh --cycles 5 --phases 1,2,3 --detail m
 
 #### `src/App.tsx`
 
-在 `useEffect` 中扩展了 `window.__tokenicode_test` 对象（仅 `import.meta.env.DEV` 下生效）：
+在 `useEffect` 中扩展了 `window.__stavebak_test` 对象（仅 `import.meta.env.DEV` 下生效）：
 
 **新增 import**：
 ```typescript
@@ -802,7 +802,7 @@ import { parseSessionMessages } from './lib/session-loader';
 **新增 `status()` 方法**（约 231-249 行）：
 - 一次性返回全局状态快照
 - `active` 字段覆盖四个活跃阶段（thinking/writing/tool/awaiting），比旧的 `isStreaming` 更全面
-- `pendingPermission` 检查 `window.__tokenicode_respond_permission` 是否存在
+- `pendingPermission` 检查 `window.__stavebak_respond_permission` 是否存在
 
 **新增 `loadSession(sessionId)` 方法**（约 268-338 行）：
 - 完整的 session 加载流程，复刻了 `ConversationList.tsx` 的 `handleLoadSession` 逻辑
@@ -820,7 +820,7 @@ import { parseSessionMessages } from './lib/session-loader';
 | 文件 | 作用 |
 |------|------|
 | `src-tauri/Cargo.toml` | 测试通道依赖（`tauri-plugin-mcp`），`cfg(debug_assertions)` 门控 |
-| `src-tauri/src/lib.rs` (`run()` 末尾) | 测试通道注册，在 `/tmp/tokenicode-test.sock` 启动 socket server |
+| `src-tauri/src/lib.rs` (`run()` 末尾) | 测试通道注册，在 `/tmp/stavebak-test.sock` 启动 socket server |
 | `package.json` | 测试通道 npm 包（`tauri-plugin-mcp`，提供前端 event listeners） |
 
 这些是之前 test-harness-bridge 任务的产物，CLI 工具复用了它们提供的 socket 通道。
@@ -834,7 +834,7 @@ import { parseSessionMessages } from './lib/session-loader';
 - **欢迎页没有编辑器**：`new-session` 无参数和 `restart` 后会停在欢迎页，该页面没有 TipTap 编辑器。对话测试必须使用 `new-session --cwd <path>` 创建可用会话，或先 `switch-session <SESSION_ID>` 加载已有会话。详见「二点五、正确的新会话流程」。
 - **DOM click 对 React 组件无效**：所有交互走 `execute_js` + Zustand store 直操，不走原生点击事件。
 - **relaunch 开新窗口**：`relaunch` 命令 spawn 新进程，会开新 Tauri 窗口。日常测试用 `restart`（同窗口 reload）即可。
-- **relaunch 进程泄漏**：`relaunch` 通过 `lsof` 找 socket 持有者 PID 来杀进程，但旧的 `target/debug/tokenicode` 子进程经常杀不干净。长时间无人值守测试（5 小时）实测累积了 76 个僵尸进程。测试前后手动清理：`pkill -9 -f 'target/debug/tokenicode'`。
+- **relaunch 进程泄漏**：`relaunch` 通过 `lsof` 找 socket 持有者 PID 来杀进程，但旧的 `target/debug/stavebak` 子进程经常杀不干净。长时间无人值守测试（5 小时）实测累积了 76 个僵尸进程。测试前后手动清理：`pkill -9 -f 'target/debug/stavebak'`。
 - **tmux 环境缺 cargo**：在 tmux session 中跑 `pnpm tauri dev`（或 relaunch 内部调用）需要先 `source ~/.cargo/env`，否则 `cargo metadata` 报 "No such file or directory"。
 - **Webview 冻结导致 restart 也失效**：restart 依赖 `execute_js` 做 `location.reload()`，webview 冻住时 restart 必然超时。此时只能 relaunch（或手动 `pkill -9` + 重新 `pnpm tauri dev`）。
 
@@ -844,5 +844,5 @@ import { parseSessionMessages } from './lib/session-loader';
 
 - Socket server 仅在 `cfg(debug_assertions)` 下编译，release 构建完全不含
 - `data-testid` 属性通过 `import.meta.env.DEV` 门控，production build 自动剥离
-- `window.__tokenicode_test` helper 仅在 `import.meta.env.DEV` 下挂载
+- `window.__stavebak_test` helper 仅在 `import.meta.env.DEV` 下挂载
 - restart 的进程查找使用 `execFileSync`（无 shell 注入），socket 清理使用 `fs.rmSync`（无路径拼接注入）

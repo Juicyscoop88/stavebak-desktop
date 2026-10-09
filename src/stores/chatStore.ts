@@ -172,7 +172,7 @@ export interface SessionMeta {
   pendingTurnMessageId?: string;
   pendingTurnInput?: string;
   pendingTurnAttachments?: FileAttachment[];
-  /** Partial assistant正文 that was visible when the user clicked Stop.
+  /** Partial assistant text that was visible when the user clicked Stop.
    *  Claude CLI resume does not always include interrupted assistant output,
    *  so the next user turn may need this text injected once for continuity. */
   interruptedAssistantText?: string;

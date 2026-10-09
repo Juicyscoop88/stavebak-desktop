@@ -7,6 +7,8 @@ import { settingsEvents } from '../lib/settingsEvents';
 export type Theme = 'light' | 'dark' | 'system';
 export type ColorTheme = 'black' | 'blue' | 'purple' | 'green';
 export type SecondaryPanelTab = 'files' | 'skills';
+/** Active panel IDs for the plugin panel system (ADR-0002) */
+export type PanelId = string | null;
 export type ModelId =
   | 'claude-fable-5'
   | 'claude-fable-5-1m'
@@ -19,7 +21,7 @@ export type ModelId =
 export type SessionMode = 'code' | 'ask' | 'plan' | 'bypass';
 /** CLI permission mode for the SDK control protocol */
 export type CliPermissionMode = 'acceptEdits' | 'default' | 'plan' | 'bypassPermissions';
-export type Locale = 'zh' | 'en';
+export type Locale = 'cs' | 'en' | 'sk' | 'de';
 
 /** Map frontend session mode to CLI permission mode */
 export function mapSessionModeToPermissionMode(mode: SessionMode): CliPermissionMode {
@@ -90,6 +92,10 @@ interface SettingsState {
   userDisplayName: string;
   /** Whether to show dotfiles (hidden files) in the file tree */
   showHiddenFiles: boolean;
+  /** Active panel ID for the left PanelSlot (ADR-0002) */
+  leftPanelId: PanelId;
+  /** Active panel ID for the right PanelSlot (ADR-0002) */
+  rightPanelId: PanelId;
 
   toggleTheme: () => void;
   setTheme: (theme: Theme) => void;
@@ -121,6 +127,8 @@ interface SettingsState {
   setUserAvatarUrl: (url: string) => void;
   setUserDisplayName: (name: string) => void;
   toggleHiddenFiles: () => void;
+  setLeftPanel: (id: PanelId) => void;
+  setRightPanel: (id: PanelId) => void;
 }
 
 // --- Theme cycle order ---
@@ -148,7 +156,7 @@ export const useSettingsStore = create<SettingsState>()(
       workingDirectory: '',
       selectedModel: 'claude-sonnet-4-6',
       sessionMode: 'bypass',
-      locale: 'zh',
+      locale: 'cs',
       fontSize: 18,
       sidebarWidth: 280,
       setupCompleted: false,
@@ -163,6 +171,8 @@ export const useSettingsStore = create<SettingsState>()(
       userAvatarUrl: '',
       userDisplayName: '',
       showHiddenFiles: false,
+      leftPanelId: 'files',
+      rightPanelId: null,
 
       toggleTheme: () =>
         set((state) => ({ theme: nextTheme(state.theme) })),
@@ -198,8 +208,14 @@ export const useSettingsStore = create<SettingsState>()(
           ...(!state.settingsOpen && state.updateAvailable ? { updateAvailable: false } : {}),
         })),
 
-      setWorkingDirectory: (dir) =>
-        set(() => ({ workingDirectory: dir })),
+      setWorkingDirectory: (dir) => {
+        set(() => ({ workingDirectory: dir }));
+        if (dir) {
+          import('@tauri-apps/api/core').then(({ invoke }) => {
+            invoke('ensure_claude_md', { path: dir }).catch(() => {});
+          });
+        }
+      },
 
       setSelectedModel: (model) => {
         const old = get().selectedModel;
@@ -216,8 +232,9 @@ export const useSettingsStore = create<SettingsState>()(
       setLocale: (locale) =>
         set(() => ({ locale })),
 
-      toggleLocale: () =>
-        set((state) => ({ locale: state.locale === 'zh' ? 'en' : 'zh' })),
+      toggleLocale: () => {
+        // No-op: use setLocale instead
+      },
 
       setFontSize: (size) =>
         set(() => ({ fontSize: Math.max(10, Math.min(36, size)) })),
@@ -263,10 +280,12 @@ export const useSettingsStore = create<SettingsState>()(
         set(() => ({ userDisplayName: name.slice(0, 20) })),
       toggleHiddenFiles: () =>
         set((state) => ({ showHiddenFiles: !state.showHiddenFiles })),
+      setLeftPanel: (id) => set(() => ({ leftPanelId: id })),
+      setRightPanel: (id) => set(() => ({ rightPanelId: id })),
     }),
     {
-      name: 'tokenicode-settings',
-      version: 8,
+      name: 'stavebak-settings',
+      version: 9,
       migrate: (persistedState: unknown, version: number) => {
         const persisted = persistedState as Record<string, unknown>;
         if (version === 0) {
@@ -326,6 +345,10 @@ export const useSettingsStore = create<SettingsState>()(
             persisted.selectedModel = opusUpgradeMap[current];
           }
         }
+        if (version < 9) {
+          persisted.leftPanelId = 'files';
+          persisted.rightPanelId = null;
+        }
         return persisted;
       },
       partialize: (state) => ({
@@ -348,6 +371,8 @@ export const useSettingsStore = create<SettingsState>()(
         userAvatarUrl: state.userAvatarUrl,
         userDisplayName: state.userDisplayName,
         showHiddenFiles: state.showHiddenFiles,
+        leftPanelId: state.leftPanelId,
+        rightPanelId: state.rightPanelId,
       }),
     },
   ),
@@ -414,7 +439,7 @@ useSettingsStore.subscribe((state, prevState) => {
     if (!stdinId) return; // No active session
 
     bridge.setPermissionMode(stdinId, cliMode).catch((err: unknown) => {
-      console.error('[TOKENICODE] Failed to set permission mode:', err);
+      console.error('[Stavebak] Failed to set permission mode:', err);
     });
   });
 });

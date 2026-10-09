@@ -3,6 +3,7 @@ import { useFileStore } from '../../stores/fileStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useT } from '../../lib/i18n';
+import { FolderPlus, Folder } from '@phosphor-icons/react';
 
 /**
  * One-time project selector shown before a project is chosen.
@@ -40,11 +41,7 @@ export function ProjectSelector() {
           hover:border-accent hover:text-accent
           hover:bg-accent/5 transition-smooth"
       >
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-          stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0">
-          <path d="M2 4h4l2 2h6v7H2V4z" />
-          <path d="M8 8v4M6 10h4" strokeLinecap="round" />
-        </svg>
+        <FolderPlus size={12} weight="light" className="flex-shrink-0" />
         {t('project.selectBtn')}
       </button>
 
@@ -59,11 +56,7 @@ export function ProjectSelector() {
             hover:text-text-primary transition-smooth"
           title={project.shortPath}
         >
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5"
-            className="flex-shrink-0 text-text-tertiary">
-            <path d="M2 4h4l2 2h6v7H2V4z" />
-          </svg>
+          <Folder size={11} weight="light" className="flex-shrink-0 text-text-tertiary" />
           {project.name}
         </button>
       ))}

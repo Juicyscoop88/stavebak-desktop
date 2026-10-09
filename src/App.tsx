@@ -3,11 +3,13 @@ import { AppShell } from './components/layout/AppShell';
 import { Sidebar } from './components/layout/Sidebar';
 import { ChatPanel } from './components/chat/ChatPanel';
 import { SecondaryPanel } from './components/layout/SecondaryPanel';
+import { BottomBar } from './components/layout/BottomBar';
 import { CommandPalette } from './components/commands/CommandPalette';
 import { SettingsPanel } from './components/settings/SettingsPanel';
 import { ImageLightbox } from './components/shared/ImageLightbox';
 import { ChangelogModal } from './components/shared/ChangelogModal';
 import { Toast } from './components/shared/Toast';
+import { SetupWizard } from './components/setup/SetupWizard';
 import { useSettingsStore } from './stores/settingsStore';
 import { useProviderStore } from './stores/providerStore';
 import type { ColorTheme, Theme } from './stores/settingsStore';
@@ -21,8 +23,39 @@ import { parseSessionMessages } from './lib/session-loader';
 import { hasRecoverableFrontendSession } from './lib/sessionLifecycle';
 import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';
 import { useT } from './lib/i18n';
+import { Warning } from '@phosphor-icons/react';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { panelRegistry } from './lib/panel-registry';
+import { registerPlugins } from './plugins/registry';
 import './App.css';
+
+// Register core built-in panels (ADR-0002)
+panelRegistry.register('core', [
+  {
+    id: 'files',
+    label: 'Soubory',
+    slot: 'left',
+    priority: 100,
+    component: () => import('./components/files/FileExplorer').then(m => ({ default: m.FileExplorer })),
+  },
+  {
+    id: 'conversations',
+    label: 'Konverzace',
+    slot: 'left',
+    priority: 50,
+    component: () => import('./components/conversations/ConversationList').then(m => ({ default: m.ConversationList })),
+  },
+  {
+    id: 'skills',
+    label: 'Skills',
+    slot: 'right',
+    priority: 40,
+    component: () => import('./components/skills/SkillsPanel').then(m => ({ default: m.SkillsPanel })),
+  },
+]);
+
+// Register MCP-driven plugins
+registerPlugins();
 
 /** Accent colors per theme for the slash in the icon */
 const THEME_ACCENT_COLORS: Record<ColorTheme, string> = {
@@ -91,6 +124,7 @@ function App() {
   const colorTheme = useSettingsStore((s) => s.colorTheme);
   const fontSize = useSettingsStore((s) => s.fontSize);
   const settingsOpen = useSettingsStore((s) => s.settingsOpen);
+  const setupCompleted = useSettingsStore((s) => s.setupCompleted);
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
   const lastSeenVersion = useSettingsStore((s) => s.lastSeenVersion);
   const setLastSeenVersion = useSettingsStore((s) => s.setLastSeenVersion);
@@ -100,7 +134,26 @@ function App() {
   const markFileChanged = useFileStore((s) => s.markFileChanged);
   const prevDirRef = useRef<string | null>(null);
 
+  const [onboardingDismissing, setOnboardingDismissing] = useState(false);
+  const wasInSetup = useRef(!setupCompleted);
+
   const t = useT();
+
+  // When setup completes, fade out overlay then reveal sidebar
+  useEffect(() => {
+    if (setupCompleted && wasInSetup.current) {
+      wasInSetup.current = false;
+      setOnboardingDismissing(true);
+      // Fade out the overlay, then open sidebar
+      const t1 = setTimeout(() => {
+        setOnboardingDismissing(false);
+        // Open sidebar with animation
+        const s = useSettingsStore.getState();
+        if (!s.sidebarOpen) s.toggleSidebar();
+      }, 600);
+      return () => clearTimeout(t1);
+    }
+  }, [setupCompleted]);
 
   // Auto-check for app updates on startup
   useAutoUpdateCheck();
@@ -126,13 +179,7 @@ function App() {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
 
-    import('tauri-plugin-mcp').then(({ setupPluginListeners }) => {
-      setupPluginListeners();
-    }).catch((error) => {
-      console.warn('[TOKENICODE] Failed to init MCP plugin listeners:', error);
-    });
-
-    (window as any).__tokenicode_test = {
+(window as any).__stavebak_test = {
       getMessages(optsOrTabId?: string | { tabId?: string; last?: number; summary?: boolean }) {
         const opts = typeof optsOrTabId === 'string' ? { tabId: optsOrTabId } : (optsOrTabId || {});
         const id = opts.tabId || useSessionStore.getState().selectedSessionId;
@@ -162,7 +209,7 @@ function App() {
         return { messages, total };
       },
       getLastMessage(tabId?: string) {
-        const { messages } = (window as any).__tokenicode_test.getMessages({ tabId, last: 1 });
+        const { messages } = (window as any).__stavebak_test.getMessages({ tabId, last: 1 });
         return messages[0] || null;
       },
       getActiveSessionId() {
@@ -206,20 +253,20 @@ function App() {
           active,
           phase: phase || null,
           sessionStatus: tab?.sessionStatus || null,
-          pendingPermission: !!(window as any).__tokenicode_respond_permission,
+          pendingPermission: !!(window as any).__stavebak_respond_permission,
           settingsOpen: useSettingsStore.getState().settingsOpen,
           messageCount: tab?.messages?.length || 0,
         };
       },
       type(text: string) {
-        const editor = (window as any).__tokenicode_editor;
+        const editor = (window as any).__stavebak_editor;
         if (!editor) return { error: 'Editor not available (no active session)' };
         editor.commands.clearContent();
         editor.commands.insertContent(text);
         return { typed: text };
       },
       send() {
-        const fn = (window as any).__tokenicode_send;
+        const fn = (window as any).__stavebak_send;
         if (!fn) return { error: 'Send handler not available' };
         fn();
         return { sent: true };
@@ -350,13 +397,13 @@ function App() {
         return { error: `Tab ${tabId} not found` };
       },
       allowPermission() {
-        const fn = (window as any).__tokenicode_respond_permission;
+        const fn = (window as any).__stavebak_respond_permission;
         if (!fn) return { error: 'No pending permission request' };
         fn(true);
         return { allowed: true };
       },
       denyPermission() {
-        const fn = (window as any).__tokenicode_respond_permission;
+        const fn = (window as any).__stavebak_respond_permission;
         if (!fn) return { error: 'No pending permission request' };
         fn(false);
         return { denied: true };
@@ -381,7 +428,7 @@ function App() {
     };
 
     return () => {
-      delete (window as any).__tokenicode_test;
+      delete (window as any).__stavebak_test;
     };
   }, []);
 
@@ -443,7 +490,7 @@ function App() {
                 }
               }
             } catch (err) {
-              console.warn('[TOKENICODE:close] stream flush failed', err);
+              console.warn('[Stavebak:close] stream flush failed', err);
             }
             const { exit } = await import('@tauri-apps/plugin-process');
             await exit(0);
@@ -464,7 +511,7 @@ function App() {
       if (!activeIds.length) return;
       const orphaned = activeIds.filter((id) => !hasRecoverableFrontendSession(id));
       for (const id of orphaned) {
-        console.log('[TOKENICODE:cleanup] killing orphaned process:', id);
+        console.log('[Stavebak:cleanup] killing orphaned process:', id);
         const ownerTabId = useSessionStore.getState().getTabForStdin(id);
         bridge.killSession(id).catch(() => {});
         useSessionStore.getState().unregisterStdinTab(id);
@@ -484,7 +531,7 @@ function App() {
     const isMac = navigator.userAgent.includes('Mac');
     if (!isMac) return;
     // Skip if user previously dismissed the dialog
-    if (localStorage.getItem('tokenicode-perm-dismissed')) return;
+    if (localStorage.getItem('stavebak-perm-dismissed')) return;
     bridge.checkFileAccess('/Users').then((ok) => {
       if (!ok) setShowPermDialog(true);
     }).catch(() => {});
@@ -702,7 +749,19 @@ function App() {
         sidebar={<Sidebar />}
         main={<ChatPanel key={selectedSessionId || 'new'} />}
         secondary={<SecondaryPanel />}
+        bottomBar={<BottomBar />}
+        forceCollapseSidebar={!setupCompleted || onboardingDismissing}
       />
+      {/* Onboarding overlay — centered, covers entire app */}
+      {(!setupCompleted || onboardingDismissing) && (
+        <div
+          className={`fixed inset-0 z-100 flex items-center justify-center bg-bg-chat
+            transition-opacity duration-500 ease-out
+            ${onboardingDismissing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        >
+          <SetupWizard />
+        </div>
+      )}
       <CommandPalette />
       {settingsOpen && <SettingsPanel />}
       <ImageLightbox />
@@ -722,11 +781,7 @@ function App() {
             {/* Header */}
             <div className="px-6 pt-6 pb-3 flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-warning/15 flex items-center justify-center flex-shrink-0">
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"
-                  stroke="currentColor" strokeWidth="1.5" className="text-warning">
-                  <path d="M10 2L1.5 17h17L10 2z" />
-                  <path d="M10 8v4M10 14.5v.5" />
-                </svg>
+                <Warning size={20} weight="light" className="text-warning" />
               </div>
               <div>
                 <h3 className="text-base font-semibold text-text-primary">{t('perm.title')}</h3>
@@ -741,7 +796,7 @@ function App() {
             <div className="px-6 py-4 flex items-center justify-end gap-2">
               <button
                 onClick={() => {
-                  localStorage.setItem('tokenicode-perm-dismissed', '1');
+                  localStorage.setItem('stavebak-perm-dismissed', '1');
                   setShowPermDialog(false);
                 }}
                 className="px-4 py-2 rounded-lg text-xs font-medium
@@ -752,7 +807,7 @@ function App() {
               </button>
               <button
                 onClick={() => {
-                  localStorage.setItem('tokenicode-perm-dismissed', '1');
+                  localStorage.setItem('stavebak-perm-dismissed', '1');
                   openUrl('x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles');
                   setShowPermDialog(false);
                 }}

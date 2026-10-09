@@ -7,7 +7,7 @@
         {
           "cmd": "new-session",
           "flags": {
-            "cwd": "/tmp/tokenicode-test"
+            "cwd": "/tmp/stavebak-test"
           }
         },
         {
@@ -59,7 +59,7 @@
         {
           "cmd": "new-session",
           "flags": {
-            "cwd": "/tmp/tokenicode-test"
+            "cwd": "/tmp/stavebak-test"
           }
         },
         {

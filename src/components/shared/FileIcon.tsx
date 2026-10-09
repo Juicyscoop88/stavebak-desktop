@@ -50,12 +50,12 @@ function getIconType(name: string, isDir?: boolean): string {
 
 type IconDef = { vb: string; fill: boolean; d: string[] };
 
-/* 图标集 —— 两种模式：
-   · fill 模式（viewBox 1024）：html/json/markdown/word/pdf 用成品实心图标
-   · stroke 模式（viewBox 16）：其余类型用统一线框（1.3 描边、圆角）
-   颜色全部走 currentColor（由调用方染成主题浅紫）。 */
+/* Icon set — two modes:
+   · fill mode (viewBox 1024): html/json/markdown/word/pdf use solid icons
+   · stroke mode (viewBox 16): other types use uniform line-art (1.3 stroke, rounded)
+   All colors use currentColor (caller tints with theme accent). */
 const ICONS: Record<string, IconDef> = {
-  // —— 实心成品图标（1024 画布）——
+  // — Solid icons (1024 canvas) —
   globe: {
     vb: '0 0 1024 1024', fill: true, d: [
       'M896 288V704h-64V288h-128A96 96 0 0 1 608 192V64H256a64 64 0 0 0-64 64v576H128V128a128 128 0 0 1 128-128h352L896 288z m-623.104 470.4v255.936h-50.624v-109.696H114.56v109.696H64V758.4h50.624v104.064h107.648V758.4h50.56z m144.064 42.368v213.568h-50.816v-213.568H293.632v-42.368h196.096v42.368H416.96z m139.264 213.568v-170.24h2.432l60.928 138.176h33.024l60.544-138.24h2.432v170.304h45.76V758.4h-51.2l-72.96 166.144H635.52L562.56 758.4h-51.52v255.936h45.184z m301.44-43.136h108.544v43.136H807.04V758.4h50.56v212.8z',
@@ -84,7 +84,7 @@ const ICONS: Record<string, IconDef> = {
     ],
   },
 
-  // —— 线框图标（16 画布，1.3 描边）——
+  // — Line-art icons (16 canvas, 1.3 stroke) —
   folder: { vb: '0 0 16 16', fill: false, d: ['M2.5 5.25a1 1 0 0 1 1-1h3.05a1 1 0 0 1 .7.3l.9.9a1 1 0 0 0 .7.3h4.65a1 1 0 0 1 1 1v4.7a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1V5.25Z'] },
   document: { vb: '0 0 16 16', fill: false, d: ['M4.5 2.75h4l3.25 3.25v6.5a.75.75 0 0 1-.75.75h-6.5a.75.75 0 0 1-.75-.75v-9a.75.75 0 0 1 .75-.75ZM8.25 2.75v2.5a.75.75 0 0 0 .75.75h2.75'] },
   'doc-text': { vb: '0 0 16 16', fill: false, d: ['M4.5 2.75h4l3.25 3.25v6.5a.75.75 0 0 1-.75.75h-6.5a.75.75 0 0 1-.75-.75v-9a.75.75 0 0 1 .75-.75ZM8.25 2.75v2.5a.75.75 0 0 0 .75.75h2.75M6.25 8.75h3.5M6.25 10.75h2.5'] },

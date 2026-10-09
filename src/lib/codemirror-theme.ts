@@ -7,7 +7,7 @@ import { tags } from '@lezer/highlight';
  * so it automatically follows the app's theme and color scheme.
  * Replaces vscodeDark/vscodeLight — no isDark branching needed.
  */
-export const tokenicodeTheme = EditorView.theme({
+export const stavebakTheme = EditorView.theme({
   '&': {
     backgroundColor: 'var(--color-bg-primary)',
     color: 'var(--color-text-primary)',
@@ -71,7 +71,7 @@ export const tokenicodeTheme = EditorView.theme({
   },
 });
 
-export const tokenicodeHighlight = syntaxHighlighting(HighlightStyle.define([
+export const stavebakHighlight = syntaxHighlighting(HighlightStyle.define([
   { tag: tags.keyword, color: 'var(--color-syntax-keyword)' },
   { tag: tags.controlKeyword, color: 'var(--color-syntax-keyword)', fontWeight: '600' },
   { tag: tags.string, color: 'var(--color-syntax-string)' },

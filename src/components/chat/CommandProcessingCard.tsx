@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { type ChatMessage } from '../../stores/chatStore';
 import { useT } from '../../lib/i18n';
 import { formatElapsedCompact } from '../../lib/elapsed-time';
+import { CaretRight, Check, SpinnerGap } from '@phosphor-icons/react';
 
 interface Props {
   message: ChatMessage;
@@ -48,15 +49,11 @@ export function CommandProcessingCard({ message }: Props) {
           {/* Status icon */}
           {isCompleted ? (
             <div className="w-6 h-6 rounded-full bg-success/15 flex items-center justify-center flex-shrink-0">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
-                stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 7l3 3 5-5" />
-              </svg>
+              <Check size={14} weight="light" className="text-success" />
             </div>
           ) : (
             <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-              <span className="w-5 h-5 border-2 border-accent/30 border-t-accent
-                rounded-full animate-spin" />
+              <SpinnerGap size={20} weight="light" className="animate-spin text-accent" />
             </div>
           )}
 
@@ -66,7 +63,7 @@ export function CommandProcessingCard({ message }: Props) {
               <code className="text-xs font-mono font-semibold text-text-primary">
                 {commandName}
               </code>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium
                 ${isCompleted
                   ? 'bg-success/10 text-success'
                   : 'bg-accent/10 text-accent'
@@ -92,7 +89,7 @@ export function CommandProcessingCard({ message }: Props) {
         {/* Cost summary (injected from result event) */}
         {isCompleted && costSummary && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2
-            border-t border-border-subtle/50 text-[11px] font-mono text-text-tertiary">
+            border-t border-border-subtle/50 text-xs font-mono text-text-tertiary">
             <span>Cost: ${costSummary.cost}</span>
             <span className="text-border-subtle">|</span>
             <span>Duration: {costSummary.duration}</span>
@@ -113,19 +110,16 @@ export function CommandProcessingCard({ message }: Props) {
             <button
               onClick={() => setShowOutput(!showOutput)}
               className="w-full flex items-center gap-1.5 px-4 py-1.5
-                border-t border-border-subtle/50 text-[11px] text-text-tertiary
+                border-t border-border-subtle/50 text-xs text-text-tertiary
                 hover:text-text-secondary hover:bg-bg-tertiary/30 transition-smooth"
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-                stroke="currentColor" strokeWidth="1.5"
+              <CaretRight size={10} weight="light"
                 className={`flex-shrink-0 transition-transform duration-150
-                  ${showOutput ? 'rotate-90' : ''}`}>
-                <path d="M3 2l4 3-4 3" />
-              </svg>
+                  ${showOutput ? 'rotate-90' : ''}`} />
               <span>{showOutput ? t('cmd.hideOutput') : t('cmd.showOutput')}</span>
             </button>
             {showOutput && (
-              <pre className="px-4 py-2 text-[11px] font-mono text-text-muted
+              <pre className="px-4 py-2 text-xs font-mono text-text-muted
                 whitespace-pre-wrap break-words overflow-x-auto max-h-48 overflow-y-auto
                 border-t border-border-subtle/30 bg-bg-secondary/20 selectable">
                 {outputText}

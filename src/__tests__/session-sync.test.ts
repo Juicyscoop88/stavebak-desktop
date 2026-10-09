@@ -1,5 +1,5 @@
 /**
- * Tests for the Her → TOKENICODE session sync (2026-04-15).
+ * Tests for the Her → Stavebak session sync (2026-04-15).
  *
  * Covers:
  * 1. SessionInfo type contract (stdin_id + cli_session_id)

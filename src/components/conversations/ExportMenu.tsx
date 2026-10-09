@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { bridge } from '../../lib/tauri-bridge';
 import { save } from '@tauri-apps/plugin-dialog';
 import { useT } from '../../lib/i18n';
+import { DownloadSimple, FileText, FileDoc, FileCode } from '@phosphor-icons/react';
 
 interface Props {
   sessionPath?: string;
@@ -79,10 +80,7 @@ export function ExportMenu({ sessionPath }: Props) {
           transition-smooth disabled:opacity-30 disabled:cursor-not-allowed"
         title={t('export.title')}
       >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-          stroke="currentColor" strokeWidth="1.5">
-          <path d="M8 2v8M5 7l3 3 3-3M3 12h10" strokeLinecap="round" />
-        </svg>
+        <DownloadSimple size={16} weight="light" />
       </button>
 
       {open && (
@@ -97,13 +95,7 @@ export function ExportMenu({ sessionPath }: Props) {
               text-sm text-text-primary hover:bg-bg-secondary
               transition-smooth text-left"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-              className="flex-shrink-0 text-text-tertiary">
-              <path d="M3 1h7l3 3v9a2 2 0 01-2 2H3a2 2 0 01-2-2V3a2 2 0 012-2z" />
-              <path d="M10 1v3h3" />
-              <path d="M5 9h6M5 12h3" />
-            </svg>
+            <FileText size={14} weight="light" className="flex-shrink-0 text-text-tertiary" />
             {t('export.markdown')}
           </button>
           <button
@@ -112,15 +104,7 @@ export function ExportMenu({ sessionPath }: Props) {
               text-sm text-text-primary hover:bg-bg-secondary
               transition-smooth text-left"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-              className="flex-shrink-0 text-text-tertiary">
-              <path d="M3 1h7l3 3v9a2 2 0 01-2 2H3a2 2 0 01-2-2V3a2 2 0 012-2z" />
-              <path d="M10 1v3h3" />
-              <circle cx="5" cy="9" r="1" fill="currentColor" stroke="none" />
-              <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" />
-              <path d="M7.5 9h4M7.5 12h3" />
-            </svg>
+            <FileDoc size={14} weight="light" className="flex-shrink-0 text-text-tertiary" />
             {t('export.markdownConversation')}
           </button>
           <button
@@ -129,13 +113,7 @@ export function ExportMenu({ sessionPath }: Props) {
               text-sm text-text-primary hover:bg-bg-secondary
               transition-smooth text-left"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-              className="flex-shrink-0 text-text-tertiary">
-              <rect x="3" y="1" width="10" height="14" rx="2" />
-              <path d="M1 4h2v8H1a1 1 0 01-1-1V5a1 1 0 011-1z" />
-              <path d="M7 5h3M7 8h3M7 11h2" />
-            </svg>
+            <FileCode size={14} weight="light" className="flex-shrink-0 text-text-tertiary" />
             {t('export.json')}
           </button>
         </div>

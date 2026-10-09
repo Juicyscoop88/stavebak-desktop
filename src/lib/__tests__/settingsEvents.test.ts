@@ -7,7 +7,7 @@
  *   captured a turn-start snapshot never learned the user had changed the
  *   setting, so the next retry/resume still used the stale value.
  *
- *   Roadmap §4.3.5 — settingsStore 事件化. This file pins down the contract.
+ *   Roadmap §4.3.5 — settingsStore event bus. This file pins down the contract.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 

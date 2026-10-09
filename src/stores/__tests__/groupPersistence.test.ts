@@ -19,12 +19,12 @@ describe('groupPersistence', () => {
 
   it('hydrates the store from disk on init', async () => {
     (bridge.loadSessionGroups as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: 'g1', label: '存档组', workspace: '~/ws', sessionIds: ['s1'], pinnedInGroup: [] },
+      { id: 'g1', label: 'Archive group', workspace: '~/ws', sessionIds: ['s1'], pinnedInGroup: [] },
     ]);
     await initGroupPersistence();
     const groups = useGroupStore.getState().getGroupsForWorkspace('~/ws');
     expect(groups).toHaveLength(1);
-    expect(groups[0].label).toBe('存档组');
+    expect(groups[0].label).toBe('Archive group');
   });
 
   it('tolerates an empty / missing groups file', async () => {
@@ -37,7 +37,7 @@ describe('groupPersistence', () => {
     (bridge.loadSessionGroups as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     await initGroupPersistence();
     (bridge.saveSessionGroups as ReturnType<typeof vi.fn>).mockClear();
-    useGroupStore.getState().createGroup('~/ws', '新组');
+    useGroupStore.getState().createGroup('~/ws', 'New group');
     expect(bridge.saveSessionGroups).toHaveBeenCalled();
   });
 });

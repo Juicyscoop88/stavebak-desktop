@@ -175,7 +175,7 @@ function markStdinReady(tabId: string, stdinId: string | undefined, model: strin
 
   if (stdinId && pendingReady?.stdinId === stdinId) {
     bridge.sendStdin(stdinId, pendingReady.text).catch((err) => {
-      console.error('[TOKENICODE] Failed to flush ready-gated message:', err);
+      console.error('[Stavebak] Failed to flush ready-gated message:', err);
       cleanupStdinRoute(stdinId);
       store.setSessionMeta(tabId, {
         stdinId: undefined,
@@ -193,7 +193,7 @@ function markStdinReady(tabId: string, stdinId: string | undefined, model: strin
         id: generateMessageId(),
         role: 'system',
         type: 'text',
-        content: '预热会话就绪后发送首条消息失败，请重发一次。',
+        content: 'Failed to send the first message after session warm-up. Please resend.',
         timestamp: Date.now(),
       });
     });
@@ -649,7 +649,7 @@ function shouldClearApiRetryForEvent(msg: any): boolean {
     || msg.type === 'content_block_delta'
     || msg.type === 'result'
     || msg.type === 'process_exit'
-    || msg.type === 'tokenicode_permission_request'
+    || msg.type === 'stavebak_permission_request'
     || msg.type === 'tool_result';
 }
 
@@ -739,7 +739,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
     markStreamProgress(tabId, msg);
 
     switch (msg.type) {
-      case 'tokenicode_permission_request': {
+      case 'stavebak_permission_request': {
         // ExitPlanMode: auto-approve in non-plan modes; add plan_review card in plan mode
         if (msg.tool_name === 'ExitPlanMode') {
           const bgMeta = store.getTab(tabId)?.sessionMeta;
@@ -1308,7 +1308,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
           const bgCompactThreshold = getAutoCompactThreshold(bgCompactTab?.sessionMeta.spawnedModel);
           if (bgResultInputTokens > bgCompactThreshold && !hasAutoCompactFired(tabId) && bgCompactStdinId && msg.subtype === 'success') {
             markAutoCompactFired(tabId);
-            console.log('[TOKENICODE] Background tab auto-compact triggered:', tabId, 'inputTokens =', bgResultInputTokens);
+            console.log('[Stavebak] Background tab auto-compact triggered:', tabId, 'inputTokens =', bgResultInputTokens);
             const bgCompactMsgId = generateMessageId();
             const bgCompactStartedAt = Date.now();
             store.addMessage(tabId, {
@@ -1331,7 +1331,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
             });
             store.setActivityStatus(tabId, { phase: 'thinking' });
             bridge.sendStdin(bgCompactStdinId, '/compact').catch((err) => {
-              console.error('[TOKENICODE] Background tab auto-compact failed:', err);
+              console.error('[Stavebak] Background tab auto-compact failed:', err);
               completePendingCommand(tabId, { output: 'Compact failed to start' });
               if (store.getTab(tabId)?.sessionStatus === 'running') {
                 store.setSessionStatus(tabId, 'error');
@@ -1431,6 +1431,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
       }
       case 'system':
         if (msg.subtype === 'init') {
+          console.log(`[perf] ★ system:init received at frontend (stdinId=${msg.__stdinId})`);
           markStdinReady(tabId, msg.__stdinId, msg.model);
         } else if (msg.subtype === 'error') {
           // FI-3: Surface system errors in background tabs too
@@ -1475,19 +1476,19 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
 
     // Diagnostic: log first message and unrecognized types
     const KNOWN_TYPES = new Set([
-      'tokenicode_permission_request', 'stream_event', 'system', 'assistant',
+      'stavebak_permission_request', 'stream_event', 'system', 'assistant',
       'user', 'human', 'tool_result', 'tool_use_summary', 'result', 'process_exit',
       'content_block_delta', 'rate_limit_event',
     ]);
     if (msg.type === 'system' || msg.type === 'process_exit') {
-      console.log('[TOKENICODE:stream]', msg.type, msg.subtype || '', msg.__stdinId || '');
+      console.log('[Stavebak:stream]', msg.type, msg.subtype || '', msg.__stdinId || '');
     }
     if (!KNOWN_TYPES.has(msg.type)) {
-      console.warn('[TOKENICODE:stream] unhandled message type:', msg.type, msg);
+      console.warn('[Stavebak:stream] unhandled message type:', msg.type, msg);
     }
 
     // --- Background routing: detect if this stream belongs to a non-active tab ---
-    // MUST run before tokenicode_permission_request and all other handlers
+    // MUST run before stavebak_permission_request and all other handlers
     // to prevent messages from background sessions leaking into the active tab.
     const msgStdinId = msg.__stdinId;
     const directOwnerTabId = msgStdinId
@@ -1518,7 +1519,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
     if (isBackground) {
       // Diagnostic: log background routing for non-trivial message types
       if (msg.type !== 'stream_event') {
-        console.log('[TOKENICODE:route] background:', msg.type, 'owner:', ownerTabId, 'active:', activeTabId);
+        console.log('[Stavebak:route] background:', msg.type, 'owner:', ownerTabId, 'active:', activeTabId);
       }
       handleBackgroundStreamMessage(msg, ownerTabId);
       return;
@@ -1549,7 +1550,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
     markStreamProgress(tabId, msg);
 
     // --- SDK Permission Request (routed through stream channel for reliability) ---
-    if (msg.type === 'tokenicode_permission_request') {
+    if (msg.type === 'stavebak_permission_request') {
 
       // ExitPlanMode: only show PlanReviewCard in Plan mode.
       // In other modes, auto-approve so the CLI continues without blocking.
@@ -1770,7 +1771,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
 
         // Diagnostic: log tool_use starts for debugging plan mode flow
         if (evt.type === 'content_block_start' && evt.content_block?.type === 'tool_use') {
-          console.log('[TOKENICODE:stream] tool_use start:', evt.content_block.name);
+          console.log('[Stavebak:stream] tool_use start:', evt.content_block.name);
 
           // UX: immediately surface that a tool is running. Without this, the
           // user sees no feedback during long tool input streams (e.g. Write
@@ -1931,7 +1932,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
           // Hook lifecycle + status events — silently ignore (no UI for these in TC)
         } else {
           // FI-3: Log unknown subtypes so we know what we're missing
-          console.warn('[TOKENICODE] Unhandled system subtype:', msg.subtype, msg);
+          console.warn('[Stavebak] Unhandled system subtype:', msg.subtype, msg);
         }
         break;
 
@@ -2424,8 +2425,8 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
             : undefined;
           const retryCandidate = pendingText || (typeof lastUserMsg === 'string' ? lastUserMsg : undefined);
           if (isThinkingSignatureError && retryCandidate) {
-            const switchType = switchedFlag ? (meta.modelSwitched ? '模型' : 'API 提供商') : '会话';
-            console.warn(`[TOKENICODE] Thinking signature error after ${switchType} switch — auto-retrying without resume`);
+            const switchType = switchedFlag ? (meta.modelSwitched ? 'model' : 'API provider') : 'session';
+            console.warn(`[Stavebak] Thinking signature error after ${switchType} switch — auto-retrying without resume`);
             const retryText = retryCandidate;
 
             // Kill the current (failed) process + clean up listeners via lifecycle module
@@ -2456,7 +2457,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
               id: generateMessageId(),
               role: 'system',
               type: 'text',
-              content: `已切换${switchType}，正在重新发送…`,
+              content: `Switched ${switchType}, resending…`,
               commandType: 'info',
               timestamp: Date.now(),
             });
@@ -2534,13 +2535,13 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
                   pendingReadyMessage: undefined,
                 });
               } catch (retryErr) {
-                console.error('[TOKENICODE] Provider-switch auto-retry failed:', retryErr);
+                console.error('[Stavebak] Provider-switch auto-retry failed:', retryErr);
                 // spawnSession handles its own rollback — no manual listener cleanup needed
                 setSessionStatus('error');
                 addMessage({
                   id: generateMessageId(),
                   role: 'system', type: 'text',
-                  content: `重试失败: ${retryErr}`,
+                  content: `Retry failed: ${retryErr}`,
                   timestamp: Date.now(),
                 });
               }
@@ -2555,7 +2556,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
         if (exitPlanModeSeenRef.current && getEffectiveMode(useChatStore.getState().getTab(tabId)?.sessionMeta) === 'code'
             && msg.subtype !== 'success') {
           exitPlanModeSeenRef.current = false;
-          console.log('[TOKENICODE] Code mode ExitPlanMode exit detected — auto-restarting with --resume');
+          console.log('[Stavebak] Code mode ExitPlanMode exit detected — auto-restarting with --resume');
           const oldStdinId = useChatStore.getState().getTab(tabId)?.sessionMeta.stdinId;
           void (async () => {
             if (oldStdinId) {
@@ -2563,7 +2564,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
                 await teardownSession(oldStdinId, tabId, 'plan-approve');
                 await waitForStdinCleared(tabId, oldStdinId);
               } catch (err) {
-                console.warn('[TOKENICODE] ExitPlanMode auto-restart teardown failed:', err);
+                console.warn('[Stavebak] ExitPlanMode auto-restart teardown failed:', err);
                 return;
               }
             }
@@ -2674,8 +2675,8 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
               role: 'system',
               type: 'text',
               content: isUserStop
-                ? (t('error.userStopped') ?? '已手动停止')
-                : formatErrorForUser(errorText || (t('error.turnFailed') ?? 'AI 响应异常中断')),
+                ? (t('error.userStopped') ?? 'Stopped by user')
+                : formatErrorForUser(errorText || (t('error.turnFailed') ?? 'AI response interrupted unexpectedly')),
               commandType: 'error',
               timestamp: Date.now(),
             });
@@ -2752,7 +2753,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
         const fgCompactThreshold = getAutoCompactThreshold(useChatStore.getState().getTab(tabId)?.sessionMeta.spawnedModel);
         if (resultInputTokens > fgCompactThreshold && !hasAutoCompactFired(tabId) && compactStdinId && msg.subtype === 'success') {
           markAutoCompactFired(tabId);
-          console.log('[TOKENICODE] Auto-compact triggered: inputTokens =', resultInputTokens);
+          console.log('[Stavebak] Auto-compact triggered: inputTokens =', resultInputTokens);
           const compactMsgId = generateMessageId();
           addMessage({
             id: compactMsgId,
@@ -2770,7 +2771,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
           setSessionStatus('running');
           setActivityStatus({ phase: 'thinking' });
           bridge.sendStdin(compactStdinId, '/compact').catch((err) => {
-            console.error('[TOKENICODE] Auto-compact failed:', err);
+            console.error('[Stavebak] Auto-compact failed:', err);
           });
           // FI-4: Timeout fallback — if compact doesn't complete within 90s, auto-complete
           setTimeout(() => {
@@ -2913,7 +2914,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
 
       case 'process_exit': {
         const exitingStdinId = msg.__stdinId;
-        console.log('[TOKENICODE:session] process_exit received', { stdinId: exitingStdinId });
+        console.log('[Stavebak:session] process_exit received', { stdinId: exitingStdinId });
 
         // Ownership guard: verify this exit belongs to the current tab
         if (exitingStdinId) {
@@ -2941,7 +2942,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
               const cwd = useSettingsStore.getState().workingDirectory || '';
               const isProtectedDir = /\/(Desktop|Downloads|Documents)\//i.test(cwd);
               const hint = isTccError && isProtectedDir
-                ? '\n\n此目录可能受 macOS 隐私保护限制。请在「系统设置 → 隐私与安全性 → 完全磁盘访问权限」中授权，或选择其他目录。'
+                ? '\n\nThis directory may be restricted by macOS privacy protections. Grant Full Disk Access in System Settings > Privacy & Security, or choose a different directory.'
                 : '';
               addMessage({
                 id: generateMessageId(),
@@ -2985,11 +2986,11 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
         // Desktop notification
         if (!document.hasFocus() && 'Notification' in window) {
           if (Notification.permission === 'granted') {
-            new Notification('TOKENICODE', { body: t('notification.chatComplete') });
+            new Notification('Stavebak', { body: t('notification.chatComplete') });
           } else if (Notification.permission === 'default') {
             Notification.requestPermission().then((perm) => {
               if (perm === 'granted') {
-                new Notification('TOKENICODE', { body: t('notification.chatComplete') });
+                new Notification('Stavebak', { body: t('notification.chatComplete') });
               }
             }).catch(() => {});
           }
@@ -3021,7 +3022,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
 
     } catch (err) {
       // P1-4: catch-all for unexpected errors in stream message processing
-      console.error('[TOKENICODE] handleStreamMessage error:', err, 'msg:', msg?.type, msg?.subtype);
+      console.error('[Stavebak] handleStreamMessage error:', err, 'msg:', msg?.type, msg?.subtype);
       const errTabId = useSessionStore.getState().selectedSessionId;
       if (errTabId) {
         useChatStore.getState().addMessage(errTabId, {

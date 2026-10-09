@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)]
+
 mod commands;
 pub mod env_manager;
 mod events;
@@ -91,15 +93,12 @@ struct WatcherManager {
     watchers: Arc<TokioMutex<HashMap<String, notify::RecommendedWatcher>>>,
 }
 
-/// Shared app data directory name — all editions (TOKENICODE / TCAlpha) use the same
+/// Shared app data directory name — all editions (Stavebak / TCAlpha) use the same
 /// directory so they share a single CLI installation and settings.
-const APP_DATA_DIR_NAME: &str = "com.tinyzhuang.tokenicode";
+const APP_DATA_DIR_NAME: &str = "cz.stavebak.desktop";
 
 /// GCS bucket for Claude Code releases.
 const CLI_GCS_BASE: &str = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases";
-
-/// Self-hosted mirror for China users.
-const CLI_MIRROR_BASE: &str = "https://herear.cn:8443/releases/claude-code";
 
 /// Path to the CLI download directory under the app's local data dir.
 pub(crate) fn cli_download_dir() -> Option<std::path::PathBuf> {
@@ -132,7 +131,7 @@ fn get_local_git_bash() -> Option<String> {
 /// Returns the path to bash.exe if found.
 #[cfg(target_os = "windows")]
 pub(crate) fn find_git_bash() -> Option<String> {
-    // 1. Check app-local PortableGit first (auto-installed by TOKENICODE)
+    // 1. Check app-local PortableGit first (auto-installed by Stavebak)
     if let Some(local) = get_local_git_bash() {
         return Some(local);
     }
@@ -183,6 +182,12 @@ pub(crate) fn find_git_bash() -> Option<String> {
 
 fn find_claude_binary() -> Option<String> {
     commands::cli_resolver::find_binary()
+}
+
+/// Fast CLI lookup: pinned → official paths → bundled. No subprocesses.
+fn find_claude_binary_fast(app: &tauri::AppHandle) -> Option<String> {
+    commands::cli_resolver::find_binary_fast(Some(app))
+        .or_else(|| commands::cli_resolver::find_binary())
 }
 
 /// Return all valid CLI binaries in priority order, for fallback iteration.
@@ -320,7 +325,7 @@ fn system_proxy_url() -> Option<String> {
 
 /// Probe common local proxy ports and return the first reachable one.
 /// Re-probes every call (fast: ~100ms worst case) so proxy tools started after
-/// TOKENICODE are still detected. Covers Clash, Surge, common SOCKS.
+/// Stavebak are still detected. Covers Clash, Surge, common SOCKS.
 fn probe_local_proxy() -> Option<String> {
     let ports: &[(u16, &str)] = &[
         (7890, "http"),   // Clash default
@@ -385,6 +390,12 @@ fn resolve_proxy_url() -> Option<String> {
         return Some(url);
     }
     None
+}
+
+/// OPT-5: Cached proxy URL — resolved once at app start, instant thereafter.
+fn cached_proxy_url() -> Option<String> {
+    static CACHE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    CACHE.get_or_init(|| resolve_proxy_url()).clone()
 }
 
 /// Check if a proxy endpoint is actually reachable (TCP connect with 1s timeout).
@@ -705,7 +716,7 @@ pub(crate) fn build_enriched_path() -> String {
 
 // --- Credential storage (TK-303) ---
 
-/// Directory for TOKENICODE app data (may be wiped by NSIS installer on Windows)
+/// Directory for Stavebak app data (may be wiped by NSIS installer on Windows)
 fn app_data_dir() -> Result<std::path::PathBuf, String> {
     dirs::data_local_dir()
         .map(|d| d.join(APP_DATA_DIR_NAME))
@@ -713,10 +724,10 @@ fn app_data_dir() -> Result<std::path::PathBuf, String> {
 }
 
 /// Safe directory in user's home — survives Windows NSIS updates.
-/// Uses ~/.tokenicode/ which already stores tracked_sessions.txt.
+/// Uses ~/.stavebak/ which already stores tracked_sessions.txt.
 fn safe_data_dir() -> Result<std::path::PathBuf, String> {
     dirs::home_dir()
-        .map(|d| d.join(".tokenicode"))
+        .map(|d| d.join(".stavebak"))
         .ok_or_else(|| "Cannot determine home directory".to_string())
 }
 
@@ -755,7 +766,7 @@ struct ProvidersFile {
     providers: Vec<ApiProvider>,
 }
 
-const PARTIAL_MESSAGES_OVERRIDE_ENV: &str = "TOKENICODE_INCLUDE_PARTIAL_MESSAGES";
+const PARTIAL_MESSAGES_OVERRIDE_ENV: &str = "STAVEBAK_INCLUDE_PARTIAL_MESSAGES";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ProviderRuntimeCapabilities {
@@ -1066,7 +1077,7 @@ async fn test_provider_connection(
 /// text/thinking stream for providers that do support Anthropic-compatible
 /// partial messages. Keep risky native-only env vars native-only, but default
 /// Anthropic-format API providers to the same partial-message stream path as
-/// native Claude. Providers can opt out with TOKENICODE_INCLUDE_PARTIAL_MESSAGES=false.
+/// native Claude. Providers can opt out with STAVEBAK_INCLUDE_PARTIAL_MESSAGES=false.
 fn resolve_provider_env(provider_id: Option<&str>) -> Result<ProviderEnvResolution, String> {
     let Some(pid) = provider_id else {
         // No provider → assume native Anthropic (Claude Desktop / CCswitch).
@@ -1149,7 +1160,7 @@ fn resolve_provider_env(provider_id: Option<&str>) -> Result<ProviderEnvResoluti
     // HOT-FIX (v0.10.5): strip inherited OAuth / host-managed env vars when
     // using a third-party provider, WITHOUT the v0.10.3 side effects.
     //
-    // Background: the parent process (Her/TOKENICODE) inherits CCswitch's
+    // Background: the parent process (Her/Stavebak) inherits CCswitch's
     // ANTHROPIC_AUTH_TOKEN and Claude Desktop's CLAUDE_CODE_OAUTH_TOKEN /
     // CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST from its own environment.
     // tokio::process::Command inherits parent env by default, so the CLI
@@ -1414,7 +1425,7 @@ fn find_session_jsonl(session_id: &str) -> Option<std::path::PathBuf> {
     // Reject non-UUID session IDs to prevent path traversal (e.g. "../../../etc/passwd")
     if uuid::Uuid::parse_str(session_id).is_err() {
         eprintln!(
-            "[TOKENICODE] find_session_jsonl: rejecting non-UUID session_id: {}",
+            "[Stavebak] find_session_jsonl: rejecting non-UUID session_id: {}",
             session_id
         );
         return None;
@@ -1455,7 +1466,7 @@ fn strip_thinking_blocks_from_session(session_id: &str) -> Result<usize, String>
         .ok_or_else(|| format!("Session JSONL not found for id: {}", session_id))?;
 
     eprintln!(
-        "[TOKENICODE] strip_thinking_blocks: processing {:?}",
+        "[Stavebak] strip_thinking_blocks: processing {:?}",
         jsonl_path
     );
 
@@ -1501,7 +1512,7 @@ fn strip_thinking_blocks_from_session(session_id: &str) -> Result<usize, String>
         let backup_path = jsonl_path.with_extension("jsonl.bak");
         if let Err(e) = std::fs::copy(&jsonl_path, &backup_path) {
             eprintln!(
-                "[TOKENICODE] strip_thinking_blocks: backup failed ({}) — proceeding anyway",
+                "[Stavebak] strip_thinking_blocks: backup failed ({}) — proceeding anyway",
                 e
             );
         }
@@ -1552,12 +1563,12 @@ fn strip_thinking_blocks_from_session(session_id: &str) -> Result<usize, String>
         }
 
         eprintln!(
-            "[TOKENICODE] strip_thinking_blocks: stripped {} thinking blocks from {:?}",
+            "[Stavebak] strip_thinking_blocks: stripped {} thinking blocks from {:?}",
             total_stripped, jsonl_path
         );
     } else {
         eprintln!(
-            "[TOKENICODE] strip_thinking_blocks: no thinking blocks found in {:?}",
+            "[Stavebak] strip_thinking_blocks: no thinking blocks found in {:?}",
             jsonl_path
         );
     }
@@ -1596,9 +1607,9 @@ fn strip_thinking_from_value(value: &mut serde_json::Value) -> Option<usize> {
 /// CLI's `--strict-mcp-config` doesn't strip the user's configured servers.
 ///
 /// Reads `~/.claude.json`, extracts the `mcpServers` object, and writes
-/// `{"mcpServers": {...}}` into `~/.tokenicode/mcp-session-<stdin_id>.json`.
+/// `{"mcpServers": {...}}` into `~/.stavebak/mcp-session-<stdin_id>.json`.
 /// Returns `None` when there are no servers to carry over (or on I/O error).
-fn build_mcp_scratch_config(stdin_id: &str) -> Option<std::path::PathBuf> {
+fn build_mcp_scratch_config(_stdin_id: &str) -> Option<std::path::PathBuf> {
     let home = dirs::home_dir()?;
     let claude_json = home.join(".claude.json");
     let raw = std::fs::read_to_string(&claude_json).ok()?;
@@ -1617,23 +1628,23 @@ fn build_mcp_scratch_config(stdin_id: &str) -> Option<std::path::PathBuf> {
     }
 
     // No servers → skip --mcp-config entirely (CLI starts faster).
-    match &servers {
+    let server_map = match &servers {
         serde_json::Value::Object(m) if m.is_empty() => return None,
-        serde_json::Value::Object(_) => {}
+        serde_json::Value::Object(m) => m.clone(),
         _ => return None,
-    }
+    };
 
-    let dir = home.join(".tokenicode");
-    if std::fs::create_dir_all(&dir).is_err() {
-        return None;
-    }
-    let path = dir.join(format!(
-        "mcp-session-{}.json",
-        safe_stdin_for_path(stdin_id)
-    ));
-    let payload = serde_json::json!({ "mcpServers": servers });
-    std::fs::write(&path, serde_json::to_string_pretty(&payload).ok()?).ok()?;
-    Some(path)
+    // OPT-7: Don't pass ANY MCP servers in the scratch config.
+    // Even "fast" servers (HTTP, direct binaries) block system:init while
+    // the CLI waits for their handshake. With --strict-mcp-config and no
+    // --mcp-config file, the CLI starts with zero servers and emits
+    // system:init immediately. Servers from ~/.claude.json are loaded
+    // lazily via the CLI's deferred MCP mechanism when the model needs them.
+    eprintln!(
+        "[Stavebak] MCP: all {} servers deferred for instant startup",
+        server_map.len()
+    );
+    None
 }
 
 fn safe_stdin_for_path(id: &str) -> String {
@@ -1649,11 +1660,11 @@ fn safe_stdin_for_path(id: &str) -> String {
 }
 
 /// Remove the per-session MCP scratch file written by `build_mcp_scratch_config`.
-/// Called after the CLI process exits so `~/.tokenicode/` doesn't accumulate
+/// Called after the CLI process exits so `~/.stavebak/` doesn't accumulate
 /// stale files across sessions.
 fn cleanup_mcp_scratch_config(stdin_id: &str) {
     if let Some(home) = dirs::home_dir() {
-        let path = home.join(".tokenicode").join(format!(
+        let path = home.join(".stavebak").join(format!(
             "mcp-session-{}.json",
             safe_stdin_for_path(stdin_id)
         ));
@@ -1670,6 +1681,13 @@ async fn start_claude_session(
     path_access: State<'_, PathAccessManager>,
     params: StartSessionParams,
 ) -> Result<SessionInfo, String> {
+    let t0 = std::time::Instant::now();
+    macro_rules! perf {
+        ($label:expr) => {
+            eprintln!("[perf] {}: {}ms", $label, t0.elapsed().as_millis());
+        };
+    }
+
     // Phase 3 §3.1: register the per-session cwd as a fixed path-access root
     // so all file commands running in this working directory are allowed.
     path_access
@@ -1683,6 +1701,7 @@ async fn start_claude_session(
     stdin_mgr.remove(&session_id).await;
     state.remove(&session_id).await;
     bypass_modes.remove(&session_id).await;
+    perf!("cleanup");
 
     // Use persistent stream-json input mode instead of per-message -p mode.
     // This keeps the CLI process alive so slash commands (/rewind, /compact, /cost, etc.) work.
@@ -1707,14 +1726,16 @@ async fn start_claude_session(
     // servers from ~/.claude.json (they'd slow cold start by 20-30 seconds).
     // BUT users also need their explicitly-configured MCP servers available
     // inside the session. Solution: write the mcpServers block from
-    // ~/.claude.json into a scratch file at ~/.tokenicode/mcp-session-<id>.json
+    // ~/.claude.json into a scratch file at ~/.stavebak/mcp-session-<id>.json
     // and pass it via --mcp-config. Cleaned up on process exit.
+    perf!("args_built");
     let mcp_scratch_path = build_mcp_scratch_config(&session_id);
+    perf!("mcp_scratch");
     if let Some(ref scratch) = mcp_scratch_path {
         args.push("--mcp-config".to_string());
         args.push(scratch.to_string_lossy().to_string());
         eprintln!(
-            "[TOKENICODE] MCP scratch config for {}: {:?}",
+            "[Stavebak] MCP scratch config for {}: {:?}",
             session_id, scratch
         );
     }
@@ -1728,8 +1749,8 @@ async fn start_claude_session(
     if params.model_switch.unwrap_or(false) {
         if let Some(ref resume_id) = params.resume_session_id {
             match strip_thinking_blocks_from_session(resume_id) {
-                Ok(n) => eprintln!("[TOKENICODE] model_switch: stripped {} thinking blocks before resume", n),
-                Err(e) => eprintln!("[TOKENICODE] model_switch: thinking-block strip failed ({}), attempting resume anyway", e),
+                Ok(n) => eprintln!("[Stavebak] model_switch: stripped {} thinking blocks before resume", n),
+                Err(e) => eprintln!("[Stavebak] model_switch: thinking-block strip failed ({}), attempting resume anyway", e),
             }
         }
     }
@@ -1773,8 +1794,10 @@ async fn start_claude_session(
         args.push(r#"{"alwaysThinkingEnabled":true}"#.to_string());
     }
 
-    // Resolve claude binary — it may not be on the default PATH
-    let claude_bin = find_claude_binary().unwrap_or_else(|| {
+    perf!("pre_find_binary");
+    // Resolve claude binary — fast path first (pinned/official, <5ms),
+    // falls back to full tiered resolve if needed.
+    let claude_bin = find_claude_binary_fast(&app).unwrap_or_else(|| {
         #[cfg(target_os = "windows")]
         {
             "claude.cmd".to_string()
@@ -1785,8 +1808,10 @@ async fn start_claude_session(
         }
     });
 
+    perf!("find_binary");
     // Build an enriched PATH for the child process
     let enriched_path = build_enriched_path();
+    perf!("enriched_path");
 
     // Resolve provider environment variables from provider_id.
     // ProviderRuntimeCapabilities keeps native-only env vars separate from
@@ -1795,6 +1820,7 @@ async fn start_claude_session(
     // api.anthropic.com endpoint.
     let (mut resolved_env, inherited_keys_to_remove, provider_extra_args, provider_caps) =
         resolve_provider_env(params.provider_id.as_deref())?;
+    perf!("provider_env");
 
     // Append provider-specific CLI args (e.g. --setting-sources project,local)
     args.extend(provider_extra_args);
@@ -1806,12 +1832,12 @@ async fn start_claude_session(
             args.remove(idx);
         }
         eprintln!(
-            "[TOKENICODE] partial streaming disabled for provider {:?} (unsupported/unknown capability)",
+            "[Stavebak] partial streaming disabled for provider {:?} (unsupported/unknown capability)",
             params.provider_id
         );
     } else if !provider_caps.is_native_anthropic {
         eprintln!(
-            "[TOKENICODE] partial streaming enabled for provider {:?}",
+            "[Stavebak] partial streaming enabled for provider {:?}",
             params.provider_id
         );
     }
@@ -1869,7 +1895,7 @@ async fn start_claude_session(
                 "1000000".to_string(),
             );
             eprintln!(
-                "[TOKENICODE] Set CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000 for model {}",
+                "[Stavebak] Set CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000 for model {}",
                 model_name
             );
         }
@@ -1927,8 +1953,8 @@ async fn start_claude_session(
             kl == "https_proxy" || kl == "http_proxy" || kl == "all_proxy"
         });
         if !has_proxy {
-            // resolve_proxy_url checks: process env > system proxy > login shell > port probing
-            if let Some(url) = resolve_proxy_url() {
+            // OPT-5: use cached proxy (warmed at app start) instead of re-probing
+            if let Some(url) = cached_proxy_url() {
                 for key in &["https_proxy", "http_proxy", "HTTPS_PROXY", "HTTP_PROXY"] {
                     resolved_env.insert(key.to_string(), url.clone());
                 }
@@ -1940,6 +1966,7 @@ async fn start_claude_session(
         }
     }
 
+    perf!("pre_spawn");
     // On Windows, .cmd/.bat files must be launched via cmd /C
     #[cfg(target_os = "windows")]
     let mut child = {
@@ -2011,7 +2038,7 @@ async fn start_claude_session(
                 .current_dir(&params.cwd)
                 .env("PATH", &enriched_path)
                 // Clear CLAUDECODE env var so the CLI doesn't refuse to start
-                // when TOKENICODE itself is launched from within a Claude Code session.
+                // when Stavebak itself is launched from within a Claude Code session.
                 .env_remove("CLAUDECODE");
             // Clear inherited ANTHROPIC_* env vars that conflict with our overrides
             for key in &inherited_keys_to_remove {
@@ -2099,18 +2126,19 @@ async fn start_claude_session(
         }
     };
 
+    perf!("spawn");
     let pid = child.id().unwrap_or(0);
     eprintln!(
-        "[TOKENICODE] CLI spawned: pid={}, bin={}, permission_mode={}",
+        "[Stavebak] CLI spawned: pid={}, bin={}, permission_mode={}",
         pid, claude_bin, permission_mode
     );
-    eprintln!("[TOKENICODE] args: {:?}", &args);
-    eprintln!("[TOKENICODE] PATH: {}", &enriched_path);
+    eprintln!("[Stavebak] args: {:?}", &args);
+    eprintln!("[Stavebak] PATH: {}", &enriched_path);
     eprintln!(
-        "[TOKENICODE] resolved_env: {:?}",
+        "[Stavebak] resolved_env: {:?}",
         redacted_env_for_log(&resolved_env)
     );
-    eprintln!("[TOKENICODE] cwd: {}", &params.cwd);
+    eprintln!("[Stavebak] cwd: {}", &params.cwd);
 
     // Capture stdin and store in StdinManager for sending follow-up messages
     let stdin = child.stdin.take().ok_or("Failed to capture stdin")?;
@@ -2143,15 +2171,15 @@ async fn start_claude_session(
             tokio::select! {
                 status = child.wait() => {
                     eprintln!(
-                        "[TOKENICODE] child naturally exited for {}: code={:?} (stdout reader will emit process_exit)",
+                        "[Stavebak] child naturally exited for {}: code={:?} (stdout reader will emit process_exit)",
                         waiter_sid,
                         status.as_ref().ok().and_then(|s| s.code())
                     );
                 }
                 _ = kill_rx => {
-                    eprintln!("[TOKENICODE] kill signal received for {} — killing child", waiter_sid);
+                    eprintln!("[Stavebak] kill signal received for {} — killing child", waiter_sid);
                     if let Err(e) = child.start_kill() {
-                        eprintln!("[TOKENICODE] start_kill failed for {}: {}", waiter_sid, e);
+                        eprintln!("[Stavebak] start_kill failed for {}: {}", waiter_sid, e);
                     }
                     // Wait for child to actually die, then stdout reader will
                     // see EOF and do the ProcessExit + cleanup.
@@ -2203,7 +2231,7 @@ async fn start_claude_session(
                 Ok(None) => break, // normal EOF
                 Err(e) => {
                     eprintln!(
-                        "[TOKENICODE:CRITICAL] stdout read error after {} lines: {}",
+                        "[Stavebak:CRITICAL] stdout read error after {} lines: {}",
                         line_count, e
                     );
                     break;
@@ -2228,7 +2256,7 @@ async fn start_claude_session(
                 };
                 let preview = &line[..end];
                 eprintln!(
-                    "[TOKENICODE:stdout] #{} @{}ms type={} preview={}",
+                    "[Stavebak:stdout] #{} @{}ms type={} preview={}",
                     line_count,
                     elapsed,
                     serde_json::from_str::<Value>(&line)
@@ -2243,6 +2271,16 @@ async fn start_claude_session(
                 Ok(v) => v,
                 Err(_) => continue, // skip non-JSON lines
             };
+
+            // Log system:init timing prominently — this is THE cold start metric
+            if json.get("type").and_then(|v| v.as_str()) == Some("system")
+                && json.get("subtype").and_then(|v| v.as_str()) == Some("init")
+            {
+                eprintln!(
+                    "[perf] ★ system:init received {}ms after spawn",
+                    spawn_time.elapsed().as_millis()
+                );
+            }
 
             // Intercept control_request messages for SDK control protocol routing.
             // All modes use --permission-prompt-tool stdio. In bypass mode, we
@@ -2328,13 +2366,13 @@ async fn start_claude_session(
                                 .map(String::from);
 
                             eprintln!(
-                                "[TOKENICODE] permission request: tool={} request_id={} parent_tool_use_id={:?} agent_id={:?}",
+                                "[Stavebak] permission request: tool={} request_id={} parent_tool_use_id={:?} agent_id={:?}",
                                 tool_name, request_id, parent_tool_use_id, agent_id
                             );
 
                             // Emit as a special stream message (reuses the working stream channel)
                             let perm_payload = serde_json::json!({
-                                "type": "tokenicode_permission_request",
+                                "type": "stavebak_permission_request",
                                 "request_id": request_id,
                                 "tool_name": tool_name,
                                 "input": input,
@@ -2347,7 +2385,7 @@ async fn start_claude_session(
                             continue; // Don't forward to stream as normal msg
                         }
                         "hook_callback" => {
-                            // Auto-allow hook callbacks (TOKENICODE doesn't manage hooks)
+                            // Auto-allow hook callbacks (Stavebak doesn't manage hooks)
                             let auto_resp = serde_json::json!({
                                 "type": "control_response",
                                 "response": {
@@ -2362,7 +2400,7 @@ async fn start_claude_session(
                         "oauth_token_refresh" => {
                             // Deny oauth_token_refresh — allowing it makes CLI refresh to
                             // an Anthropic OAuth token that overrides the provider's API key.
-                            eprintln!("[TOKENICODE] oauth_token_refresh: denying to prevent OAuth override (request_id={})", request_id);
+                            eprintln!("[Stavebak] oauth_token_refresh: denying to prevent OAuth override (request_id={})", request_id);
                             let deny_resp = serde_json::json!({
                                 "type": "control_response",
                                 "response": {
@@ -2376,13 +2414,13 @@ async fn start_claude_session(
                         }
                         other => {
                             // Unknown control request subtype — deny by default (P0-4 fix)
-                            eprintln!("[TOKENICODE] control_request/{}: denying unknown subtype (request_id={})", other, request_id);
+                            eprintln!("[Stavebak] control_request/{}: denying unknown subtype (request_id={})", other, request_id);
                             let deny_resp = serde_json::json!({
                                 "type": "control_response",
                                 "response": {
                                     "subtype": "success",
                                     "request_id": request_id,
-                                    "response": { "behavior": "deny", "message": format!("Unknown permission type '{}' denied by TOKENICODE", other) }
+                                    "response": { "behavior": "deny", "message": format!("Unknown permission type '{}' denied by Stavebak", other) }
                                 }
                             });
                             let _ = stdin_clone.send(&sid_clone, &deny_resp.to_string()).await;
@@ -2391,7 +2429,7 @@ async fn start_claude_session(
                     }
                 } else {
                     eprintln!(
-                        "[TOKENICODE] control_request missing 'request' field: {}",
+                        "[Stavebak] control_request missing 'request' field: {}",
                         &line[..line.len().min(200)]
                     );
                     // Auto-allow to avoid blocking CLI
@@ -2438,7 +2476,7 @@ async fn start_claude_session(
                 // WebView is unresponsive for a sustained period.
                 if emit_fail_count == 1 || emit_fail_count % 10 == 0 {
                     eprintln!(
-                        "[TOKENICODE] emit_to_frontend failed (#{emit_fail_count}): {e} — continuing (watchdog will recover user session if needed)"
+                        "[Stavebak] emit_to_frontend failed (#{emit_fail_count}): {e} — continuing (watchdog will recover user session if needed)"
                     );
                 }
                 // DO NOT break. Previously we broke after 10 failures, but
@@ -2451,7 +2489,7 @@ async fn start_claude_session(
             } else {
                 if emit_fail_count > 0 {
                     eprintln!(
-                        "[TOKENICODE] emit_to_frontend recovered after {} failures",
+                        "[Stavebak] emit_to_frontend recovered after {} failures",
                         emit_fail_count
                     );
                 }
@@ -2465,7 +2503,7 @@ async fn start_claude_session(
         // The child waiter task only provides a kill proxy; it does NOT
         // emit process_exit, to avoid racing with stdout drain.
         eprintln!(
-            "[TOKENICODE] stdout reader reached EOF for {} after {} lines",
+            "[Stavebak] stdout reader reached EOF for {} after {} lines",
             sid_clone, line_count
         );
         // Emit process_exit on the stream channel (primary detection)
@@ -2688,10 +2726,10 @@ async fn list_active_processes(state: State<'_, ProcessManager>) -> Result<Vec<S
     Ok(state.active_ids().await)
 }
 
-/// Path to the file tracking TOKENICODE-managed session IDs
+/// Path to the file tracking Stavebak-managed session IDs
 fn tracked_sessions_path() -> std::path::PathBuf {
     let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-    home.join(".tokenicode").join("tracked_sessions.txt")
+    home.join(".stavebak").join("tracked_sessions.txt")
 }
 
 /// Load the set of tracked session IDs.
@@ -2711,7 +2749,7 @@ fn load_tracked_sessions() -> std::collections::HashSet<String> {
     }
 
     // Fallback: if tracking file is missing/empty, rebuild from disk.
-    // Use session_names.json (tokenicode_session_names.json) as a filter to avoid
+    // Use session_names.json (stavebak_session_names.json) as a filter to avoid
     // importing Claude Code CLI or Her sessions. Only if session_names is also
     // missing do we fall back to importing all sessions (better than losing data).
     if set.is_empty() {
@@ -2777,7 +2815,7 @@ fn load_tracked_sessions() -> std::collections::HashSet<String> {
                     "all (no filter)"
                 };
                 eprintln!(
-                    "[TOKENICODE] Rebuilt tracked_sessions.txt: {} sessions ({})",
+                    "[Stavebak] Rebuilt tracked_sessions.txt: {} sessions ({})",
                     set.len(),
                     mode
                 );
@@ -2788,7 +2826,7 @@ fn load_tracked_sessions() -> std::collections::HashSet<String> {
     set
 }
 
-/// Register a CLI session ID as managed by TOKENICODE
+/// Register a CLI session ID as managed by Stavebak
 #[tauri::command]
 async fn track_session(session_id: String) -> Result<(), String> {
     // Defense-in-depth: never persist desk-generated temporary IDs
@@ -2798,7 +2836,7 @@ async fn track_session(session_id: String) -> Result<(), String> {
     let path = tracked_sessions_path();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create .tokenicode dir: {}", e))?;
+            .map_err(|e| format!("Failed to create .stavebak dir: {}", e))?;
     }
     use std::io::Write;
     let mut file = std::fs::OpenOptions::new()
@@ -2896,7 +2934,7 @@ async fn list_sessions() -> Result<Vec<Value>, String> {
         return Ok(vec![]);
     }
 
-    // Only show sessions tracked by TOKENICODE
+    // Only show sessions tracked by Stavebak
     let tracked = load_tracked_sessions();
 
     let mut sessions = vec![];
@@ -2910,7 +2948,7 @@ async fn list_sessions() -> Result<Vec<Value>, String> {
                             if let Some(name) = path.file_stem() {
                                 let id = name.to_string_lossy().to_string();
 
-                                // Skip sessions not created by TOKENICODE
+                                // Skip sessions not created by Stavebak
                                 if !tracked.contains(&id) {
                                     continue;
                                 }
@@ -3259,7 +3297,7 @@ fn extract_session_info(path: &std::path::Path) -> (String, String) {
 /// Decode project directory name back to readable path.
 ///
 /// Claude CLI encodes paths by replacing `/` with `-`, e.g.:
-///   /Users/tinyzhuang/Desktop/ppt-maker → -Users-tinyzhuang-Desktop-ppt-maker
+///   /Users/alice/Desktop/ppt-maker → -Users-alice-Desktop-ppt-maker
 ///
 /// Simple `.replace('-', '/')` fails when directory names contain hyphens
 /// (e.g. "ppt-maker" becomes "ppt/maker").
@@ -3484,6 +3522,21 @@ async fn open_with_default_app(path: String) -> Result<(), String> {
 }
 
 /// Helper: create an NSURL from a file path string (macOS only).
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct CGPoint { x: f64, y: f64 }
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct CGSize { width: f64, height: f64 }
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct CGRect { origin: CGPoint, size: CGSize }
+
 /// Returns a raw pointer to the NSURL object, or null on failure.
 #[cfg(target_os = "macos")]
 unsafe fn create_nsurl_from_path(path: &str) -> *mut objc::runtime::Object {
@@ -3558,19 +3611,19 @@ async fn share_file(path: String, app: AppHandle) -> Result<(), String> {
 
                     // Get mouse position and convert to view coordinates
                     let nsevent_class = Class::get("NSEvent").unwrap();
-                    let mouse_screen: cocoa::foundation::NSPoint =
+                    let mouse_screen: CGPoint =
                         msg_send![nsevent_class, mouseLocation];
-                    let mouse_window: cocoa::foundation::NSPoint = msg_send![key_window,
+                    let mouse_window: CGPoint = msg_send![key_window,
                         convertPointFromScreen: mouse_screen
                     ];
-                    let mouse_view: cocoa::foundation::NSPoint = msg_send![content_view,
+                    let mouse_view: CGPoint = msg_send![content_view,
                         convertPoint: mouse_window fromView: std::ptr::null::<Object>()
                     ];
 
-                    let anchor_rect = cocoa::foundation::NSRect::new(
-                        mouse_view,
-                        cocoa::foundation::NSSize::new(1.0, 1.0),
-                    );
+                    let anchor_rect = CGRect {
+                        origin: mouse_view,
+                        size: CGSize { width: 1.0, height: 1.0 },
+                    };
 
                     let _: () = msg_send![picker,
                         showRelativeToRect: anchor_rect
@@ -3592,144 +3645,6 @@ async fn share_file(path: String, app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Share a file to WeChat.
-///
-/// Strategy (macOS):
-///   1. Try NSSharingService — works when WeChat registers a share extension.
-///   2. Fallback: copy the file to the system pasteboard and open WeChat via
-///      its `weixin://` URL scheme so the user can paste.
-///   Returns `"fallback"` when using the clipboard path.
-///
-/// Strategy (Windows):
-///   Copy file to clipboard via PowerShell, then open WeChat via `weixin://`.
-#[tauri::command]
-#[allow(deprecated)]
-async fn share_to_wechat(path: String, app: AppHandle) -> Result<String, String> {
-    if !std::path::Path::new(&path).exists() {
-        return Err("File not found".to_string());
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        let (tx, rx) = std::sync::mpsc::channel::<String>();
-
-        let path_clone = path.clone();
-        app.run_on_main_thread(move || {
-            let result = objc::rc::autoreleasepool(|| -> String {
-                unsafe {
-                    use objc::msg_send;
-                    use objc::runtime::{Class, Object};
-                    use objc::sel;
-                    use objc::sel_impl;
-
-                    let file_url = create_nsurl_from_path(&path_clone);
-                    if file_url.is_null() {
-                        return "error:Failed to create file URL".to_string();
-                    }
-
-                    let nsarray_class = Class::get("NSArray").unwrap();
-                    let items: *mut Object = msg_send![nsarray_class,
-                        arrayWithObject: file_url
-                    ];
-
-                    let service_class = Class::get("NSSharingService").unwrap();
-                    let services: *mut Object = msg_send![service_class,
-                        sharingServicesForItems: items
-                    ];
-                    let count: usize = msg_send![services, count];
-
-                    for i in 0..count {
-                        let service: *mut Object = msg_send![services, objectAtIndex: i];
-                        let title: *mut Object = msg_send![service, title];
-                        let utf8: *const std::ffi::c_char = msg_send![title, UTF8String];
-                        if utf8.is_null() {
-                            continue;
-                        }
-                        let title_str = std::ffi::CStr::from_ptr(utf8).to_string_lossy();
-                        let lower = title_str.to_lowercase();
-                        if lower.contains("wechat") || title_str.contains("微信") {
-                            let _: () = msg_send![service, performWithItems: items];
-                            return "service".to_string();
-                        }
-                    }
-
-                    // Clipboard fallback
-                    let pb_class = Class::get("NSPasteboard").unwrap();
-                    let pb: *mut Object = msg_send![pb_class, generalPasteboard];
-                    let _: () = msg_send![pb, clearContents];
-
-                    let write_arr: *mut Object = msg_send![nsarray_class,
-                        arrayWithObject: file_url
-                    ];
-                    let ok: bool = msg_send![pb, writeObjects: write_arr];
-                    if !ok {
-                        return "error:Failed to copy file to clipboard".to_string();
-                    }
-
-                    let ws_class = Class::get("NSWorkspace").unwrap();
-                    let ws: *mut Object = msg_send![ws_class, sharedWorkspace];
-
-                    let scheme = "weixin://";
-                    let nsstring_class = Class::get("NSString").unwrap();
-                    let scheme_ns: *mut Object = msg_send![nsstring_class, alloc];
-                    let scheme_ns: *mut Object = msg_send![scheme_ns,
-                        initWithBytes: scheme.as_ptr() as *const std::ffi::c_void
-                        length: scheme.len()
-                        encoding: 4u64
-                    ];
-
-                    let nsurl_class = Class::get("NSURL").unwrap();
-                    let wechat_url: *mut Object = msg_send![nsurl_class,
-                        URLWithString: scheme_ns
-                    ];
-
-                    if !wechat_url.is_null() {
-                        let _: bool = msg_send![ws, openURL: wechat_url];
-                    }
-
-                    "fallback".to_string()
-                }
-            });
-            let _ = tx.send(result);
-        })
-        .map_err(|e| format!("Failed to share to WeChat: {}", e))?;
-
-        match rx.recv() {
-            Ok(ref r) if r.starts_with("error:") => {
-                return Err(r.strip_prefix("error:").unwrap_or(r).to_string());
-            }
-            Ok(r) => return Ok(r),
-            Err(_) => return Err("Share thread communication failed".to_string()),
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        let _ = app;
-        let ps_script = format!(
-            "Add-Type -AssemblyName System.Windows.Forms; \
-             $fc = New-Object System.Collections.Specialized.StringCollection; \
-             $fc.Add('{}'); \
-             [System.Windows.Forms.Clipboard]::SetFileDropList($fc)",
-            path.replace('\'', "''")
-        );
-        let _ = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-Command", &ps_script])
-            .output();
-        let _ = std::process::Command::new("cmd")
-            .args(["/c", "start", "", "weixin://"])
-            .spawn();
-
-        return Ok("fallback".to_string());
-    }
-
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        let _ = app;
-        let _ = path;
-        return Err("Not supported on this platform".to_string());
-    }
-}
 
 /// NEW-Q (v3 §4.3): extract a semver triple from raw CLI version output.
 /// `claude --version` prints "2.1.92 (Claude Code)" today, but some builds
@@ -3966,6 +3881,13 @@ async fn read_file_content(
     std::fs::read_to_string(&p).map_err(|e| format!("Cannot read file: {}", e))
 }
 
+#[tauri::command]
+fn get_home_dir() -> Result<String, String> {
+    dirs::home_dir()
+        .map(|p| p.to_string_lossy().into_owned())
+        .ok_or_else(|| "Cannot determine home directory".to_string())
+}
+
 /// Check if the app has file system access to a given directory.
 /// Returns Ok(true) if readable, Ok(false) if not, Err on other failures.
 /// Used at startup to detect macOS TCC restrictions.
@@ -4130,6 +4052,32 @@ async fn create_directory(
         )
         .await?;
     std::fs::create_dir_all(&p).map_err(|e| format!("Cannot create directory: {}", e))
+}
+
+#[tauri::command]
+async fn create_project_directory(path: String) -> Result<(), String> {
+    std::fs::create_dir_all(&path).map_err(|e| format!("Cannot create directory: {}", e))
+}
+
+#[tauri::command]
+async fn ensure_claude_md(path: String) -> Result<bool, String> {
+    let dir = std::path::Path::new(&path);
+    let claude_md = dir.join("CLAUDE.md");
+    if claude_md.exists() {
+        return Ok(false);
+    }
+    let project_name = dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("Project");
+    let content = format!(
+        "# {}\n\nWorking directory: `{}`\n",
+        project_name,
+        path.replace('\\', "/")
+    );
+    std::fs::write(&claude_md, content)
+        .map_err(|e| format!("Cannot create CLAUDE.md: {}", e))?;
+    Ok(true)
 }
 
 #[tauri::command]
@@ -4430,22 +4378,22 @@ async fn save_temp_file(
     // Falls back to system temp if cwd is not set.
     let tmp = if let Some(ref dir) = cwd {
         let p = std::path::PathBuf::from(dir)
-            .join(".tokenicode")
+            .join(".stavebak")
             .join("tmp");
         if std::fs::create_dir_all(&p).is_ok() {
-            // Ensure .tokenicode is gitignored in user's project
+            // Ensure .stavebak is gitignored in user's project
             let gitignore = std::path::PathBuf::from(dir)
-                .join(".tokenicode")
+                .join(".stavebak")
                 .join(".gitignore");
             if !gitignore.exists() {
                 let _ = std::fs::write(&gitignore, "*\n");
             }
             p
         } else {
-            std::env::temp_dir().join("tokenicode")
+            std::env::temp_dir().join("stavebak")
         }
     } else {
-        std::env::temp_dir().join("tokenicode")
+        std::env::temp_dir().join("stavebak")
     };
     std::fs::create_dir_all(&tmp).map_err(|e| format!("Failed to create temp dir: {}", e))?;
 
@@ -5125,7 +5073,7 @@ async fn toggle_skill_enabled(
 ///
 /// **Why this exists**: macOS ships `/usr/bin/git` as a shim. When Xcode Command Line Tools
 /// (CLT) are not installed, running `/usr/bin/git` spawns a **GUI dialog** asking the user to
-/// install CLT. TOKENICODE calls git for snapshot/rewind on every message, so this popup
+/// install CLT. Stavebak calls git for snapshot/rewind on every message, so this popup
 /// would appear repeatedly.
 ///
 /// Strategy:
@@ -5422,7 +5370,8 @@ fn remove_corrupt_claude_exe(suspect_path: &str) {
 #[tauri::command]
 async fn check_claude_cli() -> Result<CliStatus, String> {
     eprintln!("[check_claude_cli] START");
-    let binary = find_claude_binary();
+    let binary = commands::cli_resolver::find_binary_fast(None)
+        .or_else(find_claude_binary);
     eprintln!("[check_claude_cli] find_claude_binary => {:?}", binary);
     match binary {
         Some(path) => {
@@ -5798,52 +5747,10 @@ async fn repair_cli() -> Result<RepairReport, String> {
     Ok(report)
 }
 
-/// Detect whether the user is behind the GFW (China network).
-/// Tries to connect to Google — if unreachable within 3 seconds, assume China network.
-/// Result is cached for the lifetime of the process via OnceLock.
-static CHINA_NETWORK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-
-async fn detect_china_network() -> bool {
-    // Network detection must bypass proxy to test the real network path.
-    // If proxy is used, Google might be reachable via proxy even in China,
-    // giving a false negative.
-    let client = reqwest::Client::builder()
-        .no_proxy()
-        .connect_timeout(std::time::Duration::from_secs(3))
-        .timeout(std::time::Duration::from_secs(3))
-        .build()
-        .unwrap_or_default();
-
-    let is_china = client
-        .head("https://www.google.com/generate_204")
-        .send()
-        .await
-        .is_err();
-
-    eprintln!(
-        "Network detection: {}",
-        if is_china {
-            "China (Google unreachable)"
-        } else {
-            "Global (Google reachable)"
-        }
-    );
-    is_china
-}
-
-async fn is_china_network() -> bool {
-    if let Some(&cached) = CHINA_NETWORK.get() {
-        return cached;
-    }
-    let result = detect_china_network().await;
-    let _ = CHINA_NETWORK.set(result);
-    result
-}
-
 /// Install Claude CLI via npm. Supports system npm or local Node.js npm.
 /// Install Claude CLI via npm. Supports system npm or local Node.js npm.
 /// Uses --prefix to install into app-local directory when using local Node.js.
-async fn install_cli_via_npm(app: &AppHandle, china: bool) -> Result<(), String> {
+async fn install_cli_via_npm(app: &AppHandle) -> Result<(), String> {
     let _ = emit_to_frontend(
         app,
         "setup:download:progress",
@@ -5883,19 +5790,9 @@ async fn install_cli_via_npm(app: &AppHandle, china: bool) -> Result<(), String>
     std::fs::create_dir_all(&cache_dir)
         .map_err(|e| format!("Failed to create npm-cache dir: {}", e))?;
 
-    let registries: Vec<&str> = if china {
-        vec![
-            "https://registry.npmmirror.com",
-            "https://mirrors.huaweicloud.com/repository/npm",
-            "https://mirrors.cloud.tencent.com/npm",
-            "https://registry.npmjs.org",
-        ]
-    } else {
-        vec![
-            "https://registry.npmjs.org",
-            "https://registry.npmmirror.com",
-        ]
-    };
+    let registries: Vec<&str> = vec![
+        "https://registry.npmjs.org",
+    ];
 
     let mut last_err = String::new();
     for registry in &registries {
@@ -6045,15 +5942,10 @@ async fn fetch_latest_version(client: &reqwest::Client, base: &str) -> Option<St
     }
 }
 
-/// Order the two release bases, prefer the one with the highest version.
+/// Probe GCS for the latest CLI version.
 ///
-/// This protects against mirror lag: if `herear.cn` is several versions behind
-/// GCS (as happened 2026-04: GCS=2.1.114 vs mirror=2.1.92), we still serve the
-/// latest to users and log a warning. If one source is unreachable, the other
-/// is used unconditionally.
-///
-/// Returns `Vec<(base_url, version)>` in preferred order, empty if both fail.
-async fn choose_native_sources(china: bool) -> Vec<(&'static str, String)> {
+/// Returns `Vec<(base_url, version)>`, empty if unreachable.
+async fn choose_native_sources() -> Vec<(&'static str, String)> {
     let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(6))
         .build()
@@ -6062,74 +5954,29 @@ async fn choose_native_sources(china: bool) -> Vec<(&'static str, String)> {
         Err(_) => return Vec::new(),
     };
 
-    // China: probe both (mirror has lower latency, GCS has the freshest version).
-    // Non-China: GCS only — `herear.cn` is a China-oriented mirror with limited bandwidth.
-    let bases: Vec<&'static str> = if china {
-        vec![CLI_MIRROR_BASE, CLI_GCS_BASE]
-    } else {
-        vec![CLI_GCS_BASE]
-    };
-
     let probes = futures_util::future::join_all(
-        bases
+        vec![CLI_GCS_BASE]
             .iter()
             .map(|b| async { (*b, fetch_latest_version(&client, b).await) }),
     )
     .await;
 
-    let mut available: Vec<(&'static str, String)> = probes
+    probes
         .into_iter()
         .filter_map(|(b, v)| v.map(|v| (b, v)))
-        .collect();
-
-    if available.len() > 1 {
-        // Log lag if the china mirror is behind GCS so ops can notice.
-        if let (Some(mirror_v), Some(gcs_v)) = (
-            available
-                .iter()
-                .find(|(b, _)| *b == CLI_MIRROR_BASE)
-                .map(|(_, v)| v.clone()),
-            available
-                .iter()
-                .find(|(b, _)| *b == CLI_GCS_BASE)
-                .map(|(_, v)| v.clone()),
-        ) {
-            if version_gt(&gcs_v, &mirror_v) {
-                eprintln!(
-                    "[native_download] mirror lag detected: herear.cn={} < GCS={} — preferring GCS",
-                    mirror_v, gcs_v
-                );
-            }
-        }
-        // Sort descending by version — highest version first.
-        available.sort_by(|a, b| {
-            if version_gt(&a.1, &b.1) {
-                std::cmp::Ordering::Less
-            } else if version_gt(&b.1, &a.1) {
-                std::cmp::Ordering::Greater
-            } else {
-                std::cmp::Ordering::Equal
-            }
-        });
-    }
-
-    available
+        .collect()
 }
 
 /// Download and install a native CLI binary into `~/.claude/local/`.
 ///
 /// Shared by both `install_claude_cli` (first-time install) and `update_claude_cli`
 /// (in-app update). Works for both China and non-China users:
-///   - China: probes both `herear.cn` mirror and GCS, serves whichever has the
-///     highest version (protects against mirror lag).
-///   - Non-China: GCS only.
-///
 /// Native binary install is the preferred path because it bypasses the npm
 /// optional-dependency fragility that caused TK-0.10.5's Windows install
 /// failure (bin/claude.exe shipped by `@anthropic-ai/claude-code` was corrupt,
 /// triggering Windows error 193 "16-bit application not supported").
-async fn try_native_cli_download(app: Option<&AppHandle>, china: bool) -> Result<String, String> {
-    let sources = choose_native_sources(china).await;
+async fn try_native_cli_download(app: Option<&AppHandle>) -> Result<String, String> {
+    let sources = choose_native_sources().await;
     if sources.is_empty() {
         return Err("No native release source reachable".to_string());
     }
@@ -6302,15 +6149,13 @@ async fn try_native_cli_download(app: Option<&AppHandle>, china: bool) -> Result
 }
 
 /// Update the Claude CLI to the latest version.
-/// Strategy (same for China and non-China):
-///   Phase 1: Native binary via GCS (and herear.cn mirror for China) with lag detection
-///   Phase 2: npm multi-registry fallback with version verification
+/// Strategy:
+///   Phase 1: Native binary via GCS
+///   Phase 2: npm fallback with version verification
 #[tauri::command]
 async fn update_claude_cli(app: AppHandle) -> Result<String, String> {
-    let china = is_china_network().await;
-
     // Phase 1: Try native binary download.
-    match try_native_cli_download(Some(&app), china).await {
+    match try_native_cli_download(Some(&app)).await {
         Ok(version) => {
             eprintln!(
                 "[update_claude_cli] native binary update success: v{}",
@@ -6326,9 +6171,7 @@ async fn update_claude_cli(app: AppHandle) -> Result<String, String> {
         }
     }
 
-    // Phase 2: npm with multi-registry + version verification
-    // For China: npmmirror first (fast), verify version matches target,
-    // if stale → auto-retry with npm official
+    // Phase 2: npm with version verification
     let npm_path = if let Some(local_bin) = get_local_node_bin() {
         #[cfg(target_os = "windows")]
         let npm = local_bin.join("npm.cmd");
@@ -6350,20 +6193,13 @@ async fn update_claude_cli(app: AppHandle) -> Result<String, String> {
     let cache_dir = npm_cache_dir()?;
     std::fs::create_dir_all(&cache_dir).ok();
 
-    // Fetch target version for post-install verification (herear.cn for China, GCS for others)
+    // Fetch target version for post-install verification
     let target_version = {
         let c = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
             .unwrap_or_default();
-        let urls = if china {
-            vec![
-                format!("{}/latest", CLI_MIRROR_BASE),
-                format!("{}/latest", CLI_GCS_BASE),
-            ]
-        } else {
-            vec![format!("{}/latest", CLI_GCS_BASE)]
-        };
+        let urls = vec![format!("{}/latest", CLI_GCS_BASE)];
         let mut ver: Option<String> = None;
         for url in &urls {
             if let Ok(resp) = c.get(url).send().await {
@@ -6379,14 +6215,7 @@ async fn update_claude_cli(app: AppHandle) -> Result<String, String> {
         ver
     };
 
-    let registries: Vec<&str> = if china {
-        vec![
-            "https://registry.npmmirror.com",
-            "https://registry.npmjs.org",
-        ]
-    } else {
-        vec!["https://registry.npmjs.org"]
-    };
+    let registries: Vec<&str> = vec!["https://registry.npmjs.org"];
 
     let mut last_err = String::new();
     for registry in &registries {
@@ -6449,7 +6278,7 @@ async fn update_claude_cli(app: AppHandle) -> Result<String, String> {
                 );
 
                 // Version verification: if target is known and installed version is stale,
-                // try next registry (npmmirror may be behind)
+                // try next registry if version is stale
                 if let Some(ref target) = target_version {
                     if version != *target && version_gt(target, &version) {
                         eprintln!(
@@ -6490,7 +6319,7 @@ async fn update_claude_cli(app: AppHandle) -> Result<String, String> {
 }
 
 /// Check if a newer CLI version is available.
-/// Sources: herear.cn mirror (China-first) → GCS → npm registry.
+/// Sources: GCS → npm registry.
 #[derive(serde::Serialize)]
 struct CliUpdateCheck {
     current: Option<String>,
@@ -6508,20 +6337,9 @@ async fn check_cli_update() -> Result<CliUpdateCheck, String> {
         .build()
         .unwrap_or_default();
 
-    let china = is_china_network().await;
-
-    // Version check sources: China users try herear.cn first (GCS may be slow/blocked)
-    let version_urls: Vec<String> = if china {
-        vec![
-            format!("{}/latest", CLI_MIRROR_BASE),
-            format!("{}/latest", CLI_GCS_BASE),
-        ]
-    } else {
-        vec![
-            format!("{}/latest", CLI_GCS_BASE),
-            format!("{}/latest", CLI_MIRROR_BASE),
-        ]
-    };
+    let version_urls: Vec<String> = vec![
+        format!("{}/latest", CLI_GCS_BASE),
+    ];
 
     let mut latest: Option<String> = None;
     for url in &version_urls {
@@ -6592,15 +6410,12 @@ async fn install_claude_cli(app: AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    // Phase 0: Detect network environment (used by all subsequent phases)
-    let china = is_china_network().await;
-
     // Phase 1 (Windows only): Ensure git-bash is available
     #[cfg(target_os = "windows")]
     {
         if find_git_bash().is_none() {
             eprintln!("git-bash not found, auto-installing PortableGit...");
-            install_git_bash_inner(&app, china).await.map_err(|e| {
+            install_git_bash_inner(&app).await.map_err(|e| {
                 format!(
                     "Failed to install Git for Windows: {}. \
                      Please install Git for Windows manually: https://git-scm.com/downloads/win",
@@ -6624,7 +6439,7 @@ async fn install_claude_cli(app: AppHandle) -> Result<(), String> {
     //       Windows-specific package (TK-0.10.5 field report).
     //   (b) No Node.js dependency on the happy path. Node.js install is
     //       still triggered below if native fails, so npm can take over.
-    match try_native_cli_download(Some(&app), china).await {
+    match try_native_cli_download(Some(&app)).await {
         Ok(version) => {
             eprintln!(
                 "[install_claude_cli] native binary install success: v{}",
@@ -6653,7 +6468,7 @@ async fn install_claude_cli(app: AppHandle) -> Result<(), String> {
 
     if !has_npm {
         eprintln!("npm not available, deploying Node.js locally...");
-        install_node_env_inner(&app, china).await.map_err(|e| {
+        install_node_env_inner(&app).await.map_err(|e| {
             format!(
                 "Failed to install Node.js runtime: {}. Please install Node.js manually.",
                 e
@@ -6662,7 +6477,7 @@ async fn install_claude_cli(app: AppHandle) -> Result<(), String> {
     }
 
     // Phase 4: Install CLI via npm (fallback).
-    install_cli_via_npm(&app, china)
+    install_cli_via_npm(&app)
         .await
         .map_err(|npm_err| format!("CLI installation failed via npm: {}", npm_err))?;
 
@@ -6680,7 +6495,7 @@ fn inject_unix_shell_path(dir: &str) {
         None => return,
     };
     let export_line = format!("export PATH=\"{}:$PATH\"", dir);
-    let marker = "# Added by TOKENICODE";
+    let marker = "# Added by Stavebak";
     let block = format!("\n{}\n{}\n", marker, export_line);
 
     let profiles = [
@@ -6823,11 +6638,6 @@ const NODE_LTS_VERSION: &str = "v22.22.0";
 /// Primary Node.js download base URL (official).
 const NODE_DIST_OFFICIAL: &str = "https://nodejs.org/dist";
 
-/// China mirror: npmmirror CDN for Node.js binaries.
-const NODE_DIST_NPMMIRROR: &str = "https://cdn.npmmirror.com/binaries/node";
-
-/// China mirror: Huawei Cloud for Node.js binaries.
-const NODE_DIST_HUAWEI: &str = "https://mirrors.huaweicloud.com/nodejs";
 
 /// Directory for app-local Node.js installation.
 fn node_download_dir() -> Result<std::path::PathBuf, String> {
@@ -7024,11 +6834,10 @@ async fn check_node_env() -> Result<NodeEnvStatus, String> {
 /// Download and extract Node.js LTS to the local app directory.
 #[tauri::command]
 async fn install_node_env(app: AppHandle) -> Result<(), String> {
-    let china = is_china_network().await;
-    install_node_env_inner(&app, china).await
+    install_node_env_inner(&app).await
 }
 
-async fn install_node_env_inner(app: &AppHandle, china: bool) -> Result<(), String> {
+async fn install_node_env_inner(app: &AppHandle) -> Result<(), String> {
     let (archive_name, ext) = get_node_archive_info()?;
     let filename = format!("{}.{}", archive_name, ext);
 
@@ -7042,19 +6851,9 @@ async fn install_node_env_inner(app: &AppHandle, china: bool) -> Result<(), Stri
     )
     .await;
 
-    // Network-aware source ordering
-    let sources: Vec<String> = if china {
-        vec![
-            format!("{}/{}/{}", NODE_DIST_NPMMIRROR, NODE_LTS_VERSION, filename),
-            format!("{}/{}/{}", NODE_DIST_HUAWEI, NODE_LTS_VERSION, filename),
-            format!("{}/{}/{}", NODE_DIST_OFFICIAL, NODE_LTS_VERSION, filename),
-        ]
-    } else {
-        vec![
-            format!("{}/{}/{}", NODE_DIST_OFFICIAL, NODE_LTS_VERSION, filename),
-            format!("{}/{}/{}", NODE_DIST_NPMMIRROR, NODE_LTS_VERSION, filename),
-        ]
-    };
+    let sources: Vec<String> = vec![
+        format!("{}/{}/{}", NODE_DIST_OFFICIAL, NODE_LTS_VERSION, filename),
+    ];
 
     let mut last_err = String::new();
     let mut archive_bytes: Option<Vec<u8>> = None;
@@ -7142,18 +6941,11 @@ const GIT_RELEASE_TAG: &str = "v2.47.1.windows.2";
 #[cfg(target_os = "windows")]
 const GIT_DIST_GITHUB: &str = "https://github.com/git-for-windows/git/releases/download";
 
-/// China mirror: npmmirror binary mirror.
-#[cfg(target_os = "windows")]
-const GIT_DIST_NPMMIRROR: &str = "https://registry.npmmirror.com/-/binary/git-for-windows";
-
-/// China mirror: Huawei Cloud.
-#[cfg(target_os = "windows")]
-const GIT_DIST_HUAWEI: &str = "https://mirrors.huaweicloud.com/git-for-windows";
 
 /// Download and install PortableGit to provide bash.exe on Windows.
 /// The .7z.exe self-extracting archive is downloaded and executed silently.
 #[cfg(target_os = "windows")]
-async fn install_git_bash_inner(app: &AppHandle, china: bool) -> Result<(), String> {
+async fn install_git_bash_inner(app: &AppHandle) -> Result<(), String> {
     let install_dir = git_download_dir()?;
 
     // If an incomplete installation exists (no bash.exe), clean it up
@@ -7184,20 +6976,9 @@ async fn install_git_bash_inner(app: &AppHandle, china: bool) -> Result<(), Stri
         GIT_PORTABLE_VERSION, arch_suffix
     );
 
-    let sources: Vec<String> = if china {
-        vec![
-            // China: Huawei fastest, then npmmirror, GitHub last
-            format!("{}/{}/{}", GIT_DIST_HUAWEI, GIT_RELEASE_TAG, filename),
-            format!("{}/{}/{}", GIT_DIST_NPMMIRROR, GIT_RELEASE_TAG, filename),
-            format!("{}/{}/{}", GIT_DIST_GITHUB, GIT_RELEASE_TAG, filename),
-        ]
-    } else {
-        vec![
-            format!("{}/{}/{}", GIT_DIST_GITHUB, GIT_RELEASE_TAG, filename),
-            format!("{}/{}/{}", GIT_DIST_HUAWEI, GIT_RELEASE_TAG, filename),
-            format!("{}/{}/{}", GIT_DIST_NPMMIRROR, GIT_RELEASE_TAG, filename),
-        ]
-    };
+    let sources: Vec<String> = vec![
+        format!("{}/{}/{}", GIT_DIST_GITHUB, GIT_RELEASE_TAG, filename),
+    ];
 
     let client = build_smart_http_client(
         std::time::Duration::from_secs(15), // Fast failover between mirrors
@@ -7518,6 +7299,7 @@ async fn start_claude_login(app: AppHandle) -> Result<(), String> {
 struct AuthStatus {
     authenticated: bool,
     unknown: bool,
+    account: Option<String>,
 }
 
 /// Check whether the Claude CLI is authenticated by running a lightweight check.
@@ -7551,9 +7333,15 @@ async fn check_claude_auth() -> Result<AuthStatus, String> {
                                 .unwrap_or(false)
                         });
                     if has_token {
+                        let account = json.get("email")
+                            .or_else(|| json.get("account"))
+                            .and_then(|v| v.as_str())
+                            .filter(|s| !s.is_empty())
+                            .map(|s| s.to_string());
                         return Ok(AuthStatus {
                             authenticated: true,
                             unknown: false,
+                            account,
                         });
                     }
                 }
@@ -7566,6 +7354,7 @@ async fn check_claude_auth() -> Result<AuthStatus, String> {
             return Ok(AuthStatus {
                 authenticated: true,
                 unknown: false,
+                account: None,
             });
         }
     }
@@ -7607,6 +7396,7 @@ async fn check_claude_auth() -> Result<AuthStatus, String> {
             Ok(AuthStatus {
                 authenticated: output.status.success() && !has_auth_issue,
                 unknown: false,
+                account: None,
             })
         }
         Ok(Err(e)) => Err(format!("Failed to run auth check: {}", e)),
@@ -7615,15 +7405,16 @@ async fn check_claude_auth() -> Result<AuthStatus, String> {
             Ok(AuthStatus {
                 authenticated: false,
                 unknown: true,
+                account: None,
             })
         }
     }
 }
 
-/// Path to the session-names metadata file (~/.claude/tokenicode_session_names.json).
+/// Path to the session-names metadata file (~/.claude/stavebak_session_names.json).
 fn session_names_path() -> Result<std::path::PathBuf, String> {
     let home = dirs::home_dir().ok_or("Cannot find home dir")?;
-    Ok(home.join(".claude").join("tokenicode_session_names.json"))
+    Ok(home.join(".claude").join("stavebak_session_names.json"))
 }
 
 /// Load custom session display names from disk.
@@ -7647,12 +7438,12 @@ async fn save_custom_previews(data: Value) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| format!("Failed to write session names: {}", e))
 }
 
-fn tokenicode_data_path(filename: &str) -> Result<std::path::PathBuf, String> {
+fn stavebak_data_path(filename: &str) -> Result<std::path::PathBuf, String> {
     let home = dirs::home_dir().ok_or("Cannot find home dir")?;
-    let dir = home.join(".tokenicode");
+    let dir = home.join(".stavebak");
     if !dir.exists() {
         std::fs::create_dir_all(&dir)
-            .map_err(|e| format!("Failed to create .tokenicode dir: {}", e))?;
+            .map_err(|e| format!("Failed to create .stavebak dir: {}", e))?;
     }
     Ok(dir.join(filename))
 }
@@ -7660,7 +7451,7 @@ fn tokenicode_data_path(filename: &str) -> Result<std::path::PathBuf, String> {
 /// Load pinned session IDs from disk.
 #[tauri::command]
 async fn load_pinned_sessions() -> Result<Value, String> {
-    let path = tokenicode_data_path("pinned.json")?;
+    let path = stavebak_data_path("pinned.json")?;
     if !path.exists() {
         return Ok(serde_json::json!([]));
     }
@@ -7672,7 +7463,7 @@ async fn load_pinned_sessions() -> Result<Value, String> {
 /// Save pinned session IDs to disk.
 #[tauri::command]
 async fn save_pinned_sessions(data: Value) -> Result<(), String> {
-    let path = tokenicode_data_path("pinned.json")?;
+    let path = stavebak_data_path("pinned.json")?;
     let content = serde_json::to_string_pretty(&data)
         .map_err(|e| format!("Failed to serialize pinned sessions: {}", e))?;
     std::fs::write(&path, content).map_err(|e| format!("Failed to write pinned sessions: {}", e))
@@ -7681,7 +7472,7 @@ async fn save_pinned_sessions(data: Value) -> Result<(), String> {
 /// Load archived session IDs from disk.
 #[tauri::command]
 async fn load_archived_sessions() -> Result<Value, String> {
-    let path = tokenicode_data_path("archived.json")?;
+    let path = stavebak_data_path("archived.json")?;
     if !path.exists() {
         return Ok(serde_json::json!([]));
     }
@@ -7693,7 +7484,7 @@ async fn load_archived_sessions() -> Result<Value, String> {
 /// Save archived session IDs to disk.
 #[tauri::command]
 async fn save_archived_sessions(data: Value) -> Result<(), String> {
-    let path = tokenicode_data_path("archived.json")?;
+    let path = stavebak_data_path("archived.json")?;
     let content = serde_json::to_string_pretty(&data)
         .map_err(|e| format!("Failed to serialize archived sessions: {}", e))?;
     std::fs::write(&path, content).map_err(|e| format!("Failed to write archived sessions: {}", e))
@@ -7702,7 +7493,7 @@ async fn save_archived_sessions(data: Value) -> Result<(), String> {
 /// Load session groups (the grouping ledger) from disk.
 #[tauri::command]
 async fn load_session_groups() -> Result<Value, String> {
-    let path = tokenicode_data_path("groups.json")?;
+    let path = stavebak_data_path("groups.json")?;
     if !path.exists() {
         return Ok(serde_json::json!([]));
     }
@@ -7714,7 +7505,7 @@ async fn load_session_groups() -> Result<Value, String> {
 /// Save session groups (the grouping ledger) to disk.
 #[tauri::command]
 async fn save_session_groups(data: Value) -> Result<(), String> {
-    let path = tokenicode_data_path("groups.json")?;
+    let path = stavebak_data_path("groups.json")?;
     let content = serde_json::to_string_pretty(&data)
         .map_err(|e| format!("Failed to serialize session groups: {}", e))?;
     std::fs::write(&path, content).map_err(|e| format!("Failed to write session groups: {}", e))
@@ -8044,39 +7835,45 @@ pub fn run() {
             // One-time cleanup: purge desk_* entries from tracked_sessions.txt
             cleanup_tracked_sessions();
 
+            // OPT-2: Warm shell caches in parallel background threads.
+            // login_shell_extra_path() is OnceLock-cached — warming it here
+            // means the first session start won't block on a shell spawn.
+            #[cfg(not(target_os = "windows"))]
+            std::thread::spawn(|| {
+                let _ = login_shell_extra_path();
+            });
+
             // Propagate proxy env vars from login shell to the process environment
             // so that ALL HTTP clients (including the updater plugin) can reach
-            // external services through the proxy.
+            // external services through the proxy. Runs on a thread but joined
+            // before updater plugin registration (updater needs proxy vars).
             #[cfg(not(target_os = "windows"))]
             {
-                let proxy_env = login_shell_proxy_env();
-                for (k, v) in proxy_env {
-                    if std::env::var(k).is_err() {
-                        // SAFETY: called once during single-threaded setup
-                        unsafe {
-                            std::env::set_var(k, v);
+                let proxy_thread = std::thread::spawn(|| {
+                    let proxy_env = login_shell_proxy_env();
+                    for (k, v) in proxy_env {
+                        if std::env::var(k).is_err() {
+                            // SAFETY: called once during setup, before other
+                            // threads read these vars.
+                            unsafe {
+                                std::env::set_var(k, v);
+                            }
                         }
                     }
-                }
+                });
+                let _ = proxy_thread.join();
             }
+
+            // OPT-5: Warm proxy URL cache on background thread so
+            // start_claude_session() gets an instant hit.
+            std::thread::spawn(|| {
+                let _ = cached_proxy_url();
+            });
 
             // Register updater plugin (desktop only)
             #[cfg(desktop)]
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
-
-            // Register test harness socket server (debug builds only).
-            // Provides a Unix socket that tokenicode-cli.mjs connects to for
-            // automated GUI testing. Release builds never include this.
-            #[cfg(debug_assertions)]
-            {
-                let mcp_config = tauri_plugin_mcp::PluginConfig::new("TOKENICODE".to_string())
-                    .start_socket_server(true)
-                    .socket_path(std::path::PathBuf::from("/tmp/tokenicode-test.sock"));
-                app.handle()
-                    .plugin(tauri_plugin_mcp::init_with_config(mcp_config))?;
-                eprintln!("[TOKENICODE] Test harness registered on /tmp/tokenicode-test.sock");
-            }
 
             #[cfg(not(desktop))]
             let _ = app;
@@ -8104,11 +7901,12 @@ pub fn run() {
             rename_file,
             delete_file,
             create_directory,
+            create_project_directory,
+            ensure_claude_md,
             open_in_vscode,
             reveal_in_finder,
             open_with_default_app,
             share_file,
-            share_to_wechat,
             export_session_markdown,
             export_session_json,
             list_recent_projects,
@@ -8117,6 +7915,7 @@ pub fn run() {
             save_temp_file,
             get_file_size,
             check_file_access,
+            get_home_dir,
             read_file_base64,
             list_slash_commands,
             list_skills,
@@ -8160,8 +7959,6 @@ pub fn run() {
             test_provider_connection,
             respond_permission,
             send_control_request,
-            commands::feedback::submit_feedback,
-            commands::feedback::feedback_is_configured,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

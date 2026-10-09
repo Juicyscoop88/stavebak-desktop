@@ -1,11 +1,11 @@
-# TOKENICODE Architecture
+# Stavebak Architecture
 
 > **Purpose**: Help AI assistants quickly understand the codebase structure, avoiding full source reads on every debug session.
 > **Last updated**: 2026-03-02
 
 ## Overview
 
-TOKENICODE is a native desktop GUI for Claude Code CLI, built with **Tauri 2 + React 19 + TypeScript + Tailwind CSS 4 + Zustand 5**. It supports macOS, Windows, and Linux.
+Stavebak is a native desktop GUI for Claude Code CLI, built with **Tauri 2 + React 19 + TypeScript + Tailwind CSS 4 + Zustand 5**. It supports macOS, Windows, and Linux.
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -33,7 +33,7 @@ TOKENICODE is a native desktop GUI for Claude Code CLI, built with **Tauri 2 + R
 ## Directory Structure
 
 ```
-TOKENICODE/
+Stavebak/
 ├── src/                          # Frontend (React 19 + TS, ~77 files)
 │   ├── App.tsx                   # Entry: theme, font, file watcher, global hotkeys
 │   ├── main.tsx                  # React root + ErrorBoundary
@@ -118,7 +118,7 @@ All frontend-to-backend communication goes through this single file (~470 LOC).
 
 ```
 claude:stream:{sessionId}      → NDJSON messages from Claude CLI stdout
-                                  (includes tokenicode_permission_request for SDK protocol)
+                                  (includes stavebak_permission_request for SDK protocol)
 claude:stderr:{sessionId}      → Stderr output
 claude:exit:{sessionId}        → Process exit
 sessions:changed               → Session list invalidation
@@ -142,13 +142,13 @@ setup:login:exit               → Login process exit
 
 Bidirectional communication with Claude CLI when launched with `--permission-prompt-tool stdio`:
 
-- **CLI → TOKENICODE** (`control_request`): Permission requests (`can_use_tool`), hook callbacks
-- **TOKENICODE → CLI** (`control_response`): Allow/deny decisions with `updatedInput`
-- **TOKENICODE → CLI** (`control_request`): Runtime commands — `interrupt`, `set_permission_mode`, `set_model`, `rewind_files`
+- **CLI → Stavebak** (`control_request`): Permission requests (`can_use_tool`), hook callbacks
+- **Stavebak → CLI** (`control_response`): Allow/deny decisions with `updatedInput`
+- **Stavebak → CLI** (`control_request`): Runtime commands — `interrupt`, `set_permission_mode`, `set_model`, `rewind_files`
 
 ### Provider System
 
-Multi-provider API configuration stored as plaintext JSON at `~/.tokenicode/providers.json`:
+Multi-provider API configuration stored as plaintext JSON at `~/.stavebak/providers.json`:
 - Supports Anthropic and OpenAI API formats
 - Per-provider: base URL, API key, model tier mappings, extra env vars
 - Environment variable injection into CLI child process
@@ -182,7 +182,7 @@ Environment variables injected:
 ### Binary Discovery
 
 `find_claude_binary()` searches in priority order:
-1. App-local download directory (`~/Library/Application Support/com.tinyzhuang.tokenicode/cli/`)
+1. App-local download directory (`~/Library/Application Support/com.stavebak.stavebak/cli/`)
 2. npm-global/bin (local `--prefix` install)
 3. System PATH (`which claude`)
 4. Claude Desktop App bundled CLI (versioned directories)
@@ -228,7 +228,7 @@ User types follow-up → bridge.sendStdin(sessionId, message)
 ### Permission Request Flow (SDK Control Protocol)
 ```
 CLI stdout: control_request { subtype: "can_use_tool", tool_name, input }
-  → Rust intercepts, emits tokenicode_permission_request on stream channel
+  → Rust intercepts, emits stavebak_permission_request on stream channel
   → Frontend renders PermissionCard with approve/deny buttons
   → User clicks → bridge.respondPermission(sessionId, requestId, allow, updatedInput)
   → Rust sends control_response via StdinManager → CLI proceeds
@@ -388,7 +388,7 @@ pnpm tauri build
 - Max output tokens: 64,000 (env var override)
 - Node.js LTS for local install: v22.22.0
 - Title generation model: `claude-haiku-4-5-20251001`
-- Data dirs: `~/.tokenicode/` (persistent), `~/Library/.../com.tinyzhuang.tokenicode/` (app data)
+- Data dirs: `~/.stavebak/` (persistent), `~/Library/.../com.stavebak.stavebak/` (app data)
 
 ### Cross-Platform Notes
 

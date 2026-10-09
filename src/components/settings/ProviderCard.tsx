@@ -1,3 +1,4 @@
+import { Check, ArrowSquareOut, PencilSimple, Trash } from '@phosphor-icons/react';
 import { useT } from '../../lib/i18n';
 import type { ApiProvider } from '../../stores/providerStore';
 
@@ -63,19 +64,19 @@ export function ProviderCard({
 
       {/* Main content */}
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-medium text-text-primary truncate">
+        <div className="text-sm font-medium text-text-primary truncate">
           {provider.name || t('provider.unnamed')}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           {hostname && (
-            <span className="text-[11px] text-text-tertiary truncate">
+            <span className="text-xs text-text-tertiary truncate">
               {hostname}
             </span>
           )}
           {hostname && (
-            <span className="text-[11px] text-text-tertiary">·</span>
+            <span className="text-xs text-text-tertiary">·</span>
           )}
-          <span className="text-[11px] text-text-tertiary whitespace-nowrap">
+          <span className="text-xs text-text-tertiary whitespace-nowrap">
             {formatLabel}
           </span>
         </div>
@@ -85,7 +86,7 @@ export function ProviderCard({
       <button
         onClick={(e) => { e.stopPropagation(); onTest(); }}
         disabled={testStatus === 'testing'}
-        className={`shrink-0 px-2 py-1 rounded-md text-[11px] font-medium transition-smooth
+        className={`shrink-0 px-2 py-1 rounded-md text-xs font-medium transition-smooth
           border
           ${testStatus === 'success'
             ? 'bg-green-500/10 text-green-500 border-green-500/30'
@@ -103,10 +104,7 @@ export function ProviderCard({
           </span>
         ) : testStatus === 'success' ? (
           <span className="flex items-center gap-1">
-            <svg width="9" height="9" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M3 8l4 4 6-7" />
-            </svg>
+            <Check size={9} weight="light" />
             {testTimeMs != null ? `${testTimeMs}ms` : t('provider.testSuccess')}
           </span>
         ) : testStatus === 'auth_error' ? (
@@ -126,10 +124,7 @@ export function ProviderCard({
           className="p-1.5 rounded text-text-tertiary hover:text-text-muted transition-smooth"
           title={t('provider.exportConfig')}
         >
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <path d="M2 10v3a1 1 0 001 1h10a1 1 0 001-1v-3M8 10V2M5 5l3-3 3 3" />
-          </svg>
+          <ArrowSquareOut size={13} weight="light" />
         </button>
         {/* Edit */}
         <button
@@ -137,10 +132,7 @@ export function ProviderCard({
           className="p-1.5 rounded text-text-tertiary hover:text-text-muted transition-smooth"
           title={t('provider.editProvider')}
         >
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <path d="M11 2l3 3-9 9H2v-3z" />
-          </svg>
+          <PencilSimple size={13} weight="light" />
         </button>
         {/* Delete — trash icon, red */}
         <button
@@ -148,10 +140,7 @@ export function ProviderCard({
           className="p-1.5 rounded text-red-400/60 hover:text-red-400 transition-smooth"
           title={t('provider.deleteProvider')}
         >
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 4h12M5.33 4V2.67a1.33 1.33 0 011.34-1.34h2.66a1.33 1.33 0 011.34 1.34V4M13 4v9.33a1.33 1.33 0 01-1.33 1.34H4.33A1.33 1.33 0 013 13.33V4M6.67 7.33v4M9.33 7.33v4" />
-          </svg>
+          <Trash size={13} weight="light" />
         </button>
       </div>
     </div>

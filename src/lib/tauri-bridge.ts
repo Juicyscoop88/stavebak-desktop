@@ -126,6 +126,7 @@ export interface CleanupResult {
 export interface AuthStatus {
   authenticated: boolean;
   unknown?: boolean;
+  account?: string | null;
 }
 
 export interface StepResult {
@@ -247,8 +248,6 @@ export const bridge = {
   shareFile: (path: string) =>
     invoke<void>('share_file', { path }),
 
-  shareToWechat: (path: string) =>
-    invoke<string>('share_to_wechat', { path }),
 
   readFileTree: (path: string, depth?: number) =>
     invoke<FileNode[]>('read_file_tree', { path, depth }),
@@ -381,7 +380,7 @@ export const bridge = {
   deleteCli: (path: string) => invoke<string>('delete_cli', { path }),
 
   /** Scan all discoverable Claude CLIs and remove any that fail with
-   *  Windows error 193 ("不支持的 16 位应用程序" / corrupt .exe).
+   *  Windows error 193 (corrupt .exe / unsupported 16-bit application).
    *  No-op on non-Windows. */
   repairCli: () =>
     invoke<{ scanned: string[]; removed: string[]; notes: string[] }>('repair_cli'),
@@ -412,28 +411,28 @@ export const bridge = {
   openTerminalLogin: () =>
     invoke<void>('open_terminal_login'),
 
-  // Session custom names (persisted to ~/.claude/tokenicode_session_names.json)
+  // Session custom names (persisted to ~/.claude/stavebak_session_names.json)
   loadCustomPreviews: () =>
     invoke<Record<string, string>>('load_custom_previews'),
 
   saveCustomPreviews: (data: Record<string, string>) =>
     invoke<void>('save_custom_previews', { data }),
 
-  // Pinned sessions (persisted to ~/.tokenicode/pinned.json)
+  // Pinned sessions (persisted to ~/.stavebak/pinned.json)
   loadPinnedSessions: () =>
     invoke<string[]>('load_pinned_sessions').catch(() => []),
 
   savePinnedSessions: (data: string[]) =>
     invoke<void>('save_pinned_sessions', { data }).catch(() => {}),
 
-  // Archived sessions (persisted to ~/.tokenicode/archived.json)
+  // Archived sessions (persisted to ~/.stavebak/archived.json)
   loadArchivedSessions: () =>
     invoke<string[]>('load_archived_sessions').catch(() => []),
 
   saveArchivedSessions: (data: string[]) =>
     invoke<void>('save_archived_sessions', { data }).catch(() => {}),
 
-  // Session groups (persisted to ~/.tokenicode/groups.json)
+  // Session groups (persisted to ~/.stavebak/groups.json)
   loadSessionGroups: () =>
     invoke<unknown[]>('load_session_groups').catch(() => []),
 
@@ -474,33 +473,7 @@ export const bridge = {
   interruptSession: (sessionId: string) =>
     invoke<void>('send_control_request', { sessionId, subtype: 'interrupt', payload: {} }),
 
-  /** Submit user feedback via Feishu webhook (self-built app). */
-  submitFeedback: (params: {
-    description: string;
-    screenshotBase64?: string;
-    metadata: FeedbackMetadata;
-  }) =>
-    invoke<void>('submit_feedback', {
-      description: params.description,
-      screenshotBase64: params.screenshotBase64 ?? null,
-      metadata: params.metadata,
-    }),
-
-  /** Check whether FEISHU_* env vars were baked in at build time. */
-  feedbackIsConfigured: () => invoke<boolean>('feedback_is_configured'),
 };
-
-/** Metadata collected alongside user feedback for server-side diagnostics.
- *  OS / arch are filled in by the Rust side from std::env::consts. */
-export interface FeedbackMetadata {
-  app_name: string;
-  app_version: string;
-  locale?: string;
-  provider_name?: string;
-  model?: string;
-  session_id?: string;
-  user_contact?: string;
-}
 
 // --- SDK Control Protocol Types ---
 
@@ -515,7 +488,7 @@ export interface PermissionRequest {
 // --- Event Listeners ---
 
 /** @deprecated This listener has no corresponding backend emit — permission requests
- *  arrive through the main stream channel as `tokenicode_permission_request` messages.
+ *  arrive through the main stream channel as `stavebak_permission_request` messages.
  *  Kept for reference; will be removed in a future cleanup pass.
  *  @param stdinId - Desk-generated process key (NOT the CLI session UUID) */
 export function onPermissionRequest(

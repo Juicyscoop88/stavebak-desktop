@@ -184,7 +184,7 @@ export function hasRecoverableFrontendSession(stdinId: string): boolean {
  * Start a CLI session with all necessary bookkeeping:
  * 1. Register stdinTab mapping (must be first — triggers orphan drain)
  * 2. Publish stdin ownership to the tab immediately
- * 3. Register 4 listeners: stream / stderr / tokenicode_permission_request / exit
+ * 3. Register 4 listeners: stream / stderr / stavebak_permission_request / exit
  * 4. Start CLI process via bridge
  * 5. Write sessionMeta snapshot
  * 5. Store unlisten in __claudeUnlisteners
@@ -229,10 +229,10 @@ export async function spawnSession(params: SpawnParams): Promise<SpawnResult> {
     });
     rollbacks.push(unlistenStderr);
 
-    // 3c. Permission request via stream channel (tokenicode_permission_request)
+    // 3c. Permission request via stream channel (stavebak_permission_request)
     // NOTE: This is NOT the dead `claude:permission_request:*` channel.
     // Permission requests arrive through the main stream channel as messages
-    // with type 'tokenicode_permission_request'. They are handled by onStream
+    // with type 'stavebak_permission_request'. They are handled by onStream
     // in handleStreamMessage. No separate listener needed here — the stream
     // listener above already captures them.
 
@@ -266,7 +266,9 @@ export async function spawnSession(params: SpawnParams): Promise<SpawnResult> {
     (window as any).__claudeUnlisteners[stdinId] = combinedUnlisten;
 
     // STEP 4: Start CLI process
+    const spawnT0 = performance.now();
     const session = await bridge.startSession(sessionParams);
+    console.log(`[perf] bridge.startSession: ${Math.round(performance.now() - spawnT0)}ms`);
 
     // STEP 4b: Set sessionStatus to running. This is critical for switch/plan-approve
     // paths where teardownSession set 'stopped' before we got here. Without this, the

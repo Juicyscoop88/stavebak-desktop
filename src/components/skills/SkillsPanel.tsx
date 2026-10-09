@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { Stack, ArrowsClockwise, MagnifyingGlass, X, SpinnerGap, Diamond, DotsThreeOutline, CaretRight, ClipboardText, PencilSimple, Copy, Folder, Trash } from '@phosphor-icons/react';
 import { useSkillStore } from '../../stores/skillStore';
 import { useFileStore } from '../../stores/fileStore';
 import { useCommandStore } from '../../stores/commandStore';
@@ -145,12 +146,8 @@ export function SkillsPanel() {
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center gap-2 min-w-0">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5"
-            className="text-accent flex-shrink-0">
-            <path d="M8 1L1 4.5l7 3.5 7-3.5L8 1zM1 11.5l7 3.5 7-3.5M1 8l7 3.5L15 8" />
-          </svg>
-          <span className="text-[13px] font-medium text-text-primary">
+          <Stack size={12} weight="light" className="text-accent flex-shrink-0" />
+          <span className="text-sm font-medium text-text-primary">
             {t('skills.title')}
           </span>
           <span className="text-xs text-text-muted flex-shrink-0">
@@ -163,23 +160,15 @@ export function SkillsPanel() {
             text-text-tertiary transition-smooth"
           title={t('skills.refresh')}
         >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-            stroke="currentColor" strokeWidth="1.5">
-            <path d="M1 6a5 5 0 019-2M11 6a5 5 0 01-9 2" />
-            <path d="M10 1v3h-3M2 11V8h3" />
-          </svg>
+          <ArrowsClockwise size={12} weight="light" />
         </button>
       </div>
 
-      {/* Search bar — borderless, hover 较深底色 */}
+      {/* Search bar — borderless, darker bg on hover */}
       <div className="px-2 py-1.5">
         <div className="relative">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5"
-            className="absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary">
-            <circle cx="7" cy="7" r="5" />
-            <path d="M11 11l3 3" />
-          </svg>
+          <MagnifyingGlass size={12} weight="light"
+            className="absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary" />
           <input
             ref={searchRef}
             type="text"
@@ -199,10 +188,7 @@ export function SkillsPanel() {
                 p-0.5 rounded text-text-tertiary hover:text-text-primary
                 transition-smooth"
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-                stroke="currentColor" strokeWidth="1.5">
-                <path d="M2 2l6 6M8 2l-6 6" />
-              </svg>
+              <X size={10} weight="light" />
             </button>
           )}
         </div>
@@ -212,17 +198,12 @@ export function SkillsPanel() {
       <div className="flex-1 overflow-y-auto py-1">
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="w-5 h-5 border-2 border-accent/30
-              border-t-accent rounded-full animate-spin" />
+            <SpinnerGap size={20} weight="light" className="animate-spin text-accent" />
           </div>
         ) : filteredSkills.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8
             text-text-tertiary text-xs gap-2">
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none"
-              stroke="currentColor" strokeWidth="1.2"
-              className="text-text-tertiary/40">
-              <path d="M16 4L4 10l12 6 12-6L16 4zM4 22l12 6 12-6M4 16l12 6 12-6" />
-            </svg>
+            <Stack size={32} weight="light" className="text-text-tertiary/40" />
             <p className="text-xs text-text-tertiary leading-relaxed">
               {searchQuery ? 'No matching skills' : t('skills.empty')}
             </p>
@@ -269,12 +250,7 @@ export function SkillsPanel() {
             className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-primary
               hover:bg-bg-secondary transition-smooth text-left"
           >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
-              className="text-text-tertiary flex-shrink-0">
-              <path d="M12 9v4H4V5h4" />
-              <path d="M8 8l6-6M10 2h4v4" />
-            </svg>
+            <ClipboardText size={12} weight="light" className="text-text-tertiary flex-shrink-0" />
             {t('skills.useInInput')}
           </button>
 
@@ -284,11 +260,7 @@ export function SkillsPanel() {
             className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-primary
               hover:bg-bg-secondary transition-smooth text-left"
           >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
-              className="text-text-tertiary flex-shrink-0">
-              <path d="M11.5 1.5l3 3L5 14H2v-3l9.5-9.5z" />
-            </svg>
+            <PencilSimple size={12} weight="light" className="text-text-tertiary flex-shrink-0" />
             {t('skills.edit')}
           </button>
 
@@ -298,12 +270,7 @@ export function SkillsPanel() {
             className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-primary
               hover:bg-bg-secondary transition-smooth text-left"
           >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
-              className="text-text-tertiary flex-shrink-0">
-              <rect x="5" y="5" width="9" height="9" rx="1.5" />
-              <path d="M11 5V3.5A1.5 1.5 0 009.5 2h-6A1.5 1.5 0 002 3.5v6A1.5 1.5 0 003.5 11H5" />
-            </svg>
+            <Copy size={12} weight="light" className="text-text-tertiary flex-shrink-0" />
             {t('skills.duplicate')}
           </button>
 
@@ -313,11 +280,7 @@ export function SkillsPanel() {
             className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-primary
               hover:bg-bg-secondary transition-smooth text-left"
           >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
-              className="text-text-tertiary flex-shrink-0">
-              <path d="M2 4h5l2 2h5v7a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" />
-            </svg>
+            <Folder size={12} weight="light" className="text-text-tertiary flex-shrink-0" />
             {t('skills.revealInFinder')}
           </button>
 
@@ -329,12 +292,7 @@ export function SkillsPanel() {
             className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-error
               hover:bg-error/10 transition-smooth text-left"
           >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5"
-              strokeLinecap="round" strokeLinejoin="round"
-              className="flex-shrink-0">
-              <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" />
-            </svg>
+            <Trash size={12} weight="light" className="flex-shrink-0" />
             {t('skills.delete')}
           </button>
         </div>,
@@ -371,12 +329,9 @@ function SkillGroup({
         className="w-full flex items-center gap-2 px-3 py-1.5
           hover:bg-bg-secondary/50 rounded-lg transition-smooth"
       >
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-          stroke="currentColor" strokeWidth="1.5"
+        <CaretRight size={10} weight="light"
           className={`text-text-tertiary transition-transform
-            ${collapsed ? '' : 'rotate-90'}`}>
-          <path d="M3 1l4 4-4 4" />
-        </svg>
+            ${collapsed ? '' : 'rotate-90'}`} />
         <span className="text-xs font-medium text-text-tertiary uppercase tracking-wider flex-1 text-left">
           {label}
         </span>
@@ -432,12 +387,8 @@ function SkillCard({
     >
       {/* Row 1: Name + scope badge + actions */}
       <div className="flex items-center gap-1.5">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-          stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"
-          className="flex-shrink-0 text-text-tertiary">
-          <path d="M6 1l5 5-5 5-5-5z" />
-        </svg>
-        <span className={`text-[13px] truncate flex-1 ${
+        <Diamond size={12} weight="light" className="flex-shrink-0 text-text-tertiary" />
+        <span className={`text-sm truncate flex-1 ${
           isSelected ? 'text-accent' : 'text-text-primary'
         }`}>
           {skill.name}
@@ -467,11 +418,7 @@ function SkillCard({
           className="flex-shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100
             hover:bg-bg-secondary transition-smooth text-text-tertiary"
         >
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <circle cx="4" cy="8" r="1.5" />
-            <circle cx="8" cy="8" r="1.5" />
-            <circle cx="12" cy="8" r="1.5" />
-          </svg>
+          <DotsThreeOutline size={12} weight="light" />
         </button>
       </div>
 

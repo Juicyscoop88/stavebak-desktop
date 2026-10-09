@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { type ChatMessage, useChatStore } from '../../stores/chatStore';
 import { bridge } from '../../lib/tauri-bridge';
 import { useT } from '../../lib/i18n';
+import { Check } from '@phosphor-icons/react';
 
 /** Decode literal Unicode escape sequences (e.g. `\u2014`) that appear in text. */
 function decodeUnicodeEscapes(text: string): string {
@@ -196,7 +197,7 @@ export function QuestionCard({ message, floating }: Props) {
   }, [isFullyResolved, isSending, awaitingSdkPatch, message.id, message.permissionData, message.toolInput, resolveOwner]);
 
   return (
-    <div className={`${floating ? '' : 'ml-11'} animate-scale-in ${isFullyResolved ? 'opacity-80' : ''}`}>
+    <div className={`${floating ? '' : ''} animate-scale-in ${isFullyResolved ? 'opacity-80' : ''}`}>
       <div className={`rounded-xl border overflow-hidden transition-all duration-200
         ${isFullyResolved
           ? 'border-border-subtle bg-bg-secondary/20'
@@ -233,10 +234,7 @@ export function QuestionCard({ message, floating }: Props) {
         {/* Resolved state — show all answers */}
         {isFullyResolved && Object.keys(answeredMap).length === 0 && (
           <div className="flex items-center gap-1.5 px-3 py-2">
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"
-              stroke="currentColor" strokeWidth="1.5" className="text-success">
-              <path d="M2.5 6l2.5 2.5 4.5-4.5" />
-            </svg>
+            <Check size={10} weight="light" className="text-success" />
             <span className="text-xs text-text-muted">{t('msg.responded')}</span>
           </div>
         )}
@@ -258,7 +256,7 @@ export function QuestionCard({ message, floating }: Props) {
                       }`} />
                   ))}
                 </div>
-                <span className="text-[10px] text-text-tertiary font-mono flex-shrink-0">
+                <span className="text-xs text-text-tertiary font-mono flex-shrink-0">
                   {currentIdx + 1}/{questions.length}
                 </span>
               </div>
@@ -268,7 +266,7 @@ export function QuestionCard({ message, floating }: Props) {
             <div className="flex items-start gap-2 mb-3">
               {currentQ.header && (
                 <span className="flex-shrink-0 px-1.5 py-0.5 rounded
-                  bg-accent/10 text-accent text-[10px] font-bold
+                  bg-accent/10 text-accent text-xs font-bold
                   uppercase tracking-wider mt-px">
                   {decodeUnicodeEscapes(currentQ.header)}
                 </span>
@@ -343,7 +341,7 @@ export function QuestionCard({ message, floating }: Props) {
 
             {/* Error state */}
             {isFailed && message.interactionError && (
-              <div className="mb-2 text-[11px] text-error bg-error/5 rounded-lg px-2.5 py-1.5
+              <div className="mb-2 text-xs text-error bg-error/5 rounded-lg px-2.5 py-1.5
                 border border-error/20">
                 {message.interactionError}
               </div>
@@ -351,10 +349,10 @@ export function QuestionCard({ message, floating }: Props) {
 
             {/* Awaiting-sync hint (Phase 4 §5.3 S3) */}
             {awaitingSdkPatch && showRetryHint && (
-              <div className="mb-2 text-[11px] text-warning bg-warning/5 rounded-lg px-2.5 py-1.5
+              <div className="mb-2 text-xs text-warning bg-warning/5 rounded-lg px-2.5 py-1.5
                 border border-warning/20">
                 {t('msg.questionAwaitingSync')
-                  ?? '权限同步超时：正在等待 CLI 发送 control_request。若长时间未恢复，请打断后重试。'}
+                  ?? 'Permission sync timeout: waiting for CLI control_request. If this persists, interrupt and retry.'}
               </div>
             )}
 

@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, type ReactNode } from 'react';
-import { type ChatMessage } from '../../stores/chatStore';
+import { type ChatMessage, useActiveTab } from '../../stores/chatStore';
 import { useFileStore } from '../../stores/fileStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { classifyPathToken, resolvePathToken } from '../../stores/fileReveal';
@@ -10,8 +10,24 @@ import { CommandProcessingCard } from './CommandProcessingCard';
 import { PlanReviewCard } from './PlanReviewCard';
 import { PermissionCard } from './PermissionCard';
 import { QuestionCard } from './QuestionCard';
-import { AiAvatar } from '../shared/AiAvatar';
-import { UserAvatar } from '../shared/UserAvatar';
+import {
+  ArrowsDownUp,
+  CaretRight,
+  Check,
+  Copy,
+  CheckSquare,
+  Cube,
+  File,
+  FileArrowUp,
+  FileText,
+  Globe,
+  MagnifyingGlass,
+  PencilSimple,
+  PlusCircle,
+  Square,
+  Terminal,
+  WarningCircle,
+} from '@phosphor-icons/react';
 
 interface Props {
   message: ChatMessage;
@@ -70,7 +86,7 @@ function renderCodeSegment(inner: string, key: number): ReactNode {
         key={key}
         onClick={(e) => {
           e.stopPropagation();
-          // 纯定位：右侧文件区展开到该路径并高亮（不读内容、不预览）
+          // Navigate: expand the file tree to this path and highlight it (no preview)
           useSettingsStore.getState().setSecondaryTab('files');
           useFileStore.getState().revealPath(resolved);
         }}
@@ -82,13 +98,13 @@ function renderCodeSegment(inner: string, key: number): ReactNode {
           align-baseline leading-normal whitespace-nowrap inline-block"
         title={resolved}
       >
-        <span className="text-[10px] leading-none">{kind === 'folder' ? '📁' : '📄'}</span>
+        <span className="text-xs leading-none">{kind === 'folder' ? '📁' : '📄'}</span>
         <span className="max-w-[240px] truncate">{inner}</span>
       </button>
     );
   }
   return (
-    <code key={key} className="px-1.5 py-0.5 mx-0.5 rounded-md text-[13px]
+    <code key={key} className="px-1.5 py-0.5 mx-0.5 rounded-md text-sm
       bg-white/15 border border-white/20 font-mono">
       {inner}
     </code>
@@ -138,21 +154,22 @@ function UserMsg({ message }: Props) {
   }, [content]);
 
   return (
-    <div className="flex justify-end gap-3 group/user relative">
+    <div className="flex justify-end group/user relative">
       {/* Copy button — visible on hover */}
       <button
         onClick={handleCopy}
-        className="absolute -top-2 right-1 z-10 opacity-0 group-hover/user:opacity-100
-          px-1.5 py-0.5 rounded-md text-[10px] font-medium
-          bg-bg-tertiary/80 text-text-muted hover:text-text-primary
-          hover:bg-bg-tertiary border border-border-subtle
+        className="absolute -top-3 right-0 z-10 opacity-0 group-hover/user:opacity-100
+          w-7 h-7 rounded-full flex items-center justify-center
+          bg-bg-card text-text-muted hover:text-text-primary
+          border border-border-subtle shadow-sm
           transition-smooth cursor-pointer"
+        title={copied ? t('msg.copied') : t('msg.copyText')}
       >
-        {copied ? t('msg.copied') : t('msg.copyText')}
+        {copied ? <Check size={13} weight="bold" /> : <Copy size={13} weight="regular" />}
       </button>
-      <div className="max-w-[75%] px-3.5 py-2.5 rounded-2xl rounded-br-md
-        bg-bg-user-msg text-text-inverse
-        text-sm leading-relaxed shadow-md whitespace-pre-wrap">
+      <div className="max-w-[75%] px-5 py-3 rounded-full
+        user-bubble text-text-inverse border border-white/[0.08]
+        text-sm leading-normal whitespace-pre-wrap">
         {renderUserContent(displayContent)}
         {!expanded && isLong && (
           <span className="text-white/60">…</span>
@@ -163,7 +180,7 @@ function UserMsg({ message }: Props) {
             className="block mt-1.5 text-xs text-white/60 hover:text-white/90
               transition-smooth"
           >
-            {expanded ? '▲ 收起' : '▼ 展开全部'}
+            {expanded ? '▲ Collapse' : '▼ Expand all'}
           </button>
         )}
         {attachments && attachments.length > 0 && (
@@ -186,13 +203,9 @@ function UserMsg({ message }: Props) {
                   <img src={att.preview} alt="" className="w-8 h-8 rounded object-cover" />
                 ) : (
                   <span className="flex items-center justify-center w-8 h-8 rounded
-                    bg-white/10 text-[10px] font-mono font-semibold uppercase opacity-80">
+                    bg-white/10 text-xs font-mono font-semibold uppercase opacity-80">
                     {getFileExt(att.name) || (
-                      <svg width="14" height="14" viewBox="0 0 12 12" fill="none"
-                        stroke="currentColor" strokeWidth="1.2">
-                        <path d="M7 1H3a1 1 0 00-1 1v8a1 1 0 001 1h6a1 1 0 001-1V4L7 1z" />
-                        <path d="M7 1v3h3" />
-                      </svg>
+                      <File size={14} weight="light" />
                     )}
                   </span>
                 )}
@@ -202,7 +215,6 @@ function UserMsg({ message }: Props) {
           </div>
         )}
       </div>
-      <UserAvatar size="w-8 h-8 text-xs" className="mt-0.5" />
     </div>
   );
 }
@@ -241,11 +253,8 @@ function CommandFeedbackMsg({ message }: Props) {
     return (
       <div className="flex justify-center my-2 animate-fade-in">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full
-          border border-border-subtle text-text-tertiary text-[11px]">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0 opacity-60">
-            <path d="M4 6l4-4 4 4M4 10l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          border border-border-subtle text-text-tertiary text-xs">
+          <ArrowsDownUp size={11} weight="light" className="flex-shrink-0 opacity-60" />
           {safeContent(message.content)}
         </div>
       </div>
@@ -259,14 +268,14 @@ function CommandFeedbackMsg({ message }: Props) {
     // Preformatted output (e.g. CLI command results)
     if (data.preformatted) {
       return (
-        <div className="ml-11 my-1 animate-fade-in">
+        <div className="my-1 animate-fade-in">
           <div className="rounded-lg border border-border-subtle
             bg-bg-secondary/50 overflow-hidden max-w-md">
             <div className="flex items-center gap-2 px-3 py-1.5
               border-b border-border-subtle/50 bg-bg-tertiary/30">
-              <span className="text-[10px] font-mono text-text-tertiary">{data.command}</span>
+              <span className="text-xs font-mono text-text-tertiary">{data.command}</span>
             </div>
-            <pre className="px-3 py-2 text-[11px] font-mono text-text-primary
+            <pre className="px-3 py-2 text-xs font-mono text-text-primary
               whitespace-pre-wrap break-words overflow-x-auto max-h-60 overflow-y-auto">
               {safeContent(message.content)}
             </pre>
@@ -276,7 +285,7 @@ function CommandFeedbackMsg({ message }: Props) {
     }
 
     return (
-      <div className="ml-11 my-1 animate-fade-in">
+      <div className="my-1 animate-fade-in">
         <div className="inline-block rounded-lg border border-border-subtle
           bg-bg-secondary/50 overflow-hidden max-w-xs">
           {/* Header */}
@@ -291,8 +300,8 @@ function CommandFeedbackMsg({ message }: Props) {
             <div className="divide-y divide-border-subtle/30">
               {rows.map((row, i) => (
                 <div key={i} className="flex items-center justify-between gap-4 px-3 py-1.5">
-                  <span className="text-[11px] text-text-tertiary">{row.label}</span>
-                  <span className={`text-[11px] font-mono font-medium
+                  <span className="text-xs text-text-tertiary">{row.label}</span>
+                  <span className={`text-xs font-mono font-medium
                     ${row.value === '—' ? 'text-text-tertiary/50' : 'text-text-primary'}`}>
                     {row.value}
                   </span>
@@ -300,14 +309,14 @@ function CommandFeedbackMsg({ message }: Props) {
               ))}
             </div>
           ) : (
-            <div className="px-3 py-2 text-[11px] text-text-tertiary italic">
+            <div className="px-3 py-2 text-xs text-text-tertiary italic">
               {t('cmd.noSessionData')}
             </div>
           )}
           {/* Hint */}
           {data.hint && (
             <div className="px-3 py-1.5 border-t border-border-subtle/50
-              text-[10px] text-text-tertiary/70">
+              text-xs text-text-tertiary/70">
               {data.hint}
             </div>
           )}
@@ -320,7 +329,7 @@ function CommandFeedbackMsg({ message }: Props) {
   if (cType === 'help') {
     const builtins: Array<{ name: string; desc: string }> = data.builtins || [];
     return (
-      <div className="ml-11 my-1 animate-fade-in">
+      <div className="my-1 animate-fade-in">
         <div className="rounded-lg border border-border-subtle
           bg-bg-secondary/50 overflow-hidden max-w-md">
           {/* Header */}
@@ -336,10 +345,10 @@ function CommandFeedbackMsg({ message }: Props) {
             {builtins.map((cmd, i) => (
               <div key={i} className="flex items-baseline gap-2 px-1.5 py-0.5
                 rounded hover:bg-bg-tertiary/40 transition-colors">
-                <code className="text-[11px] font-mono text-accent font-medium w-20 flex-shrink-0">
+                <code className="text-xs font-mono text-accent font-medium w-20 flex-shrink-0">
                   {cmd.name}
                 </code>
-                <span className="text-[11px] text-text-muted truncate">
+                <span className="text-xs text-text-muted truncate">
                   {cmd.desc}
                 </span>
               </div>
@@ -347,7 +356,7 @@ function CommandFeedbackMsg({ message }: Props) {
           </div>
           {/* Footer stats */}
           <div className="flex items-center gap-3 px-3 py-1.5
-            border-t border-border-subtle/50 text-[10px] text-text-tertiary">
+            border-t border-border-subtle/50 text-xs text-text-tertiary">
             <span>{t('cmd.helpCustom')}: {data.customCount ?? 0}</span>
             <span>•</span>
             <span>{t('cmd.helpSkills')}: {data.skillCount ?? 0}</span>
@@ -362,7 +371,7 @@ function CommandFeedbackMsg({ message }: Props) {
     return (
       <div className="flex justify-center my-1.5 animate-fade-in">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg
-          bg-bg-secondary/60 border border-border-subtle text-[11px] text-text-muted">
+          bg-bg-secondary/60 border border-border-subtle text-xs text-text-muted">
           {data.loading ? (
             <span className="w-3 h-3 border-2 border-accent/30 border-t-accent
               rounded-full animate-spin" />
@@ -380,12 +389,8 @@ function CommandFeedbackMsg({ message }: Props) {
     return (
       <div className="flex justify-center my-1.5 animate-fade-in">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg
-          bg-red-500/5 border border-red-500/20 text-[11px] text-red-400">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-            stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0">
-            <circle cx="6" cy="6" r="5" />
-            <path d="M6 4v2.5M6 8v.5" />
-          </svg>
+          bg-red-500/5 border border-red-500/20 text-xs text-red-400">
+          <WarningCircle size={12} weight="light" className="flex-shrink-0" />
           <span>{safeContent(message.content)}</span>
         </div>
       </div>
@@ -395,7 +400,7 @@ function CommandFeedbackMsg({ message }: Props) {
   // Fallback: render as plain text
   return (
     <div className="flex justify-center my-1 animate-fade-in">
-      <span className="text-[11px] text-text-tertiary">{safeContent(message.content)}</span>
+      <span className="text-xs text-text-tertiary">{safeContent(message.content)}</span>
     </div>
   );
 }
@@ -403,20 +408,12 @@ function CommandFeedbackMsg({ message }: Props) {
 /* ================================================================
    AssistantMsg — markdown with avatar (uses shared MarkdownRenderer)
    ================================================================ */
-function AssistantMsg({ message, isFirstInGroup = true }: Props) {
+function AssistantMsg({ message }: Props) {
   return (
-    <div className="flex gap-3">
-      {/* Avatar: show only for the first message in a consecutive group */}
-      {isFirstInGroup ? (
-        <AiAvatar size="w-8 h-8" className="mt-0.5" />
-      ) : (
-        <div className="w-8 flex-shrink-0" />
-      )}
-      <div className="flex-1 min-w-0 text-base text-text-primary leading-relaxed">
+    <div>
+      <div className="text-base text-text-primary leading-relaxed">
         <MarkdownRenderer content={safeContent(message.content)} />
       </div>
-      {/* Right gutter mirrors the avatar so assistant text aligns with the user bubble's right edge */}
-      <div className="w-8 flex-shrink-0" />
     </div>
   );
 }
@@ -465,77 +462,28 @@ function shortPath(filePath: string): string {
   return parts.length > 2 ? parts.slice(-2).join('/') : parts[parts.length - 1] || filePath;
 }
 
-/** Tool icon mini SVG */
+/** Tool icon using Phosphor icons */
 function ToolIcon({ name }: { name: string }) {
   switch (name) {
     case 'Bash':
-      return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-          stroke="currentColor" strokeWidth="1.2" className="text-text-tertiary flex-shrink-0">
-          <rect x="1" y="2" width="10" height="8" rx="1.5" />
-          <path d="M3.5 5.5L5 7l-1.5 1.5M6.5 8.5h2" />
-        </svg>
-      );
+      return <Terminal size={12} weight="light" className="text-text-tertiary flex-shrink-0" />;
     case 'Read':
-      return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-          stroke="currentColor" strokeWidth="1.2" className="text-text-tertiary flex-shrink-0">
-          <path d="M7 1H3a1 1 0 00-1 1v8a1 1 0 001 1h6a1 1 0 001-1V4L7 1z" />
-          <path d="M7 1v3h3M4 6.5h4M4 8.5h2" />
-        </svg>
-      );
+      return <FileText size={12} weight="light" className="text-text-tertiary flex-shrink-0" />;
     case 'Write':
-      return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-          stroke="currentColor" strokeWidth="1.2" className="text-accent/70 flex-shrink-0">
-          <path d="M7 1H3a1 1 0 00-1 1v8a1 1 0 001 1h6a1 1 0 001-1V4L7 1z" />
-          <path d="M7 1v3h3" />
-          <path d="M5 7l1.5-1.5L8 7M6.5 5.5v4" strokeLinecap="round" />
-        </svg>
-      );
+      return <FileArrowUp size={12} weight="light" className="text-accent/70 flex-shrink-0" />;
     case 'Edit':
-      return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-          stroke="currentColor" strokeWidth="1.2" className="text-accent/70 flex-shrink-0">
-          <path d="M8.5 1.5l2 2-6.5 6.5H2V8L8.5 1.5z" />
-          <path d="M7 3l2 2" />
-        </svg>
-      );
+      return <PencilSimple size={12} weight="light" className="text-accent/70 flex-shrink-0" />;
     case 'Glob':
     case 'Grep':
-      return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-          stroke="currentColor" strokeWidth="1.2" className="text-text-tertiary flex-shrink-0">
-          <circle cx="5.5" cy="5.5" r="3" />
-          <path d="M8 8l2.5 2.5" />
-        </svg>
-      );
+      return <MagnifyingGlass size={12} weight="light" className="text-text-tertiary flex-shrink-0" />;
     case 'Task':
     case 'Agent':
-      return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-          stroke="currentColor" strokeWidth="1.2" className="text-text-tertiary flex-shrink-0">
-          <circle cx="6" cy="6" r="4.5" />
-          <path d="M6 3.5v5M3.5 6h5" />
-        </svg>
-      );
+      return <PlusCircle size={12} weight="light" className="text-text-tertiary flex-shrink-0" />;
     case 'WebFetch':
     case 'WebSearch':
-      return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-          stroke="currentColor" strokeWidth="1.2" className="text-text-tertiary flex-shrink-0">
-          <circle cx="6" cy="6" r="4.5" />
-          <path d="M1.5 6h9M6 1.5c-1.5 1.5-2 3-2 4.5s.5 3 2 4.5M6 1.5c1.5 1.5 2 3 2 4.5s-.5 3-2 4.5" />
-        </svg>
-      );
+      return <Globe size={12} weight="light" className="text-text-tertiary flex-shrink-0" />;
     default:
-      return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-          stroke="currentColor" strokeWidth="1.2" className="text-text-tertiary flex-shrink-0">
-          <rect x="2" y="2" width="8" height="8" rx="1.5" />
-          <path d="M4.5 5l1.5 1.5L7.5 5" />
-        </svg>
-      );
+      return <Cube size={12} weight="light" className="text-text-tertiary flex-shrink-0" />;
   }
 }
 
@@ -570,7 +518,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
   const renderPreview = () => {
     if (toolName === 'Bash' && input?.command) {
       return (
-        <span className="text-[11px] text-text-tertiary truncate
+        <span className="text-xs text-text-tertiary truncate
           font-mono max-w-[350px] bg-bg-secondary/60 px-1.5 py-0.5 rounded">
           {input.command.length > 80 ? input.command.slice(0, 80) + '…' : input.command}
         </span>
@@ -585,7 +533,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
               e.stopPropagation();
               useFileStore.getState().selectFile(input.file_path);
             }}
-            className="text-[11px] text-accent/70 hover:text-accent font-mono
+            className="text-xs text-accent/70 hover:text-accent font-mono
               truncate max-w-[280px] hover:underline cursor-pointer transition-smooth"
             title={input.file_path}
           >
@@ -594,13 +542,13 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
           {/* Diff stats for Edit */}
           {editDiff && (
             <span className="inline-flex items-center gap-1 ml-0.5">
-              <span className="text-[10px] font-mono text-success">+{editDiff.added}</span>
-              <span className="text-[10px] font-mono text-error">-{editDiff.removed}</span>
+              <span className="text-xs font-mono text-success">+{editDiff.added}</span>
+              <span className="text-xs font-mono text-error">-{editDiff.removed}</span>
             </span>
           )}
           {/* Line count for Write */}
           {writeLines !== null && (
-            <span className="text-[10px] font-mono text-success ml-0.5">
+            <span className="text-xs font-mono text-success ml-0.5">
               +{writeLines} lines
             </span>
           )}
@@ -610,7 +558,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
 
     if ((toolName === 'Glob' || toolName === 'Grep') && input?.pattern) {
       return (
-        <span className="text-[11px] text-text-tertiary truncate
+        <span className="text-xs text-text-tertiary truncate
           font-mono max-w-[300px]">
           {input.pattern}
         </span>
@@ -619,7 +567,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
 
     if ((toolName === 'Task' || toolName === 'Agent') && input?.description) {
       return (
-        <span className="text-[11px] text-text-tertiary truncate max-w-[300px] italic">
+        <span className="text-xs text-text-tertiary truncate max-w-[300px] italic">
           {input.description}
         </span>
       );
@@ -627,7 +575,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
 
     if (toolName === 'TeamCreate' && (input?.team_name || input?.name)) {
       return (
-        <span className="text-[11px] text-text-tertiary truncate max-w-[300px] italic">
+        <span className="text-xs text-text-tertiary truncate max-w-[300px] italic">
           Team: {input.team_name || input.name}
         </span>
       );
@@ -635,7 +583,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
 
     if (toolName === 'TaskCreate' && (input?.subject || input?.description)) {
       return (
-        <span className="text-[11px] text-text-tertiary truncate max-w-[300px] italic">
+        <span className="text-xs text-text-tertiary truncate max-w-[300px] italic">
           {input.subject || input.description}
         </span>
       );
@@ -643,7 +591,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
 
     if (toolName === 'SendMessage' && input?.recipient) {
       return (
-        <span className="text-[11px] text-text-tertiary truncate max-w-[300px] italic">
+        <span className="text-xs text-text-tertiary truncate max-w-[300px] italic">
           &rarr; {input.recipient}
         </span>
       );
@@ -652,7 +600,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
     if ((toolName === 'WebFetch' || toolName === 'WebSearch') && (input?.url || input?.query)) {
       const display = input.url || input.query;
       return (
-        <span className="text-[11px] text-accent/70 truncate max-w-[300px] font-mono">
+        <span className="text-xs text-accent/70 truncate max-w-[300px] font-mono">
           {display}
         </span>
       );
@@ -688,7 +636,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
           <div>
             {oldLines.map((line: string, i: number) => (
               <div key={`old-${i}`}
-                className="flex items-start gap-0 text-[11px] font-mono leading-relaxed
+                className="flex items-start gap-0 text-xs font-mono leading-relaxed
                   bg-red-500/8 dark:bg-red-500/10">
                 <span className="flex-shrink-0 w-8 text-right pr-2 text-red-400/60
                   select-none border-r border-red-500/10">
@@ -706,7 +654,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
           <div>
             {newLines.map((line: string, i: number) => (
               <div key={`new-${i}`}
-                className="flex items-start gap-0 text-[11px] font-mono leading-relaxed
+                className="flex items-start gap-0 text-xs font-mono leading-relaxed
                   bg-blue-500/8 dark:bg-blue-500/10">
                 <span className="flex-shrink-0 w-8 text-right pr-2 text-blue-400/60
                   select-none border-r border-blue-500/10">
@@ -722,7 +670,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
         {/* File path */}
         {input.file_path && (
           <div className="px-2 py-1 border-t border-border-subtle/50
-            text-[10px] text-text-tertiary font-mono truncate">
+            text-xs text-text-tertiary font-mono truncate">
             {input.file_path}
           </div>
         )}
@@ -743,7 +691,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
         max-h-48 overflow-y-auto">
         {displayLines.map((line: string, i: number) => (
           <div key={i}
-            className="flex items-start gap-0 text-[11px] font-mono leading-relaxed
+            className="flex items-start gap-0 text-xs font-mono leading-relaxed
               bg-blue-500/8 dark:bg-blue-500/10">
             <span className="flex-shrink-0 w-8 text-right pr-2 text-blue-400/60
               select-none border-r border-blue-500/10">
@@ -755,14 +703,14 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
           </div>
         ))}
         {remaining > 0 && (
-          <div className="px-2 py-1 text-[10px] text-text-tertiary font-mono
+          <div className="px-2 py-1 text-xs text-text-tertiary font-mono
             bg-blue-500/5 border-t border-blue-500/10">
             ... +{remaining} more lines
           </div>
         )}
         {input.file_path && (
           <div className="px-2 py-1 border-t border-border-subtle/50
-            text-[10px] text-text-tertiary font-mono truncate">
+            text-xs text-text-tertiary font-mono truncate">
             {input.file_path}
           </div>
         )}
@@ -778,8 +726,8 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
       if (toolName === 'Bash' && input?.command) {
         sections.push(
           <div key="cmd" className="flex items-start gap-1.5">
-            <span className="text-text-tertiary/60 text-[11px] font-mono select-none">$</span>
-            <pre className="text-[11px] text-text-muted font-mono whitespace-pre-wrap break-all">
+            <span className="text-text-tertiary/60 text-xs font-mono select-none">$</span>
+            <pre className="text-xs text-text-muted font-mono whitespace-pre-wrap break-all">
               {input.command}
             </pre>
           </div>
@@ -792,7 +740,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
         if (writeDiffView) sections.push(writeDiffView);
       } else {
         sections.push(
-          <pre key="input" className="text-[11px] text-text-tertiary
+          <pre key="input" className="text-xs text-text-tertiary
             overflow-x-auto font-mono leading-relaxed
             max-h-32 overflow-y-auto whitespace-pre-wrap">
             {typeof input === 'string' ? input : JSON.stringify(input, null, 2)}
@@ -810,7 +758,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
         );
       }
       sections.push(
-        <pre key="result" className="text-[11px] text-text-tertiary
+        <pre key="result" className="text-xs text-text-tertiary
           overflow-x-auto font-mono leading-relaxed
           max-h-48 overflow-y-auto whitespace-pre-wrap">
           {resultContent}
@@ -826,19 +774,16 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
   const depth = message.subAgentDepth ?? 0;
 
   return (
-    <div className={depth > 0 ? 'ml-16 mr-11 pl-3 border-l-2 border-accent/15' : 'ml-11 mr-11'}>
+    <div className={depth > 0 ? 'ml-4 mr-0 pl-3 border-l-2 border-accent/15' : 'mr-0'}>
       <button
         onClick={() => canExpand && setExpanded(!expanded)}
         className={`flex items-center gap-1.5 py-1 text-left group
           ${canExpand ? 'cursor-pointer' : 'cursor-default'}`}
       >
         {canExpand ? (
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-            stroke="currentColor" strokeWidth="1.5"
+          <CaretRight size={10} weight="light"
             className={`flex-shrink-0 text-text-tertiary transition-transform
-              duration-150 ${expanded ? 'rotate-90' : ''}`}>
-            <path d="M3 2l4 3-4 3" />
-          </svg>
+              duration-150 ${expanded ? 'rotate-90' : ''}`} />
         ) : (
           <span className="w-[10px] flex-shrink-0" />
         )}
@@ -861,10 +806,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
         )}
         {/* Show a small result indicator when collapsed with result */}
         {!expanded && isCompleted && (
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none"
-            stroke="currentColor" strokeWidth="1.5" className="text-success flex-shrink-0 ml-0.5">
-            <path d="M2.5 6l2.5 2.5 4.5-4.5" />
-          </svg>
+          <Check size={10} weight="light" className="text-success flex-shrink-0 ml-0.5" />
         )}
       </button>
       {expanded && (
@@ -891,30 +833,24 @@ function ToolResultMsg({ message }: Props) {
     : '';
 
   return (
-    <div className={depth > 0 ? 'ml-16 mr-11 pl-3 border-l-2 border-accent/15' : 'ml-11 mr-11'}>
+    <div className={depth > 0 ? 'ml-4 mr-0 pl-3 border-l-2 border-accent/15' : 'mr-0'}>
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-1.5 py-0.5 cursor-pointer group"
       >
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-          stroke="currentColor" strokeWidth="1.5"
+        <CaretRight size={10} weight="light"
           className={`flex-shrink-0 text-text-tertiary transition-transform
-            duration-150 ${expanded ? 'rotate-90' : ''}`}>
-          <path d="M3 2l4 3-4 3" />
-        </svg>
-        <svg width="10" height="10" viewBox="0 0 12 12" fill="none"
-          stroke="currentColor" strokeWidth="1.5" className="text-success flex-shrink-0">
-          <path d="M2.5 6l2.5 2.5 4.5-4.5" />
-        </svg>
-        <span className="text-[11px] text-text-tertiary">{t('msg.result')}</span>
+            duration-150 ${expanded ? 'rotate-90' : ''}`} />
+        <Check size={10} weight="light" className="text-success flex-shrink-0" />
+        <span className="text-xs text-text-tertiary">{t('msg.result')}</span>
         {!expanded && preview && (
-          <span className="text-[11px] text-text-tertiary/60 font-mono truncate max-w-[300px]">
+          <span className="text-xs text-text-tertiary/60 font-mono truncate max-w-[300px]">
             {preview}
           </span>
         )}
       </button>
       {expanded && content && (
-        <pre className="ml-5 mt-0.5 text-[11px] text-text-tertiary
+        <pre className="ml-5 mt-0.5 text-xs text-text-tertiary
           overflow-x-auto font-mono leading-relaxed
           max-h-48 overflow-y-auto whitespace-pre-wrap">
           {content}
@@ -929,19 +865,26 @@ function ToolResultMsg({ message }: Props) {
    ================================================================ */
 function ThinkingMsg({ message }: Props) {
   const t = useT();
+  const durationSec = useActiveTab((tab) => {
+    const idx = tab.messages.findIndex((m) => m.id === message.id);
+    if (idx < 0) return undefined;
+    const next = tab.messages[idx + 1];
+    if (!next) return undefined;
+    return Math.max(1, Math.round((next.timestamp - message.timestamp) / 1000));
+  });
+  const label = durationSec != null
+    ? t('msg.thoughtFor').replace('{seconds}', String(durationSec))
+    : t('msg.thinking');
   return (
-    <div className="ml-11 mr-11">
+    <div className="mr-0">
       <details className="group">
         <summary className="flex items-center gap-1.5 py-1
-          cursor-pointer text-[11px] text-text-tertiary list-none select-none">
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-            stroke="currentColor" strokeWidth="1.5"
-            className="transition-transform duration-150 group-open:rotate-90">
-            <path d="M3 2l4 3-4 3" />
-          </svg>
-          {t('msg.thinking')}
+          cursor-pointer text-xs text-text-tertiary list-none select-none">
+          <CaretRight size={10} weight="light"
+            className="transition-transform duration-150 group-open:rotate-90" />
+          {label}
         </summary>
-        <pre className="ml-5 mt-0.5 text-[11px] text-text-tertiary
+        <pre className="ml-5 mt-0.5 text-xs text-text-tertiary
           whitespace-pre-wrap max-h-48 overflow-y-auto
           font-mono leading-relaxed">
           {safeContent(message.content)}
@@ -962,28 +905,25 @@ function PlanMsg({ message }: Props) {
   const items = message.planItems || (typeof message.content === 'string' ? message.content.split('\n').filter(Boolean) : []);
 
   return (
-    <div className="ml-11 mr-11">
+    <div className="mr-0">
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-1.5 py-1 cursor-pointer"
       >
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-          stroke="currentColor" strokeWidth="1.5"
+        <CaretRight size={10} weight="light"
           className={`flex-shrink-0 text-text-tertiary transition-transform
-            duration-150 ${expanded ? 'rotate-90' : ''}`}>
-          <path d="M3 2l4 3-4 3" />
-        </svg>
+            duration-150 ${expanded ? 'rotate-90' : ''}`} />
         <span className="text-xs font-medium text-text-muted">
           {t('msg.planTitle')}
         </span>
-        <span className="text-[11px] text-text-tertiary">
+        <span className="text-xs text-text-tertiary">
           ({items.length} {t('msg.planSteps')})
         </span>
       </button>
       {expanded && (
         <div className="ml-5 mt-0.5 space-y-0.5">
           {items.map((item, i) => (
-            <div key={i} className="flex items-start gap-2 text-[11px] text-text-muted">
+            <div key={i} className="flex items-start gap-2 text-xs text-text-muted">
               <span className="flex-shrink-0 text-text-tertiary font-mono w-4 text-right">
                 {i + 1}.
               </span>
@@ -1009,24 +949,21 @@ function TodoMsg({ message }: Props) {
   const inProgressItem = items.find((i) => i.status === 'in_progress');
 
   return (
-    <div className="ml-11 mr-11">
+    <div className="mr-0">
       {/* Header — collapsible */}
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-1.5 py-1 cursor-pointer text-left"
       >
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-          stroke="currentColor" strokeWidth="1.5"
+        <CaretRight size={10} weight="light"
           className={`flex-shrink-0 text-text-tertiary transition-transform
-            duration-150 ${expanded ? 'rotate-90' : ''}`}>
-          <path d="M3 2l4 3-4 3" />
-        </svg>
+            duration-150 ${expanded ? 'rotate-90' : ''}`} />
         <span className="text-xs font-bold text-text-primary">{t('msg.todo')}</span>
-        <span className="text-[10px] text-text-tertiary">
+        <span className="text-xs text-text-tertiary">
           {completedCount}/{items.length}
         </span>
         {inProgressItem && (
-          <span className="text-[10px] text-accent italic ml-1 truncate max-w-[200px]">
+          <span className="text-xs text-accent italic ml-1 truncate max-w-[200px]">
             {inProgressItem.activeForm || inProgressItem.content}
           </span>
         )}
@@ -1059,28 +996,16 @@ function TodoMsg({ message }: Props) {
                 {/* Status icon + text */}
                 <div className="flex items-center gap-1.5 py-0.5 min-h-[20px]">
                   {item.status === 'completed' ? (
-                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"
-                      className="flex-shrink-0">
-                      <rect x="0.5" y="0.5" width="11" height="11" rx="2"
-                        fill="var(--color-success)" fillOpacity="0.15"
-                        stroke="var(--color-success)" strokeWidth="1" />
-                      <path d="M3 6l2 2 4-4" stroke="var(--color-success)"
-                        strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                    </svg>
+                    <CheckSquare size={11} weight="fill" className="flex-shrink-0 text-success" />
                   ) : item.status === 'in_progress' ? (
                     <span className="w-[11px] h-[11px] flex items-center justify-center flex-shrink-0">
                       <span className="w-2.5 h-2.5 rounded-full border-2 border-accent
                         bg-accent/20 animate-pulse-soft" />
                     </span>
                   ) : (
-                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"
-                      className="flex-shrink-0">
-                      <rect x="0.5" y="0.5" width="11" height="11" rx="2"
-                        fill="none" stroke="var(--color-text-tertiary)" strokeWidth="1"
-                        strokeOpacity="0.4" />
-                    </svg>
+                    <Square size={11} weight="light" className="flex-shrink-0 text-text-tertiary/40" />
                   )}
-                  <span className={`text-[11px] leading-tight
+                  <span className={`text-xs leading-tight
                     ${item.status === 'completed'
                       ? 'text-text-tertiary line-through'
                       : item.status === 'in_progress'

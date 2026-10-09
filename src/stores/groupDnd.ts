@@ -1,13 +1,16 @@
 /**
- * 组间拖拽落点 → 拖拽后「完整的有序组 id 列表」（整体喂给 groupStore.reorderGroups）。
+ * Group drag-end handler: produces the complete ordered group-id list
+ * (fed to groupStore.reorderGroups).
  *
- * 纯函数：dnd-kit 的 onDragEnd 给出 active / over 的 id，这里用 arrayMove 语义算出
- * 完整新顺序。抽成纯函数是为了能在 node 环境直接单测，避开在 jsdom 里模拟 pointer
- * 拖拽的已知困难（见 ADR-0002）。reorderGroups 要的就是完整有序列表（mp-review 约束）。
+ * Pure function: dnd-kit's onDragEnd gives active/over ids; this uses
+ * arrayMove semantics to compute the new order. Extracted as a pure
+ * function so it can be unit-tested in Node without simulating pointer
+ * drag in jsdom (see ADR-0002). reorderGroups expects the full ordered
+ * list (mp-review constraint).
  *
- * - active === over：没移动，原样返回。
- * - active / over 任一不在列表里：无效落点，原样返回。
- * - 始终返回新数组，不改动入参。
+ * - active === over: no movement, return as-is.
+ * - active/over not in list: invalid drop target, return as-is.
+ * - Always returns a new array; never mutates the input.
  */
 export function reorderByDragEnd(
   orderedIds: string[],

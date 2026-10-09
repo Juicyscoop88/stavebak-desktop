@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-// run-tests.mjs — Mechanical test runner for TOKENICODE GUI
-// Reads test definitions from JSON, executes them serially via tokenicode-cli.mjs,
+// run-tests.mjs — Mechanical test runner for Stavebak GUI
+// Reads test definitions from JSON, executes them serially via stavebak-cli.mjs,
 // records everything, outputs structured report.
 // Zero external dependencies — Node.js built-in modules only.
 
@@ -13,18 +13,18 @@ import { fileURLToPath } from 'node:url';
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CLI_PATH = resolve(__dirname, 'tokenicode-cli.mjs');
+const CLI_PATH = resolve(__dirname, 'stavebak-cli.mjs');
 const DEFAULT_STEP_TIMEOUT = 30_000;  // 30s per step
 const DEFAULT_TEST_TIMEOUT = 120_000; // 2 min per test
 const MAX_CONSECUTIVE_FAILURES = 3;   // trigger restart after this many
-const REPORT_DIR = process.env.TOKENICODE_REPORT_DIR || '/tmp';
+const REPORT_DIR = process.env.Stavebak_REPORT_DIR || '/tmp';
 const DETAIL_LEVELS = { minimal: 0, standard: 1, full: 2 };
 
 // ─── CLI Bridge ──────────────────────────────────────────────────────────────
 
 /**
  * Execute a single CLI command. Returns the parsed JSON output.
- * This is the ONLY interface to TOKENICODE — pure process spawn, no socket.
+ * This is the ONLY interface to Stavebak — pure process spawn, no socket.
  */
 function cli(cmd, args = [], flags = {}, timeout = DEFAULT_STEP_TIMEOUT) {
   const argv = [CLI_PATH, cmd, ...args];
@@ -524,10 +524,10 @@ function main() {
 
   config._testFile = config.testFile;
 
-  // Pre-flight: check if TOKENICODE is running
+  // Pre-flight: check if Stavebak is running
   const pingResult = cli('ping');
   if (!pingResult.ok) {
-    process.stderr.write(`TOKENICODE is not running. Start with: pnpm tauri dev\n`);
+    process.stderr.write(`Stavebak is not running. Start with: pnpm tauri dev\n`);
     process.stderr.write(`Ping result: ${JSON.stringify(pingResult)}\n`);
     process.exit(1);
   }
@@ -609,7 +609,7 @@ function main() {
 
   // Determine report path
   const timestamp = startTime.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const reportPath = config.reportPath || resolve(REPORT_DIR, `tokenicode-test-report-${timestamp}.json`);
+  const reportPath = config.reportPath || resolve(REPORT_DIR, `stavebak-test-report-${timestamp}.json`);
 
   let reportWritten = false;
   let reportWriteError = null;

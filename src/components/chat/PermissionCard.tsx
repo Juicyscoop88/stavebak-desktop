@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { type ChatMessage, useChatStore } from '../../stores/chatStore';
 import { bridge } from '../../lib/tauri-bridge';
 import { useT } from '../../lib/i18n';
+import { Check, SpinnerGap, Warning } from '@phosphor-icons/react';
 
 interface Props {
   message: ChatMessage;
@@ -100,17 +101,17 @@ export function PermissionCard({ message }: Props) {
   // Expose permission respond handler for test harness (dev only)
   useEffect(() => {
     if (import.meta.env.DEV && isPending) {
-      (window as any).__tokenicode_respond_permission = handleRespond;
+      (window as any).__stavebak_respond_permission = handleRespond;
     }
     return () => {
       if (import.meta.env.DEV) {
-        delete (window as any).__tokenicode_respond_permission;
+        delete (window as any).__stavebak_respond_permission;
       }
     };
   }, [handleRespond, isPending]);
 
   return (
-    <div className={`ml-11 animate-scale-in ${isResolved ? 'opacity-60' : ''}`}
+    <div className={`animate-scale-in ${isResolved ? 'opacity-60' : ''}`}
       {...(import.meta.env.DEV && { 'data-testid': 'permission-card' })}>
       <div className={`rounded-xl border overflow-hidden transition-all duration-200
         ${isResolved
@@ -121,25 +122,21 @@ export function PermissionCard({ message }: Props) {
         }`}>
         {/* Header row */}
         <div className="flex items-start gap-2.5 px-3 py-2.5">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
-            stroke="currentColor" strokeWidth="1.5"
-            className="text-warning flex-shrink-0 mt-0.5">
-            <path d="M7 1.5l6 10.5H1L7 1.5zM7 6v3M7 10.5v.5" />
-          </svg>
+          <Warning size={14} weight="light" className="text-warning flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-semibold text-text-primary">
                 {t('msg.permissionTitle')}
               </span>
               {toolName && (
-                <code className="text-[10px] px-1.5 py-0.5 rounded
+                <code className="text-xs px-1.5 py-0.5 rounded
                   bg-warning/10 text-warning font-mono font-medium">
                   {toolName}
                 </code>
               )}
             </div>
             {description && (
-              <p className="text-[11px] text-text-muted mt-1 leading-relaxed">
+              <p className="text-xs text-text-muted mt-1 leading-relaxed">
                 {description}
               </p>
             )}
@@ -147,23 +144,16 @@ export function PermissionCard({ message }: Props) {
           {/* Status indicator */}
           {isResolved && (
             <span className="flex items-center gap-1 flex-shrink-0">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-                stroke="currentColor" strokeWidth="1.5" className="text-success">
-                <path d="M2.5 6l2.5 2.5 4.5-4.5" />
-              </svg>
-              <span className="text-[11px] text-success font-medium">
+              <Check size={12} weight="light" className="text-success" />
+              <span className="text-xs text-success font-medium">
                 {t('msg.responded')}
               </span>
             </span>
           )}
           {isSending && (
             <span className="flex items-center gap-1 flex-shrink-0">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-                className="text-text-muted animate-spin">
-                <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.5"
-                  strokeDasharray="14 14" />
-              </svg>
-              <span className="text-[11px] text-text-muted">
+              <SpinnerGap size={12} weight="light" className="text-text-muted animate-spin" />
+              <span className="text-xs text-text-muted">
                 Sending...
               </span>
             </span>
@@ -173,7 +163,7 @@ export function PermissionCard({ message }: Props) {
         {/* Input preview */}
         {inputPreview && (
           <div className="px-3 pb-2">
-            <pre className="text-[11px] text-text-muted font-mono leading-relaxed
+            <pre className="text-xs text-text-muted font-mono leading-relaxed
               whitespace-pre-wrap break-words bg-bg-secondary/50 rounded-lg px-2.5 py-2
               border border-border-subtle/30 max-h-32 overflow-y-auto">
               {inputPreview}
@@ -184,7 +174,7 @@ export function PermissionCard({ message }: Props) {
         {/* Error state */}
         {isFailed && (
           <div className="px-3 pb-2">
-            <div className="text-[11px] text-error bg-error/5 rounded-lg px-2.5 py-2
+            <div className="text-xs text-error bg-error/5 rounded-lg px-2.5 py-2
               border border-error/20">
               {message.interactionError || 'Failed to send response'}
             </div>
@@ -205,10 +195,7 @@ export function PermissionCard({ message }: Props) {
                     hover:bg-success/15 transition-smooth cursor-pointer
                     flex items-center gap-1.5"
                 >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M2.5 6l2.5 2.5 4.5-4.5" />
-                  </svg>
+                  <Check size={12} weight="light" />
                   {t('msg.permissionAllowHint')}
                 </button>
                 <button

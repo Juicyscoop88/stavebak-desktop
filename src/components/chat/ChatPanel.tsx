@@ -1,30 +1,28 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+import { ListDashes, X, List, CaretRight, Info, Warning, Clock, ArrowDown, Folder, Plus } from '@phosphor-icons/react';
 import { create } from 'zustand';
 import { useChatStore, useActiveTab, type ChatMessage } from '../../stores/chatStore';
 import { MessageBubble } from './MessageBubble';
 import { ToolGroup } from './ToolGroup';
-import { InputBar } from './InputBar';
-import { ExportMenu } from '../conversations/ExportMenu';
 import { UpdateButton } from '../shared/UpdateButton';
-import { useSettingsStore, MODEL_OPTIONS, mapSessionModeToPermissionMode } from '../../stores/settingsStore';
+import { useSettingsStore, mapSessionModeToPermissionMode } from '../../stores/settingsStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useFileStore } from '../../stores/fileStore';
-import { useAgentStore } from '../../stores/agentStore';
-import { AgentPanel } from '../agents/AgentPanel';
 // bridge import removed — spawn goes through sessionLifecycle module
 import { open } from '@tauri-apps/plugin-dialog';
+import { invoke } from '@tauri-apps/api/core';
 import { useT } from '../../lib/i18n';
 import { envFingerprint, is1MModel as isOneMillionModel, resolveModelForProvider, spawnConfigHash } from '../../lib/api-provider';
 import { useProviderStore } from '../../stores/providerStore';
 import { spawnSession } from '../../lib/sessionLifecycle';
 import { MarkdownRenderer } from '../shared/MarkdownRenderer';
-import { SetupWizard } from '../setup/SetupWizard';
+import { useSetupStore } from '../../stores/setupStore';
 import { AiAvatar } from '../shared/AiAvatar';
-import { UserAvatar } from '../shared/UserAvatar';
 import { useFindInPage } from '../../hooks/useFindInPage';
 import { FindBar } from './FindBar';
 import { formatElapsedCompact } from '../../lib/elapsed-time';
 import { formatRetryDelaySeconds, isRateLimitRetry, type ApiRetryStatus } from '../../lib/api-retry';
+import { useProjectStore } from '../../stores/projectStore';
 
 /** Shared plan panel toggle — used by ChatPanel (panel) and InputBar (button) */
 export const usePlanPanelStore = create<{
@@ -94,10 +92,7 @@ function PlanPanel({ planMessages, onClose }: {
       <div className="flex items-center justify-between px-3 py-2.5
         border-b border-border-subtle bg-accent/5 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
-            stroke="currentColor" strokeWidth="1.5" className="text-accent">
-            <path d="M2 3.5h10M2 7h8M2 10.5h5" />
-          </svg>
+          <ListDashes size={14} weight="light" className="text-accent" />
           <span className="text-xs font-semibold text-text-primary">
             {t('msg.planTitle')}
           </span>
@@ -107,10 +102,7 @@ function PlanPanel({ planMessages, onClose }: {
           className="p-1 rounded-md hover:bg-bg-tertiary text-text-tertiary
             transition-smooth cursor-pointer"
         >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-            stroke="currentColor" strokeWidth="1.5">
-            <path d="M3 3l6 6M9 3l-6 6" />
-          </svg>
+          <X size={12} weight="light" />
         </button>
       </div>
       {/* Content */}
@@ -131,12 +123,6 @@ function PlanPanel({ planMessages, onClose }: {
   );
 }
 
-/** Map raw model ID to friendly display name */
-function getModelDisplayName(modelId: string): string {
-  const option = MODEL_OPTIONS.find((m) => modelId.includes(m.id));
-  return option?.short || modelId;
-}
-
 
 /** Format token count: "3.2k" for >=1000, raw number for <1000 */
 function formatTokens(n: number): string {
@@ -151,7 +137,7 @@ const DELETING_SPEED = 40;    // ms per character (deleting)
 const PAUSE_DURATION = 2500;  // ms to hold full word
 const TRANSITION_DELAY = 300; // ms between delete and next word
 
-/** Fisher-Yates shuffle, always starts with index 0 ("思考中"/"Thinking") */
+/** Fisher-Yates shuffle, always starts with index 0 ("Thinking") */
 function shuffledOrder(count: number): number[] {
   const arr = Array.from({ length: count }, (_, i) => i);
   for (let i = arr.length - 1; i > 1; i--) {
@@ -303,18 +289,14 @@ function ActivityIndicator({ activityStatus, sessionMeta, sessionStatus }: {
       </span>
       {stallWarning && (
         <span className="text-xs text-red-400 ml-2 flex items-center gap-1">
-          <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
-          </svg>
+          <Info size={14} weight="light" className="flex-shrink-0" />
           {t('chat.stallWarning')}
         </span>
       )}
       {contextWarning && !stallWarning && (
         <span className="text-xs text-amber-500 ml-2 flex items-center gap-1"
               title={t('chat.tokenWarning')}>
-          <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-          </svg>
+          <Warning size={14} weight="light" className="flex-shrink-0" />
           {t('chat.tokenWarning')}
         </span>
       )}
@@ -334,29 +316,15 @@ export function ChatPanel() {
   const pendingUserMessages = useActiveTab((t) => t.pendingUserMessages);
   const sidebarOpen = useSettingsStore((s) => s.sidebarOpen);
   const toggleSidebar = useSettingsStore((s) => s.toggleSidebar);
-  const toggleSecondaryPanel = useSettingsStore((s) => s.toggleSecondaryPanel);
-  const agentPanelOpen = useSettingsStore((s) => s.agentPanelOpen);
-  const toggleAgentPanel = useSettingsStore((s) => s.toggleAgentPanel);
-  const sessionMode = useSettingsStore((s) => s.sessionMode);
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
   const directoryMissing = useFileStore((s) => s.directoryMissing);
-  const activeProvider = useProviderStore((s) => {
-    if (!s.activeProviderId) return null;
-    return s.providers.find((p) => p.id === s.activeProviderId) ?? null;
-  });
-  const selectedSessionId = useSessionStore((s) => s.selectedSessionId);
-  const sessions = useSessionStore((s) => s.sessions);
   const isFilePreviewMode = !!useFileStore((s) => s.selectedFile);
+  const projectPhase = useProjectStore((s) => s.phase);
+  const completedSections = useProjectStore((s) => s.completedSections);
+  const totalSections = useProjectStore((s) => s.totalSections);
+  const currentSection = useProjectStore((s) => s.currentSection);
+  const buildingType = useProjectStore((s) => s.buildingType);
 
-  // Agent activity for floating button badge
-  const agents = useAgentStore((s) => s.agents);
-  const activeAgentCount = useMemo(
-    () => Array.from(agents.values()).filter(
-      (a) => a.phase !== 'completed' && a.phase !== 'error'
-    ).length,
-    [agents],
-  );
-  const totalAgentCount = agents.size;
 
   const showPlanPanel = usePlanPanelStore((s) => s.open);
   const closePlanPanel = usePlanPanelStore((s) => s.close);
@@ -373,8 +341,8 @@ export function ChatPanel() {
       useSettingsStore.getState().setSecondaryTab('files');
       useFileStore.getState().selectFile(filePath);
     };
-    window.addEventListener('tokenicode:open-file', onOpenFile);
-    return () => window.removeEventListener('tokenicode:open-file', onOpenFile);
+    window.addEventListener('stavebak:open-file', onOpenFile);
+    return () => window.removeEventListener('stavebak:open-file', onOpenFile);
   }, []);
 
   // --- Tool grouping: group 3+ consecutive tool_use messages ---
@@ -410,10 +378,6 @@ export function ChatPanel() {
   );
 
   // Find the path of the currently selected session for export
-  const currentSessionPath = sessions.find(
-    (s) => s.id === selectedSessionId
-  )?.path;
-
   const scrollRef = useRef<HTMLDivElement>(null);
   const find = useFindInPage(scrollRef);
   const thinkingPreRef = useRef<HTMLPreElement>(null);
@@ -469,104 +433,48 @@ export function ChatPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Top Bar — with extra top padding for macOS traffic lights */}
+      {/* Title bar spacer — 28px for macOS traffic lights */}
+      <div className="h-[28px] flex-shrink-0" />
+
+      {/* Header row — project name + status */}
       <div
-        className="flex items-center h-[68px] pt-[20px] px-5 border-b border-border-subtle
+        className="flex items-center h-[36px] pl-3.5 pr-5 border-b border-border-subtle
         flex-shrink-0 bg-bg-chat cursor-default">
-        {/* Show sidebar toggle when sidebar is not visible:
-            either user closed it, or it's hidden by file preview mode */}
         {(!sidebarOpen || isFilePreviewMode) && (
           <button onClick={toggleSidebar}
-            className="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-tertiary
-              transition-smooth mr-3" title={t('chat.showSidebar')}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M2 4h12M2 8h12M2 12h12" />
-            </svg>
+            className="p-1 rounded-lg hover:bg-bg-tertiary text-text-tertiary
+              transition-smooth mr-2" title={t('chat.showSidebar')}>
+            <List size={14} weight="light" />
           </button>
         )}
-        {/* Left: model name + project hint */}
-        <div className="flex items-center gap-3 pointer-events-none">
-          {sessionMeta.model && (
-            <span className="text-sm font-medium text-text-muted">
-              {getModelDisplayName(sessionMeta.model)}
-            </span>
-          )}
-          {workingDirectory && (
-            <span className="text-[10px] text-text-tertiary truncate max-w-[160px]"
-              title={workingDirectory}>
-              {workingDirectory.split(/[\\/]/).pop()}
-            </span>
-          )}
+        {workingDirectory && sessionStatus !== 'idle' && (
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 transition-smooth
+            ${sessionStatus === 'running'
+              ? 'bg-success shadow-[0_0_6px_var(--color-accent-glow)] animate-pulse-soft'
+              : sessionStatus === 'error'
+                ? 'bg-error'
+                : 'bg-transparent'}`} />
+        )}
+        <div className="ml-auto flex items-center">
+          <UpdateButton />
         </div>
-
-        {/* Integrated status: Agent + API route — left-aligned with color dots */}
-        <div className="relative flex items-center gap-3 ml-3">
-          {/* Agent status — clickable dot + label → opens AgentPanel */}
-          <button onClick={toggleAgentPanel}
-            className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded-lg
-              transition-smooth text-[9px]
-              ${agentPanelOpen ? 'bg-accent/10' : 'hover:bg-bg-secondary/50'}`}
-            title={t('agents.toggle')}>
-            <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 transition-smooth
-              ${activeAgentCount > 0
-                ? 'bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)] animate-pulse-soft'
-                : totalAgentCount > 0
-                  ? 'bg-success'
-                  : 'bg-text-tertiary/30'}`} />
-            <span className={`${activeAgentCount > 0 ? 'text-amber-400' : totalAgentCount > 0 ? 'text-success' : 'text-text-tertiary'}`}>
-              Agent{totalAgentCount > 1 ? ` (${totalAgentCount})` : ''}
-            </span>
-          </button>
-
-          {/* API route status — dot + label */}
-          <div className="flex items-center gap-1.5 text-[9px]">
-            <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 transition-smooth
-              ${sessionStatus === 'running'
-                ? 'bg-success shadow-[0_0_6px_var(--color-accent-glow)] animate-pulse-soft'
-                : sessionStatus === 'error'
-                  ? 'bg-error'
-                  : 'bg-text-tertiary/30'}`} />
-            <span className="text-text-tertiary">
-              {activeProvider ? (activeProvider.name || 'Custom') : 'CLI'}
-            </span>
-          </div>
-
-          {/* Current session mode indicator */}
-          <div className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded
-            ${sessionMode === 'bypass'
-              ? 'text-warning/80'
-              : 'text-text-tertiary'}`}>
-            <span>{t(`mode.${sessionMode}`)}</span>
-          </div>
-
-          {/* Floating agent panel popover — anchored to agent button */}
-          {agentPanelOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={toggleAgentPanel} />
-              <div className="absolute left-0 top-full mt-2 z-50
-                w-72 max-h-80 rounded-xl border border-border-subtle
-                bg-bg-primary shadow-lg overflow-y-auto">
-                <AgentPanel />
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Spacer + right-side actions */}
-        <div className="ml-auto flex items-center" />
-        <UpdateButton />
-        <ExportMenu sessionPath={currentSessionPath} />
-        <button onClick={toggleSecondaryPanel}
-          className="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-tertiary
-            transition-smooth" title={t('chat.toggleFiles')}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5">
-            <rect x="1" y="2" width="14" height="12" rx="2" />
-            <path d="M10 2v12" />
-          </svg>
-        </button>
       </div>
+
+      {/* Second row — DSP workflow breadcrumb (only when classification is done) */}
+      {workingDirectory && buildingType && (
+        <div className="flex items-center h-[36px] pl-3.5 pr-5 border-b border-border-subtle
+          flex-shrink-0 bg-bg-chat cursor-default">
+          <div className="flex items-center gap-1.5 text-xs text-text-tertiary">
+            <span className="font-medium">{projectPhase}</span>
+            <span className="text-border-subtle">·</span>
+            {currentSection ? (
+              <span>{currentSection}</span>
+            ) : (
+              <span className="text-text-quaternary">{completedSections}/{totalSections} sekcí</span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-1 min-h-0 relative">
       {/* Main chat area */}
@@ -583,7 +491,7 @@ export function ChatPanel() {
         ) : messages.length === 0 && !isStreaming ? (
           <EmptyReadyState />
         ) : (
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-2xl mx-auto">
             {displayItems.map((item, displayIdx) => {
               // Determine spacing based on item type
               const isCompact = item.kind === 'tool_group'
@@ -633,24 +541,21 @@ export function ChatPanel() {
             {isStreaming && partialThinking && (() => {
               const hasVisiblePartialText = partialText.trim().length > 0;
               return (
-              <div className="ml-11 mr-11 mt-1">
+              <div className="mt-1">
                 <details
                   key={hasVisiblePartialText ? 'collapsed' : 'open'}
                   {...(!hasVisiblePartialText ? { open: true } : {})}
                   className="group"
                 >
                   <summary className="flex items-center gap-1.5 py-1
-                    cursor-pointer text-[11px] text-text-tertiary list-none select-none">
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"
-                      stroke="currentColor" strokeWidth="1.5"
-                      className="transition-transform duration-150 group-open:rotate-90">
-                      <path d="M3 2l4 3-4 3" />
-                    </svg>
+                    cursor-pointer text-xs text-text-tertiary list-none select-none">
+                    <CaretRight size={10} weight="light"
+                      className="transition-transform duration-150 group-open:rotate-90" />
                     {t('msg.thinking')}
                     <span className="inline-block w-1.5 h-3 bg-text-tertiary ml-0.5
                       animate-pulse-soft rounded-sm" />
                   </summary>
-                  <pre ref={thinkingPreRef} className="ml-5 mt-0.5 text-[11px] text-text-tertiary
+                  <pre ref={thinkingPreRef} className="ml-5 mt-0.5 text-xs text-text-tertiary
                     whitespace-pre-wrap max-h-48 overflow-y-auto
                     font-mono leading-relaxed">
                     {partialThinking}
@@ -703,21 +608,17 @@ export function ChatPanel() {
                 message bubble when the current turn completes and the
                 FIFO drain in useStreamProcessor sends it. */}
             {pendingUserMessages && pendingUserMessages.length > 0 && pendingUserMessages.map((pending, idx) => (
-              <div key={`pending_${idx}`} className="flex justify-end gap-3 mt-4">
+              <div key={`pending_${idx}`} className="flex justify-end mt-4">
                 <div className="flex flex-col items-end max-w-[75%] opacity-60">
                   <div className="bg-bg-elevated border border-border-subtle text-text-primary
-                    rounded-2xl rounded-br-md px-4 py-2.5 leading-relaxed whitespace-pre-wrap break-words">
+                    rounded-full px-5 py-3 leading-normal whitespace-pre-wrap break-words">
                     {pending.text}
                   </div>
-                  <span className="text-[10px] text-text-tertiary mt-1 mr-1 flex items-center gap-1">
-                    <svg className="w-2.5 h-2.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <circle cx="8" cy="8" r="6" />
-                      <path d="M8 5v3l2 1.5" strokeLinecap="round" />
-                    </svg>
+                  <span className="text-xs text-text-tertiary mt-1 mr-1 flex items-center gap-1">
+                    <Clock size={10} weight="light" />
                     {t('chat.queued')}
                   </span>
                 </div>
-                <UserAvatar size="w-8 h-8 text-xs" className="mt-0.5 flex-shrink-0" />
               </div>
             ))}
             {/* Inline activity status indicator — like Claude Desktop App */}
@@ -745,10 +646,7 @@ export function ChatPanel() {
             cursor-pointer opacity-80 hover:opacity-100"
           title={t('chat.scrollToBottom')}
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M7 2v10M3 8l4 4 4-4" />
-          </svg>
+          <ArrowDown size={14} weight="light" />
         </button>
       )}
 
@@ -756,12 +654,7 @@ export function ChatPanel() {
       {workingDirectory && directoryMissing && (
         <div className="mx-4 mb-3 px-4 py-3 rounded-xl bg-status-warning/10 border border-status-warning/30
           flex items-center gap-3 text-sm text-text-secondary">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-            strokeWidth="1.5" className="flex-shrink-0 text-status-warning">
-            <path d="M8 1.5L1.5 13h13L8 1.5z" strokeLinejoin="round" />
-            <path d="M8 6v3" strokeLinecap="round" />
-            <circle cx="8" cy="11.5" r="0.5" fill="currentColor" stroke="none" />
-          </svg>
+          <Warning size={16} weight="light" className="flex-shrink-0 text-status-warning" />
           <span className="flex-1">{t('project.directoryMissing')}</span>
           <button
             onClick={async () => {
@@ -777,8 +670,7 @@ export function ChatPanel() {
         </div>
       )}
 
-      {/* Input — only show when a project folder is selected and exists */}
-      {workingDirectory && !directoryMissing && <InputBar />}
+      {/* InputBar moved to BottomBar in AppShell */}
       </div>{/* end main chat area */}
 
       {/* Right-side plan panel (resizable) */}
@@ -874,7 +766,7 @@ async function startDraftSession(folderPath: string) {
         }
       },
       onStderr: (line: string) => {
-        console.warn('[TOKENICODE] pre-warm stderr:', line);
+        console.warn('[Stavebak] pre-warm stderr:', line);
       },
       setRunning: false,
     });
@@ -900,11 +792,19 @@ async function startDraftSession(folderPath: string) {
 /** Welcome screen shown when no project folder is selected */
 function WelcomeScreen() {
   const t = useT();
-  const setupCompleted = useSettingsStore((s) => s.setupCompleted);
   const recentProjects = useFileStore((s) => s.recentProjects);
   const fetchProjects = useFileStore((s) => s.fetchRecentProjects);
+  const [newProjectMode, setNewProjectMode] = useState(false);
+  const [parentDir, setParentDir] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { fetchProjects(); }, []);
+  useEffect(() => {
+    useSettingsStore.getState().setSetupCompleted(false);
+    useSetupStore.getState().reset();
+    fetchProjects();
+  }, []);
 
   const handlePickFolder = useCallback(async () => {
     const selected = await open({
@@ -917,66 +817,118 @@ function WelcomeScreen() {
     }
   }, [t]);
 
-  // Show SetupWizard if setup has not been completed
-  if (!setupCompleted) {
-    return <SetupWizard />;
-  }
+  const handleNewProjectStart = useCallback(async () => {
+    const dir = await open({
+      directory: true,
+      multiple: false,
+      title: t('welcome.pickParentDir'),
+    });
+    if (dir) {
+      setParentDir(dir as string);
+      setNewProjectMode(true);
+      setProjectName('');
+      setTimeout(() => nameInputRef.current?.focus(), 50);
+    }
+  }, [t]);
+
+  const handleCreateProject = useCallback(async () => {
+    if (!parentDir || !projectName.trim()) return;
+    const sep = parentDir.endsWith('/') ? '' : '/';
+    const fullPath = `${parentDir}${sep}${projectName.trim()}`;
+    setCreating(true);
+    try {
+      await invoke('create_project_directory', { path: fullPath });
+      startDraftSession(fullPath);
+    } catch (e) {
+      console.error('Failed to create project directory:', e);
+      setCreating(false);
+    }
+  }, [parentDir, projectName]);
+
+  const handleCancelNew = useCallback(() => {
+    setNewProjectMode(false);
+    setParentDir(null);
+    setProjectName('');
+  }, []);
 
   return (
     <div className="flex flex-col items-center justify-center h-full text-center">
-      {/* App icon — customizable AI avatar */}
-      <AiAvatar size="w-20 h-20" rounded="rounded-3xl" className="mb-6 shadow-glow" />
-      <h2 className="text-xl font-semibold text-accent mb-2">
+      <AiAvatar size="w-20 h-20" rounded="rounded-3xl" className="mb-6" />
+      <h2 className="text-xl font-semibold text-text-primary mb-2">
         {t('chat.welcome')}
       </h2>
-      <p className="text-sm text-text-muted max-w-sm leading-relaxed mb-6">
+      <p className="text-sm text-text-primary max-w-sm leading-relaxed mb-6">
         {t('welcome.subtitle')}
       </p>
 
-      {/* Primary action: new chat with folder picker */}
-      <button
-        onClick={handlePickFolder}
-        className="px-6 py-3 rounded-[20px] text-sm font-medium
-          bg-accent hover:bg-accent-hover text-text-inverse
-          hover:shadow-glow transition-smooth
-          flex items-center gap-2 mb-8"
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-          stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M2 4h4l2 2h6v7H2V4z" />
-        </svg>
-        {t('welcome.newChat')}
-      </button>
-
-      {/* Recent projects */}
-      {recentProjects.length > 0 && (
-        <div className="w-full max-w-sm">
-          <div className="text-[11px] font-medium text-text-tertiary uppercase
-            tracking-wider mb-3">
-            {t('welcome.recentProjects')}
+      {newProjectMode ? (
+        <div className="animate-scale-in flex flex-col items-center gap-3 w-full max-w-xs">
+          <p className="text-xs text-text-muted truncate max-w-full">{parentDir}</p>
+          <div className="flex w-full gap-2">
+            <input
+              ref={nameInputRef}
+              type="text"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleCreateProject(); if (e.key === 'Escape') handleCancelNew(); }}
+              placeholder={t('welcome.projectNamePlaceholder')}
+              className="flex-1 px-3 py-2 rounded-xl text-sm
+                bg-white/10 border border-white/[0.08]
+                text-text-primary placeholder:text-text-quaternary
+                focus:border-accent/50 focus:outline-none
+                transition-all duration-200"
+              disabled={creating}
+            />
+            <button
+              onClick={handleCreateProject}
+              disabled={!projectName.trim() || creating}
+              className="px-4 py-2 rounded-xl text-sm font-medium
+                bg-accent text-white
+                hover:bg-accent-hover active:scale-[0.97]
+                disabled:opacity-40 disabled:pointer-events-none
+                transition-all duration-200 ease-out"
+            >
+              {creating ? '...' : t('welcome.create')}
+            </button>
           </div>
-          <div className="flex flex-wrap justify-center gap-2">
-            {recentProjects.slice(0, 6).map((project) => (
-              <button
-                key={project.path}
-                onClick={() => startDraftSession(project.path)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5
-                  rounded-lg border border-border-subtle text-xs
-                  text-text-muted hover:border-accent hover:text-accent
-                  hover:bg-accent/5 transition-smooth"
-                title={project.shortPath}
-              >
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none"
-                  stroke="currentColor" strokeWidth="1.5"
-                  className="flex-shrink-0 text-text-tertiary">
-                  <path d="M2 4h4l2 2h6v7H2V4z" />
-                </svg>
-                {project.name}
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={handleCancelNew}
+            className="text-xs text-text-quaternary hover:text-text-muted transition-colors"
+          >
+            {t('welcome.cancel')}
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-4 mb-8 animate-scale-in">
+          <button
+            onClick={handlePickFolder}
+            className="group px-5 py-2.5 rounded-xl text-sm font-medium
+              bg-white/10 backdrop-blur-md
+              border border-white/[0.08]
+              text-text-primary
+              hover:bg-white/[0.15] hover:border-white/[0.15]
+              active:scale-[0.97]
+              transition-all duration-200 ease-out
+              flex items-center gap-2"
+          >
+            <Folder size={15} weight="light" className="opacity-50 group-hover:opacity-80 transition-opacity" />
+            {t('welcome.newChat')}
+          </button>
+          <button
+            onClick={handleNewProjectStart}
+            className="group px-5 py-2.5 rounded-xl text-sm font-medium
+              text-text-muted
+              hover:text-text-primary hover:bg-white/[0.06]
+              active:scale-[0.97]
+              transition-all duration-200 ease-out
+              flex items-center gap-2"
+          >
+            <Plus size={15} weight="light" className="opacity-40 group-hover:opacity-70 transition-opacity" />
+            {t('welcome.newProject')}
+          </button>
         </div>
       )}
+
     </div>
   );
 }
@@ -984,22 +936,43 @@ function WelcomeScreen() {
 /** Empty state shown when project is selected but no messages yet */
 function EmptyReadyState() {
   const t = useT();
-  const workingDirectory = useSettingsStore((s) => s.workingDirectory);
+  const selectedSessionId = useSessionStore((s) => s.selectedSessionId);
+  const setInputDraft = useChatStore((s) => s.setInputDraft);
+
+  const actions = [
+    { label: t('quickAction.classify'), message: t('quickAction.classifyMsg') },
+    { label: t('quickAction.regulations'), message: t('quickAction.regulationsMsg') },
+    { label: t('quickAction.whatNeeded'), message: t('quickAction.whatNeededMsg') },
+  ];
+
+  const handleAction = useCallback((message: string) => {
+    if (selectedSessionId) {
+      setInputDraft(selectedSessionId, message);
+    }
+  }, [selectedSessionId, setInputDraft]);
+
   return (
     <div className="flex flex-col items-center justify-center h-full text-center">
-      {/* App icon — customizable AI avatar */}
-      <AiAvatar size="w-16 h-16" rounded="rounded-2xl" className="mb-5 shadow-glow" />
-      <h2 className="text-lg font-semibold text-accent mb-1">
-        {t('chat.welcome')}
-      </h2>
-      <p className="text-sm text-text-muted max-w-sm leading-relaxed">
+      <p className="text-sm text-text-secondary mb-6">
         {t('chat.welcomeWithProject')}
       </p>
-      {workingDirectory && (
-        <p className="text-xs text-text-tertiary mt-2 truncate max-w-xs">
-          {workingDirectory}
-        </p>
-      )}
+      <div className="flex flex-wrap justify-center gap-3 max-w-lg">
+        {actions.map((action) => (
+          <button
+            key={action.label}
+            onClick={() => handleAction(action.message)}
+            className="px-4 py-2 text-xs font-medium
+              text-text-secondary rounded-full
+              border border-border-subtle
+              cursor-pointer select-none
+              hover:text-text-primary hover:border-text-muted hover:bg-bg-tertiary
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/30
+              active:scale-[0.97]"
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

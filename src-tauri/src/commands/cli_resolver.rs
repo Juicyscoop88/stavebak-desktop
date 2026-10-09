@@ -13,6 +13,7 @@
 use serde::Serialize;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use tauri::Manager;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -892,10 +893,165 @@ fn classify_path(path: &str) -> CliSource {
     CliSource::System
 }
 
-// ─── Convenience wrapper (drop-in replacement) ─────────────
+// ─── Fast resolver (OPT-0: CC-only, no subprocesses) ──────
 
-/// Drop-in replacement for the old `find_claude_binary()`.
-/// Returns just the path, discarding the source tier.
+/// Fast 3-step CLI lookup: pinned → official install paths → full resolve fallback.
+/// No subprocesses, no shell spawns — typically <5ms.
+pub fn find_binary_fast(app: Option<&tauri::AppHandle>) -> Option<String> {
+    let start = std::time::Instant::now();
+
+    // 1. User-pinned CLI (explicit override in settings)
+    if let Some(pinned) = get_pinned_cli() {
+        let p = Path::new(&pinned);
+        if is_native_binary(p) || is_valid_executable(p) {
+            eprintln!(
+                "[cli_resolver:fast] pinned: {} ({}ms)",
+                pinned,
+                start.elapsed().as_millis()
+            );
+            return Some(pinned);
+        }
+        eprintln!(
+            "[cli_resolver:fast] pinned CLI '{}' invalid, continuing",
+            pinned
+        );
+    }
+
+    // 2. Official CC install paths (filesystem checks only, <1ms each)
+    for path in official_install_paths() {
+        let p = Path::new(&path);
+        if is_native_binary(p) || is_valid_executable(p) {
+            auto_pin_cli(&path);
+            eprintln!(
+                "[cli_resolver:fast] official: {} ({}ms)",
+                path,
+                start.elapsed().as_millis()
+            );
+            return Some(path);
+        }
+    }
+
+    // 3. Bundled binary (shipped with Stavebak as Tauri resource)
+    if let Some(app) = app {
+        if let Ok(resource_dir) = app.path().resource_dir() {
+            let bundled = resource_dir.join("claude");
+            if is_native_binary(&bundled) || is_valid_executable(&bundled) {
+                let path = bundled.to_string_lossy().to_string();
+                eprintln!(
+                    "[cli_resolver:fast] bundled: {} ({}ms)",
+                    path,
+                    start.elapsed().as_millis()
+                );
+                return Some(path);
+            }
+        }
+    }
+
+    eprintln!(
+        "[cli_resolver:fast] no binary found in fast path ({}ms), falling back to full resolve",
+        start.elapsed().as_millis()
+    );
+    None
+}
+
+/// Known CC install paths — filesystem checks only, no subprocesses.
+/// Covers Official tier + common System tier locations that don't need
+/// subprocess discovery (npm root -g, which, login shell).
+fn official_install_paths() -> Vec<String> {
+    let mut paths = Vec::new();
+    if let Some(home) = dirs::home_dir() {
+        #[cfg(target_os = "windows")]
+        let bin_name = "claude.exe";
+        #[cfg(not(target_os = "windows"))]
+        let bin_name = "claude";
+
+        // Claude Desktop bundled CLI (versioned dirs — newest version)
+        #[cfg(target_os = "macos")]
+        {
+            let vdir = home.join("Library/Application Support/Claude/claude-code");
+            if let Some(bin) = find_newest_version_bin(&vdir, bin_name) {
+                paths.push(bin);
+            }
+        }
+        #[cfg(target_os = "windows")]
+        {
+            for base_fn in [dirs::data_local_dir, dirs::data_dir] {
+                if let Some(base) = base_fn() {
+                    let vdir = base.join("Claude").join("claude-code");
+                    if let Some(bin) = find_newest_version_bin(&vdir, bin_name) {
+                        paths.push(bin);
+                    }
+                }
+            }
+        }
+        #[cfg(target_os = "linux")]
+        if let Some(data_dir) = dirs::data_dir() {
+            let vdir = data_dir.join("Claude").join("claude-code");
+            if let Some(bin) = find_newest_version_bin(&vdir, bin_name) {
+                paths.push(bin);
+            }
+        }
+
+        // Official native installer path
+        #[cfg(not(target_os = "windows"))]
+        {
+            paths.push(home.join(".claude/local/claude").to_string_lossy().to_string());
+        }
+        #[cfg(target_os = "windows")]
+        {
+            paths.push(home.join(".claude\\local\\claude.exe").to_string_lossy().to_string());
+        }
+
+        // Common System tier paths (no subprocess needed, just fs check)
+        #[cfg(not(target_os = "windows"))]
+        {
+            paths.push(home.join(".local/bin/claude").to_string_lossy().to_string());
+            paths.push(home.join(".npm-global/bin/claude").to_string_lossy().to_string());
+            paths.push(home.join(".cargo/bin/claude").to_string_lossy().to_string());
+            paths.push("/usr/local/bin/claude".to_string());
+            paths.push("/opt/homebrew/bin/claude".to_string());
+        }
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(app_data) = dirs::data_dir() {
+                paths.push(app_data.join("npm\\claude.cmd").to_string_lossy().to_string());
+            }
+            paths.push(home.join(".cargo\\bin\\claude.exe").to_string_lossy().to_string());
+        }
+
+        // Version manager paths (fs-only, no subprocess)
+        #[cfg(not(target_os = "windows"))]
+        {
+            paths.push(home.join(".volta/bin/claude").to_string_lossy().to_string());
+            paths.push(home.join(".bun/bin/claude").to_string_lossy().to_string());
+        }
+        #[cfg(target_os = "windows")]
+        {
+            paths.push(home.join(".volta\\bin\\claude.exe").to_string_lossy().to_string());
+            paths.push(home.join(".bun\\bin\\claude.exe").to_string_lossy().to_string());
+        }
+    }
+    paths
+}
+
+/// Auto-pin the resolved CLI path for instant lookup next time.
+fn auto_pin_cli(path: &str) {
+    if let Some(pin_path) = pin_file_path() {
+        let pin = CliPin {
+            path: path.to_string(),
+        };
+        if let Ok(json) = serde_json::to_string_pretty(&pin) {
+            let _ = std::fs::create_dir_all(pin_path.parent().unwrap());
+            let _ = std::fs::write(&pin_path, json);
+            eprintln!("[cli_resolver] auto-pinned: {}", path);
+        }
+    }
+}
+
+// ─── Legacy convenience wrapper ───────────────────────────
+
+/// Legacy resolver — uses full tiered search (can be slow).
+/// Used by diagnostics (scan_all, resolve_ordered) and as fallback.
 pub fn find_binary() -> Option<String> {
     // Check pinned CLI first
     if let Some(pinned) = get_pinned_cli() {
@@ -964,11 +1120,11 @@ pub fn unpin_cli() -> Result<(), String> {
 
 // ─── PATH Injection ────────────────────────────────────────
 
-/// Marker used to identify TOKENICODE-injected blocks in shell profile files.
+/// Marker used to identify Stavebak-injected blocks in shell profile files.
 #[cfg(not(target_os = "windows"))]
-const APP_PATH_MARKER: &str = "# Added by TOKENICODE";
+const APP_PATH_MARKER: &str = "# Added by Stavebak";
 
-/// Strip all `# Added by TOKENICODE\nexport PATH=...` blocks from a shell profile.
+/// Strip all `# Added by Stavebak\nexport PATH=...` blocks from a shell profile.
 ///
 /// Only removes two-line sequences where the marker is immediately followed
 /// by an `export PATH=` line. A marker line followed by something else is
@@ -1006,7 +1162,7 @@ fn strip_app_blocks(content: &str, marker: &str) -> String {
 ///    non-executable files) — writing PATH entries that don't contain a
 ///    working `claude` binary is worse than failing visibly.
 /// 2. Find the first existing profile from a prioritized list (.zshrc first).
-/// 3. Strip all previous TOKENICODE blocks from that profile to prevent
+/// 3. Strip all previous Stavebak blocks from that profile to prevent
 ///    accumulation when users click through different candidates.
 /// 4. Append a fresh block with the new export.
 /// 5. Write back atomically.
@@ -1055,7 +1211,7 @@ pub fn inject_path(cli_path: &str) -> Result<String, String> {
     // Read (may not exist yet — empty string is the correct default)
     let existing = std::fs::read_to_string(&target).unwrap_or_default();
 
-    // Strip all historical TOKENICODE blocks. This fixes two bugs at once:
+    // Strip all historical Stavebak blocks. This fixes two bugs at once:
     // 1. The old literal-contains idempotency check let different `dir`
     //    values stack up across clicks, polluting the profile.
     // 2. Users who clicked through several stale candidates accumulated

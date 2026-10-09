@@ -80,14 +80,14 @@ describe('Root Cause 5: Provider parameter white-list gaps', () => {
     // Known provider limitations that conflict with unconditional injection:
     const knownConflicts = [
       {
-        provider: '智谱 GLM',
+        provider: 'Third-party proxy',
         conflict: 'CLAUDE_CODE_EFFORT_LEVEL',
-        reason: 'thinking budget_tokens 上限 38912, high/max effort 可能超限',
+        reason: 'thinking budget_tokens cap 38912, high/max effort may exceed',
       },
       {
-        provider: '第三方中转',
+        provider: 'Third-party proxy',
         conflict: 'CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000',
-        reason: '某些 Provider 限 32768, 设 64000 会 400',
+        reason: 'some providers cap at 32768, setting 64000 returns 400',
       },
     ];
 
@@ -122,7 +122,7 @@ describe('Root Cause 5: Provider parameter white-list gaps', () => {
 
     expect(shouldDisableBetas('')).toBe(false);                    // default = Anthropic
     expect(shouldDisableBetas('https://api.anthropic.com')).toBe(false);
-    expect(shouldDisableBetas('https://open.bigmodel.cn')).toBe(true);  // 智谱
+    expect(shouldDisableBetas('https://open.bigmodel.cn')).toBe(true);  // Zhipu
     expect(shouldDisableBetas('https://api.moonshot.cn')).toBe(true);   // Kimi
     expect(shouldDisableBetas('https://openrouter.ai')).toBe(true);
     expect(shouldDisableBetas('https://bedrock-runtime.us-east-1.amazonaws.com')).toBe(true);
@@ -141,9 +141,9 @@ describe('Root Cause 2: AskUserQuestion dual-path race', () => {
       }
     };
 
-    // Path B: control_request intercepted by Rust, forwarded as tokenicode_permission_request
+    // Path B: control_request intercepted by Rust, forwarded as stavebak_permission_request
     const pathB_event = {
-      type: 'tokenicode_permission_request',
+      type: 'stavebak_permission_request',
       tool_name: 'AskUserQuestion',
       request_id: 'req_001',
       tool_use_id: 'toolu_01abc',  // should match Path A's block.id

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { CheckCircle, DownloadSimple, SpinnerGap } from '@phosphor-icons/react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { getUpdateHandle } from '../../hooks/useAutoUpdateCheck';
 import { useT } from '../../lib/i18n';
@@ -73,7 +74,7 @@ export function UpdateButton() {
   return (
     <button
       onClick={handleClick}
-      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium
+      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium
         transition-smooth mr-1
         ${phase === 'ready'
           ? 'bg-success/15 text-success border border-success/30 hover:bg-success/25'
@@ -89,26 +90,17 @@ export function UpdateButton() {
     >
       {phase === 'downloading' ? (
         <>
-          <div className="w-3 h-3 border-[1.5px] border-accent/30
-            border-t-accent rounded-full animate-spin" />
+          <SpinnerGap size={12} weight="light" className="animate-spin" />
           <span>{progress}%</span>
         </>
       ) : phase === 'ready' ? (
         <>
-          {/* Checkmark icon */}
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2.5 6l2.5 2.5 4.5-4.5" />
-          </svg>
+          <CheckCircle size={12} weight="light" />
           <span>{t('update.restart')}</span>
         </>
       ) : (
         <>
-          {/* Download/arrow-up icon */}
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 2v6M3.5 5.5L6 8l2.5-2.5M2 10h8" />
-          </svg>
+          <DownloadSimple size={12} weight="light" />
           <span>v{updateVersion}</span>
         </>
       )}

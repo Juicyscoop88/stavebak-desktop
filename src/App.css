@@ -2,65 +2,123 @@
 @plugin "@tailwindcss/typography";
 
 /* ================================================================
+   Switzer — self-hosted from Fontshare (Indian Type Foundry)
+   ================================================================ */
+@font-face {
+  font-family: 'Switzer';
+  src: url('/fonts/switzer/switzer-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Switzer';
+  src: url('/fonts/switzer/switzer-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Switzer';
+  src: url('/fonts/switzer/switzer-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Switzer';
+  src: url('/fonts/switzer/switzer-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ================================================================
    Default theme (Black) — light mode — clean solid
    ================================================================ */
 @theme {
-  --color-bg-primary: #F8F8FA;
-  --color-bg-secondary: #F0F0F2;
-  --color-bg-tertiary: #E8E8EA;
+  --color-bg-primary: #FAFAFA;
+  --color-bg-secondary: #F4F4F5;
+  --color-bg-tertiary: #EBEBED;
   --color-bg-chat: #FFFFFF;
-  --color-bg-sidebar: #F5F5F7;
+  --color-bg-sidebar: #FAFAFA;
   --color-bg-input: #FFFFFF;
-  --color-bg-user-msg: #333333;
-  --color-bg-assistant-msg: #F8F8FA;
-  --color-bg-tool: #F3F3F5;
-  --color-bg-thinking: #F0F0F2;
+  --color-bg-user-msg: #1A1A1E;
+  --color-bg-assistant-msg: #FAFAFA;
+  --color-bg-tool: #F6F6F8;
+  --color-bg-thinking: #F4F4F5;
   --color-bg-card: #FFFFFF;
-  --color-bg-nav-active: rgba(0, 0, 0, 0.04);
+  --color-bg-nav-active: rgba(0, 0, 0, 0.03);
 
-  --color-text-primary: #1A1A1A;
-  --color-text-secondary: #555555;
-  --color-text-tertiary: #888888;
-  --color-text-inverse: #FFFFFF;
-  --color-text-muted: #777777;
+  --color-text-primary: #18181B;
+  --color-text-secondary: #52525B;
+  --color-text-tertiary: #A1A1AA;
+  --color-text-inverse: #FAFAFA;
+  --color-text-muted: #71717A;
 
-  --color-border: #E5E5EA;
-  --color-border-subtle: #EBEBF0;
-  --color-border-focus: #333333;
+  --color-border: #E4E4E7;
+  --color-border-subtle: #F0F0F2;
+  --color-border-focus: #52525B;
 
-  --color-accent: #333333;
-  --color-accent-light: #555555;
-  --color-accent-hover: #1A1A1A;
-  --color-accent-glow: rgba(0, 0, 0, 0.06);
+  --color-accent: #52525B;
+  --color-accent-light: #71717A;
+  --color-accent-hover: #3F3F46;
+  --color-accent-glow: rgba(82, 82, 91, 0.08);
   --color-success: #10b981;
   --color-error: #ef4444;
   --color-warning: #f59e0b;
 
-  --color-gradient-start: #333333;
-  --color-gradient-mid: #444444;
-  --color-gradient-end: #555555;
+  --color-gradient-start: #3F3F46;
+  --color-gradient-mid: #52525B;
+  --color-gradient-end: #71717A;
 
   /* Syntax highlighting — decoupled from semantic colors */
   --color-syntax-keyword:  #7C3AED;
   --color-syntax-string:   #059669;
   --color-syntax-number:   #D97706;
   --color-syntax-function: #2563EB;
-  --color-syntax-comment:  #9CA3AF;
+  --color-syntax-comment:  #A1A1AA;
   --color-syntax-type:     #0891B2;
   --color-syntax-builtin:  #6366F1;
   --color-syntax-delete:   #DC2626;
   --color-syntax-meta:     #78716C;
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04),
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.04),
     0 1px 2px rgba(0, 0, 0, 0.02);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06),
-    0 2px 4px rgba(0, 0, 0, 0.03);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08),
-    0 4px 8px rgba(0, 0, 0, 0.04);
-  --shadow-glow: 0 0 20px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.06),
+    0 2px 4px rgba(0, 0, 0, 0.02);
+  --shadow-glow: 0 0 0 1px rgba(0, 0, 0, 0.04);
 
-  /* Icon slash color — same as brackets in default theme */
-  --color-icon-slash: white;
+  /* Icon slash color */
+  --color-icon-slash: #636366;
+
+  /* Typography scale — two main sizes: body (14px) + meta (12px) */
+  --text-xs: 13px;
+  --text-sm: 16px;
+  --text-base: 16px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 32px;
+
+  /* Font weights */
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+
+  /* Line heights */
+  --leading-tight: 1.1;
+  --leading-snug: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.5;
+  --leading-loose: 1.5;
+
+  /* Letter spacing */
+  --tracking-tight: -0.02em;
+  --tracking-normal: -0.006em;
+  --tracking-wide: 0.04em;
 }
 
 @variant dark (&:where(.dark, .dark *));
@@ -69,52 +127,54 @@
    Black — dark mode
    ================================================================ */
 .dark {
-  --color-bg-primary: #141414;
-  --color-bg-secondary: #1C1C1E;
-  --color-bg-tertiary: #2C2C2E;
-  --color-bg-chat: #0A0A0A;
-  --color-bg-sidebar: #1C1C1E;
-  --color-bg-input: #1C1C1E;
-  --color-bg-user-msg: #D0D0D0;
-  --color-bg-assistant-msg: #1A1A1C;
-  --color-bg-tool: #1E1E20;
-  --color-bg-thinking: #1A1A1C;
-  --color-bg-card: #262628;
+  --color-bg-primary: #111113;
+  --color-bg-secondary: #19191B;
+  --color-bg-tertiary: #242426;
+  --color-bg-chat: #111113;
+  --color-bg-sidebar: #111113;
+  --color-bg-input: #19191B;
+  --color-bg-user-msg: #2A2A2E;
+  --color-bg-assistant-msg: #16161A;
+  --color-bg-tool: #1A1A1E;
+  --color-bg-thinking: #16161A;
+  --color-bg-card: #1E1E22;
+  --color-bg-nav-active: rgba(255, 255, 255, 0.04);
+  --color-bg-elevated: #1E1E22;
 
-  --color-text-primary: #F0F0F0;
-  --color-text-secondary: #B0B0B0;
-  --color-text-tertiary: #8C8C8C;
-  --color-text-inverse: #101010;
-  --color-text-muted: #A3A3A3;
+  --color-text-primary: #ECECEF;
+  --color-text-secondary: #A0A0A8;
+  --color-text-tertiary: #6C6C76;
+  --color-text-inverse: #111113;
+  --color-text-muted: #8A8A94;
 
-  --color-border: #38383A;
-  --color-border-subtle: #2C2C2E;
-  --color-border-focus: #D0D0D0;
+  --color-border: #2A2A2E;
+  --color-border-subtle: #222226;
+  --color-border-focus: #5A5A66;
 
-  --color-accent: #D0D0D0;
-  --color-accent-light: #E0E0E0;
-  --color-accent-hover: #FFFFFF;
-  --color-accent-glow: rgba(255, 255, 255, 0.08);
+  --color-accent: #8A8A94;
+  --color-accent-light: #A0A0A8;
+  --color-accent-hover: #ECECEF;
+  --color-accent-glow: rgba(140, 140, 160, 0.08);
 
-  --color-gradient-start: #D0D0D0;
-  --color-gradient-mid: #E0E0E0;
-  --color-gradient-end: #F0F0F0;
+  --color-gradient-start: #7A7A84;
+  --color-gradient-mid: #8A8A94;
+  --color-gradient-end: #A0A0A8;
 
   /* Syntax highlighting — dark mode */
   --color-syntax-keyword:  #A78BFA;
   --color-syntax-string:   #34D399;
   --color-syntax-number:   #FBBF24;
   --color-syntax-function: #60A5FA;
-  --color-syntax-comment:  #6B7280;
+  --color-syntax-comment:  #52525E;
   --color-syntax-type:     #22D3EE;
   --color-syntax-builtin:  #818CF8;
   --color-syntax-delete:   #F87171;
   --color-syntax-meta:     #A8A29E;
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
-  --shadow-glow: 0 0 20px rgba(255, 255, 255, 0.06);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 0 1px rgba(255, 255, 255, 0.06);
 
   /* Icon slash color — same as brackets in default theme */
   --color-icon-slash: black;
@@ -289,23 +349,43 @@
 
 /* Light mode */
 .gradient-bg {
-  background: #F5F5F7;
+  background: #FFFFFF;
 }
 
 /* Dark mode — all themes */
 .dark .gradient-bg {
-  background: #1C1C1E;
+  background: #111113;
 }
 
 /* ================================================================
-   User message bubble — subtle shadow
+   User message bubble — soft gradient pill
    ================================================================ */
-.bg-bg-user-msg {
-  box-shadow: 0 2px 8px var(--color-accent-glow);
+.user-bubble {
+  background: linear-gradient(135deg, #134E4A 0%, #0F766E 100%);
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
-.dark .bg-bg-user-msg {
-  box-shadow: 0 2px 12px var(--color-accent-glow);
+.dark .user-bubble {
+  background: linear-gradient(135deg, #0D3D38 0%, #115E59 100%);
+  box-shadow: 0 2px 10px rgba(13, 61, 56, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.send-button {
+  background: linear-gradient(135deg, #0F766E 0%, #14B8A6 100%);
+  box-shadow: 0 1px 4px rgba(15, 118, 110, 0.2);
+}
+.send-button:hover {
+  background: linear-gradient(135deg, #0D6560 0%, #0F9D8F 100%);
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.3);
+}
+
+.dark .send-button {
+  background: linear-gradient(135deg, #115E59 0%, #0F766E 100%);
+  box-shadow: 0 1px 4px rgba(15, 118, 110, 0.3);
+}
+.dark .send-button:hover {
+  background: linear-gradient(135deg, #0F766E 0%, #14B8A6 100%);
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.4);
 }
 
 /* Accent button treatment */
@@ -344,14 +424,17 @@ html, body, #root {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC',
-    'Segoe UI', 'Roboto', 'Helvetica Neue',
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text',
+    'Switzer', 'Segoe UI', 'Helvetica Neue',
     Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  letter-spacing: -0.01em;
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Disable text selection and context menu globally for native app feel */
+  font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -363,7 +446,7 @@ input, textarea, [contenteditable="true"],
   -webkit-user-select: text;
 }
 
-/* Scrollbar — use macOS-native overlay scrollbars (System Settings → 外观/General
+/* Scrollbar — use macOS-native overlay scrollbars (System Settings → Appearance
    → "Show scrollbars: When scrolling"). They float over content and reserve NO
    layout space, so they never recreate the sidebar gap, yet stay visible while
    scrolling in the chat / file-preview areas. We deliberately do NOT customize
@@ -426,7 +509,7 @@ input, textarea, [contenteditable="true"],
   to { opacity: 1; transform: scale(1); }
 }
 .animate-scale-in {
-  animation: scale-in 0.2s ease-out;
+  /* instant — no decorative animations */
 }
 
 /* Slow spin for activity indicator asterisk */
@@ -441,7 +524,7 @@ input, textarea, [contenteditable="true"],
 
 /* Smooth transitions for all interactive elements */
 .transition-smooth {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: none;
 }
 
 /* Fade in animation for modals */
@@ -450,7 +533,7 @@ input, textarea, [contenteditable="true"],
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .animate-fade-in {
-  animation: fade-in 0.15s ease-out;
+  /* instant */
 }
 
 /* Title update animation (AI-generated title) */
@@ -460,7 +543,7 @@ input, textarea, [contenteditable="true"],
   100% { opacity: 1; transform: translateY(0); }
 }
 .animate-title-update {
-  animation: title-update 0.5s ease-out;
+  /* instant */
 }
 
 /* ================================================================

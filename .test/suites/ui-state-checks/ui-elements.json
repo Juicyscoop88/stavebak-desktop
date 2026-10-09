@@ -158,7 +158,7 @@
         {
           "cmd": "new-session",
           "flags": {
-            "cwd": "/tmp/tokenicode-test"
+            "cwd": "/tmp/stavebak-test"
           }
         },
         {
@@ -185,7 +185,7 @@
         {
           "cmd": "new-session",
           "flags": {
-            "cwd": "/tmp/tokenicode-test"
+            "cwd": "/tmp/stavebak-test"
           }
         },
         {
@@ -238,7 +238,7 @@
         {
           "cmd": "new-session",
           "flags": {
-            "cwd": "/tmp/tokenicode-test"
+            "cwd": "/tmp/stavebak-test"
           }
         },
         {
@@ -306,7 +306,7 @@
         {
           "cmd": "new-session",
           "flags": {
-            "cwd": "/tmp/tokenicode-test"
+            "cwd": "/tmp/stavebak-test"
           }
         },
         {
@@ -351,7 +351,7 @@
         {
           "cmd": "exec",
           "args": [
-            "JSON.stringify({env: window.__tokenicode_test ? 'test_helper_exists' : 'no_helper'})"
+            "JSON.stringify({env: window.__stavebak_test ? 'test_helper_exists' : 'no_helper'})"
           ]
         }
       ]

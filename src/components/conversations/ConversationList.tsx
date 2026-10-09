@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useCallback, useState } from 'react';
+import { MagnifyingGlass, X } from '@phosphor-icons/react';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useChatStore, generateMessageId } from '../../stores/chatStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -64,7 +65,7 @@ function normalizeProjectKey(raw: string): string {
 
 /** Extract display label from a project key.
  *  When `parentHint` is true (duplicate names), appends parent folder:
- *  "A (Desktop)" vs "A (坚果云)" */
+ *  "A (Desktop)" vs "A (NutCloud)" */
 function projectLabel(project: string, parentHint?: boolean): string {
   const parts = project.replace(/^~[\\/]/, '').split(/[\\/]/);
   const name = parts[parts.length - 1] || project;
@@ -137,13 +138,13 @@ export function ConversationList() {
   // Pinned & archived (Phase 3)
   const [pinnedSessions, setPinnedSessions] = useState<Set<string>>(() => {
     try {
-      const data = localStorage.getItem('tokenicode_pinned_sessions');
+      const data = localStorage.getItem('stavebak_pinned_sessions');
       return new Set(data ? JSON.parse(data) : []);
     } catch { return new Set(); }
   });
   const [archivedSessions, setArchivedSessions] = useState<Set<string>>(() => {
     try {
-      const data = localStorage.getItem('tokenicode_archived_sessions');
+      const data = localStorage.getItem('stavebak_archived_sessions');
       return new Set(data ? JSON.parse(data) : []);
     } catch { return new Set(); }
   });
@@ -168,7 +169,7 @@ export function ConversationList() {
   // Persist pinned/archived
   const persistPinned = useCallback((next: Set<string>) => {
     setPinnedSessions(next);
-    localStorage.setItem('tokenicode_pinned_sessions', JSON.stringify([...next]));
+    localStorage.setItem('stavebak_pinned_sessions', JSON.stringify([...next]));
     bridge.savePinnedSessions([...next]).catch(() => {});
   }, []);
 
@@ -554,14 +555,14 @@ export function ConversationList() {
   // --- Session group handlers ---
   // Create an empty group in a workspace (workspace header → "create group").
   const handleCreateGroup = useCallback((projectKey: string) => {
-    const id = useGroupStore.getState().createGroup(projectKey, '新任务组');
+    const id = useGroupStore.getState().createGroup(projectKey, 'New task group');
     setRenamingGroupId(id); // jump straight into inline rename
   }, []);
 
   // Create a group and drop this session into it (session → "create group").
   const handleCreateGroupWithSession = useCallback((session: SessionListItem) => {
     const ws = normalizeProjectKey(session.project || session.projectDir);
-    const id = useGroupStore.getState().createGroup(ws, '新任务组');
+    const id = useGroupStore.getState().createGroup(ws, 'New task group');
     useGroupStore.getState().addToGroup(session.id, id);
     setRenamingGroupId(id);
   }, []);
@@ -674,6 +675,19 @@ export function ConversationList() {
     setSelectedIds(new Set());
   }, []);
 
+  const workingDirectory = useSettingsStore((s) => s.workingDirectory);
+
+  // When no project is selected, show empty state
+  if (!workingDirectory) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center px-6 py-12">
+        <p className="text-sm text-text-tertiary">
+          {t('conv.noConv')}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-1 px-3">
       {/* Search + Filters */}
@@ -682,12 +696,7 @@ export function ConversationList() {
           <div className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 rounded-xl
             bg-bg-secondary border border-border-subtle
             focus-within:border-border-focus transition-smooth">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5"
-              className="text-text-tertiary flex-shrink-0">
-              <circle cx="7" cy="7" r="4.5" />
-              <path d="M10.5 10.5L14 14" />
-            </svg>
+            <MagnifyingGlass size={14} weight="light" className="text-text-tertiary flex-shrink-0" />
             <input
               type="text"
               value={searchQuery}
@@ -701,10 +710,7 @@ export function ConversationList() {
                 onClick={() => setSearchQuery('')}
                 className="flex-shrink-0 p-0.5 rounded text-text-tertiary
                   hover:text-text-primary transition-smooth">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-                  stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M4 4l8 8M12 4l-8 8" />
-                </svg>
+                <X size={12} weight="light" />
               </button>
             )}
           </div>
@@ -765,7 +771,7 @@ export function ConversationList() {
         <div className="mt-3 mb-1">
           <div className="flex items-center gap-2 px-3 py-1">
             <div className="flex-1 h-px bg-border-subtle" />
-            <span className="text-[10px] text-text-tertiary font-medium uppercase tracking-wider">
+            <span className="text-xs text-text-tertiary font-medium uppercase tracking-wider">
               {t('conv.contentMatches')} ({contentOnlyMatches.length})
             </span>
             <div className="flex-1 h-px bg-border-subtle" />
@@ -803,7 +809,7 @@ export function ConversationList() {
         <div className="flex items-center justify-center gap-1.5 py-3 text-text-tertiary">
           <div className="w-3 h-3 border-[1.5px] border-text-tertiary/20
             border-t-text-tertiary/60 rounded-full animate-spin" />
-          <span className="text-[10px]">{t('conv.searchingContent')}</span>
+          <span className="text-xs">{t('conv.searchingContent')}</span>
         </div>
       )}
 
@@ -819,7 +825,7 @@ export function ConversationList() {
       {/* Refresh button */}
       <button
         onClick={fetchSessions}
-        className="mx-2 mt-2 py-1.5 rounded-lg text-[12px]
+        className="mx-2 mt-2 py-1.5 rounded-lg text-xs
           text-text-muted hover:text-text-primary
           hover:bg-bg-secondary transition-smooth"
       >

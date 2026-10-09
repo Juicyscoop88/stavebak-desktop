@@ -25,8 +25,8 @@ class ErrorBoundary extends React.Component<
 
   handleClearAndReload = () => {
     try {
-      localStorage.removeItem("tokenicode-settings");
-      localStorage.removeItem("tokenicode_custom_previews");
+      localStorage.removeItem("stavebak-settings");
+      localStorage.removeItem("stavebak_custom_previews");
     } catch {
       // ignore
     }

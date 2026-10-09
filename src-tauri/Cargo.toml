@@ -1,13 +1,13 @@
 [package]
-name = "tokenicode"
+name = "stavebak"
 version = "0.11.0"
-description = "TOKENICODE - A beautiful GUI for Claude Code"
+description = "Stavebak - A beautiful GUI for Claude Code"
 authors = ["TinyZ"]
 license = "Apache-2.0"
 edition = "2021"
 
 [lib]
-name = "tokenicode_lib"
+name = "stavebak_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -36,7 +36,6 @@ flate2 = "1"
 tar = "0.4"
 zip = "2"
 sha2 = "0.10"
-tauri-plugin-mcp = { git = "https://github.com/P3GLEG/tauri-plugin-mcp" }
 
 [dev-dependencies]
 tempfile = "3"
@@ -45,5 +44,4 @@ tempfile = "3"
 libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-cocoa = "0.26"
 objc = "0.2"

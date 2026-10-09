@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { MagnifyingGlassMinus, MagnifyingGlassPlus } from '@phosphor-icons/react';
 import { useT } from '../../lib/i18n';
 
 interface AvatarCropModalProps {
@@ -146,7 +147,7 @@ export function AvatarCropModal({ imageFile, onSave, onCancel }: AvatarCropModal
         onClick={(e) => e.stopPropagation()}>
         {/* Title */}
         <div className="flex items-center justify-between w-full">
-          <h3 className="text-[14px] font-semibold text-text-primary">{t('settings.aiAvatarCrop')}</h3>
+          <h3 className="text-sm font-semibold text-text-primary">{t('settings.aiAvatarCrop')}</h3>
           <button onClick={onCancel} className="text-text-muted hover:text-text-primary transition-smooth text-lg leading-none">&times;</button>
         </div>
 
@@ -182,11 +183,7 @@ export function AvatarCropModal({ imageFile, onSave, onCancel }: AvatarCropModal
             className="w-8 h-8 rounded-lg border border-border-subtle flex items-center justify-center
               text-text-muted hover:bg-bg-secondary transition-smooth text-sm font-bold"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <circle cx="7" cy="7" r="5" />
-              <path d="M11 11l3 3" />
-              <path d="M5 7h4" />
-            </svg>
+            <MagnifyingGlassMinus size={14} weight="light" />
           </button>
           <input
             type="range"
@@ -212,11 +209,7 @@ export function AvatarCropModal({ imageFile, onSave, onCancel }: AvatarCropModal
             className="w-8 h-8 rounded-lg border border-border-subtle flex items-center justify-center
               text-text-muted hover:bg-bg-secondary transition-smooth text-sm font-bold"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <circle cx="7" cy="7" r="5" />
-              <path d="M11 11l3 3" />
-              <path d="M5 7h4M7 5v4" />
-            </svg>
+            <MagnifyingGlassPlus size={14} weight="light" />
           </button>
         </div>
 
@@ -224,14 +217,14 @@ export function AvatarCropModal({ imageFile, onSave, onCancel }: AvatarCropModal
         <div className="flex gap-3 w-full">
           <button
             onClick={onCancel}
-            className="flex-1 py-2 rounded-xl text-[13px] font-medium
+            className="flex-1 py-2 rounded-xl text-sm font-medium
               border border-border-subtle text-text-muted hover:bg-bg-secondary transition-smooth"
           >
             {t('settings.aiAvatarCancel')}
           </button>
           <button
             onClick={handleSave}
-            className="flex-1 py-2 rounded-xl text-[13px] font-medium
+            className="flex-1 py-2 rounded-xl text-sm font-medium
               bg-accent text-text-inverse hover:bg-accent-hover transition-smooth"
           >
             {t('settings.aiAvatarSave')}

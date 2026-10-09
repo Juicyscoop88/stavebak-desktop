@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { SessionListItem } from '../../lib/tauri-bridge';
 import { useT } from '../../lib/i18n';
 import { t as tStatic } from '../../lib/i18n';
+import { PushPin, MagnifyingGlass } from '@phosphor-icons/react';
 
 function formatRelativeTime(ms: number): string {
   if (!ms) return '';
@@ -201,16 +202,12 @@ export function SessionItem({
             ${name ? 'text-text-primary' : 'text-text-muted italic'}
             ${titleAnimating ? 'animate-title-update' : ''}`}>
             {isPinned && (
-              <svg width="10" height="10" viewBox="0 0 16 16" fill="none"
-                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-                className="inline-block mr-1 -mt-0.5 text-accent">
-                <path d="M9.5 2L14 6.5L8.5 12L6 14L4.5 11.5L2 9.5L4 7.5L9.5 2z" />
-              </svg>
+              <PushPin size={10} weight="light" className="inline-block mr-1 -mt-0.5 text-accent" />
             )}
             {name || (session.path === '' ? t('conv.newChat') : t('conv.empty'))}
           </div>
         )}
-        <span className="text-[10px] text-text-tertiary flex-shrink-0">
+        <span className="text-xs text-text-tertiary flex-shrink-0">
           {formatRelativeTime(session.modifiedAt)}
         </span>
         {isRunning && (
@@ -220,13 +217,8 @@ export function SessionItem({
         )}
       </div>
       {contentSnippet && (
-        <div className="flex gap-1 mt-0.5 text-[10px] text-text-muted leading-relaxed">
-          <svg width="8" height="8" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-            className="flex-shrink-0 mt-[3px] text-accent/40">
-            <circle cx="7" cy="7" r="5" />
-            <path d="M14 14l-3-3" />
-          </svg>
+        <div className="flex gap-1 mt-0.5 text-xs text-text-muted leading-relaxed">
+          <MagnifyingGlass size={8} weight="light" className="flex-shrink-0 mt-[3px] text-accent/40" />
           <div className="min-w-0">
             {matchCount != null && matchCount > 1 && (
               <span className="text-accent/60 font-medium mr-1">{matchCount}x</span>

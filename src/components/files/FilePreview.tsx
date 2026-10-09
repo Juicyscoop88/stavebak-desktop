@@ -27,8 +27,9 @@ import { useFileStore } from '../../stores/fileStore';
 import { bridge } from '../../lib/tauri-bridge';
 import { MarkdownRenderer } from '../shared/MarkdownRenderer';
 import { FileIcon } from '../shared/FileIcon';
-import { tokenicodeTheme, tokenicodeHighlight } from '../../lib/codemirror-theme';
+import { stavebakTheme, stavebakHighlight } from '../../lib/codemirror-theme';
 import { useT } from '../../lib/i18n';
+import { ArrowsClockwise, X, SpinnerGap, ArrowSquareOut } from '@phosphor-icons/react';
 
 /* ================================================================
    Helpers
@@ -194,12 +195,12 @@ export function FilePreview() {
 
   return (
     <div className="flex flex-col h-full bg-bg-primary" onKeyDown={handleKeyDown}>
-      {/* Header bar — h-[68px]+pt-[20px] 与聊天顶栏完全一致，顶部分隔线对齐；z-10 above iframe content */}
+      {/* Header bar — h-[68px]+pt-[20px] matches chat top bar exactly, top divider aligned; z-10 above iframe content */}
       <div className="flex items-center justify-between h-[68px] px-3 pt-[20px]
         border-b border-border-subtle bg-bg-secondary/50 flex-shrink-0 relative z-10">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <FileIcon name={fileName} size={16} className="flex-shrink-0 text-text-muted" />
-          <span className="text-[13px] font-medium text-text-primary truncate">
+          <span className="text-sm font-medium text-text-primary truncate">
             {fileName}
           </span>
           {lineCount > 0 && (
@@ -260,11 +261,7 @@ export function FilePreview() {
               text-text-tertiary transition-smooth cursor-pointer"
             title={t('files.refresh')}
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M2.5 8a5.5 5.5 0 019.3-4M13.5 8a5.5 5.5 0 01-9.3 4" />
-              <path d="M12 1v3h-3M4 12v3h3" />
-            </svg>
+            <ArrowsClockwise size={14} weight="light" />
           </button>
 
           {/* Close button — larger hit area for easy clicking */}
@@ -274,10 +271,7 @@ export function FilePreview() {
               text-text-tertiary transition-smooth cursor-pointer"
             title={t('files.closePreview')}
           >
-            <svg width="16" height="16" viewBox="0 0 14 14" fill="none"
-              stroke="currentColor" strokeWidth="2">
-              <path d="M4 4l6 6M10 4l-6 6" />
-            </svg>
+            <X size={16} weight="light" />
           </button>
         </div>
       </div>
@@ -287,10 +281,7 @@ export function FilePreview() {
         {isLoadingContent ? (
           <div className="flex items-center justify-center h-full">
             <div className="flex items-center gap-2 text-text-muted text-xs">
-              <svg className="animate-spin-slow" width="14" height="14"
-                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-              </svg>
+              <SpinnerGap size={14} weight="light" className="animate-spin" />
               {t('files.loading')}
             </div>
           </div>
@@ -315,7 +306,7 @@ export function FilePreview() {
             <div className="flex items-center justify-center py-2 border-t border-border-subtle">
               <button
                 onClick={() => bridge.openWithDefaultApp(selectedFile)}
-                className="px-3 py-1 rounded-lg text-[11px] font-medium
+                className="px-3 py-1 rounded-lg text-xs font-medium
                   text-text-muted hover:text-text-primary hover:bg-bg-tertiary
                   transition-smooth"
               >
@@ -354,11 +345,7 @@ export function FilePreview() {
                     text-text-muted hover:bg-bg-tertiary hover:text-text-primary
                     transition-smooth cursor-pointer inline-flex items-center gap-1.5"
                 >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-                    stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <path d="M10 6.5v3a1 1 0 01-1 1H2.5a1 1 0 01-1-1V3a1 1 0 011-1H6" />
-                    <path d="M7.5 1.5h3v3M7 5.5l3.5-4" />
-                  </svg>
+                  <ArrowSquareOut size={12} weight="light" />
                   {t('files.openDefault')}
                 </button>
               )}
@@ -368,8 +355,8 @@ export function FilePreview() {
           /* Edit mode: CodeMirror 6 editor */
           <CodeMirror
             value={editContent ?? fileContent ?? ''}
-            extensions={[...(Array.isArray(langExtension) ? langExtension : [langExtension]), EditorView.lineWrapping, tokenicodeHighlight]}
-            theme={tokenicodeTheme}
+            extensions={[...(Array.isArray(langExtension) ? langExtension : [langExtension]), EditorView.lineWrapping, stavebakHighlight]}
+            theme={stavebakTheme}
             onChange={(value) => setEditContent(value)}
             height="100%"
             style={{ height: '100%', fontSize: '13px' }}
@@ -424,7 +411,7 @@ export function FilePreview() {
                       <div className="mb-4 rounded-lg border border-border-subtle
                         bg-bg-secondary/50 overflow-hidden text-xs font-mono">
                         <div className="px-3 py-1 border-b border-border-subtle/50
-                          bg-bg-tertiary/30 text-[10px] text-text-tertiary font-sans">
+                          bg-bg-tertiary/30 text-xs text-text-tertiary font-sans">
                           frontmatter
                         </div>
                         <div className="px-3 py-2 text-text-muted whitespace-pre-wrap">
@@ -442,8 +429,8 @@ export function FilePreview() {
           /* Source view: read-only CodeMirror */
           <CodeMirror
             value={fileContent}
-            extensions={[...(Array.isArray(langExtension) ? langExtension : [langExtension]), EditorView.lineWrapping, tokenicodeHighlight]}
-            theme={tokenicodeTheme}
+            extensions={[...(Array.isArray(langExtension) ? langExtension : [langExtension]), EditorView.lineWrapping, stavebakHighlight]}
+            theme={stavebakTheme}
             editable={false}
             readOnly={true}
             height="100%"

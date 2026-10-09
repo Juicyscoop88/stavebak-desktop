@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useMcpStore } from '../../stores/mcpStore';
+import { HardDrives, ArrowsClockwise, Plus, PencilSimple, Trash, SpinnerGap } from '@phosphor-icons/react';
+import { useMcpStore, BUILTIN_SERVER_NAME } from '../../stores/mcpStore';
 import type { McpServer, McpServerConfig } from '../../stores/mcpStore';
 import { useT } from '../../lib/i18n';
 
@@ -32,18 +33,11 @@ export function McpPanel() {
       <div className="flex items-center justify-between px-3 py-2
         border-b border-border-subtle">
         <div className="flex items-center gap-2 min-w-0">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5"
-            className="text-accent flex-shrink-0">
-            <path d="M2 4a2 2 0 012-2h8a2 2 0 012 2v1H2V4z" />
-            <path d="M2 7h12v5a2 2 0 01-2 2H4a2 2 0 01-2-2V7z" />
-            <circle cx="5" cy="10" r="1" fill="currentColor" stroke="none" />
-            <circle cx="8" cy="10" r="1" fill="currentColor" stroke="none" />
-          </svg>
+          <HardDrives size={12} weight="light" className="text-accent flex-shrink-0" />
           <span className="text-xs font-semibold text-text-primary">
             {t('mcp.title')}
           </span>
-          <span className="text-[10px] text-text-muted flex-shrink-0">
+          <span className="text-xs text-text-muted flex-shrink-0">
             {servers.length}
           </span>
         </div>
@@ -54,11 +48,7 @@ export function McpPanel() {
               text-text-tertiary transition-smooth"
             title={t('mcp.refresh')}
           >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
-              stroke="currentColor" strokeWidth="1.5">
-              <path d="M1 6a5 5 0 019-2M11 6a5 5 0 01-9 2" />
-              <path d="M10 1v3h-3M2 11V8h3" />
-            </svg>
+            <ArrowsClockwise size={12} weight="light" />
           </button>
           <button
             onClick={() => setAdding(true)}
@@ -66,10 +56,7 @@ export function McpPanel() {
               text-text-tertiary transition-smooth"
             title={t('mcp.add')}
           >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
-              stroke="currentColor" strokeWidth="1.5">
-              <path d="M8 3v10M3 8h10" />
-            </svg>
+            <Plus size={12} weight="light" />
           </button>
         </div>
       </div>
@@ -89,20 +76,12 @@ export function McpPanel() {
 
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="w-5 h-5 border-2 border-accent/30
-              border-t-accent rounded-full animate-spin" />
+            <SpinnerGap size={20} weight="light" className="animate-spin text-accent" />
           </div>
         ) : servers.length === 0 && !isAdding ? (
           <div className="flex flex-col items-center justify-center py-8
             text-text-tertiary text-xs gap-2">
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none"
-              stroke="currentColor" strokeWidth="1.2"
-              className="text-text-tertiary/40">
-              <path d="M4 8a4 4 0 014-4h16a4 4 0 014 4v2H4V8z" />
-              <path d="M4 14h24v10a4 4 0 01-4 4H8a4 4 0 01-4-4V14z" />
-              <circle cx="10" cy="20" r="2" />
-              <circle cx="16" cy="20" r="2" />
-            </svg>
+            <HardDrives size={32} weight="light" className="text-text-tertiary/40" />
             <p className="text-xs text-text-tertiary leading-relaxed">
               {t('mcp.noServers')}
             </p>
@@ -147,8 +126,9 @@ function McpServerCard({
   onDelete: () => void;
   t: (key: string) => string;
 }) {
+  const isBuiltin = server.name === BUILTIN_SERVER_NAME;
   const envCount = Object.keys(server.config.env).length;
-  const cmdDisplay = [server.config.command, ...server.config.args].join(' ');
+  const display = server.config.url || [server.config.command, ...server.config.args].join(' ');
 
   return (
     <div className="mx-1.5 mb-1 px-2.5 py-2 rounded-lg
@@ -156,53 +136,50 @@ function McpServerCard({
       hover:bg-bg-secondary hover:border-border-subtle">
       {/* Row 1: Name + type badge + actions */}
       <div className="flex items-center gap-1.5">
-        <svg width="10" height="10" viewBox="0 0 16 16" fill="none"
-          stroke="currentColor" strokeWidth="1.5"
-          className="text-text-tertiary flex-shrink-0">
-          <path d="M2 4a2 2 0 012-2h8a2 2 0 012 2v1H2V4z" />
-          <path d="M2 7h12v5a2 2 0 01-2 2H4a2 2 0 01-2-2V7z" />
-        </svg>
-        <span className="text-[13px] font-medium truncate flex-1 text-text-primary">
+        <HardDrives size={10} weight="light" className="text-text-tertiary shrink-0" />
+        <span className="text-sm font-medium truncate flex-1 text-text-primary">
           {server.name}
         </span>
-        <span className="flex-shrink-0 px-1.5 py-0.5 text-[9px] rounded-md
+        {isBuiltin && (
+          <span className="shrink-0 px-1.5 py-0.5 text-[9px] rounded-md
+            bg-accent/15 text-accent font-medium">
+            {t('mcp.builtin')}
+          </span>
+        )}
+        <span className="shrink-0 px-1.5 py-0.5 text-[9px] rounded-md
           bg-blue-500/15 text-blue-400 font-medium">
           {server.config.type}
         </span>
-        {/* Edit button */}
-        <button
-          onClick={onEdit}
-          className="flex-shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100
-            hover:bg-bg-tertiary transition-smooth text-text-tertiary"
-          title={t('mcp.edit')}
-        >
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <path d="M11.5 1.5l3 3L5 14H2v-3l9.5-9.5z" />
-          </svg>
-        </button>
-        {/* Delete button */}
-        <button
-          onClick={onDelete}
-          className="flex-shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100
-            hover:bg-red-500/10 transition-smooth text-text-tertiary hover:text-red-500"
-          title={t('mcp.delete')}
-        >
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"
-            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" />
-          </svg>
-        </button>
+        {!isBuiltin && (
+          <button
+            onClick={onEdit}
+            className="shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100
+              hover:bg-bg-tertiary transition-smooth text-text-tertiary"
+            title={t('mcp.edit')}
+          >
+            <PencilSimple size={11} weight="light" />
+          </button>
+        )}
+        {!isBuiltin && (
+          <button
+            onClick={onDelete}
+            className="shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100
+              hover:bg-red-500/10 transition-smooth text-text-tertiary hover:text-red-500"
+            title={t('mcp.delete')}
+          >
+            <Trash size={11} weight="light" />
+          </button>
+        )}
       </div>
 
-      {/* Row 2: Command in monospace */}
-      <p className="text-[11px] text-text-muted mt-1 font-mono truncate pl-4">
-        {cmdDisplay}
+      {/* Row 2: Command or URL in monospace */}
+      <p className="text-xs text-text-muted mt-1 font-mono truncate pl-4">
+        {display}
       </p>
 
       {/* Row 3: Env var count */}
       {envCount > 0 && (
-        <p className="text-[10px] text-text-tertiary mt-0.5 pl-4">
+        <p className="text-xs text-text-tertiary mt-0.5 pl-4">
           {envCount} {t('mcp.envCount')}
         </p>
       )}
@@ -260,7 +237,7 @@ function McpServerForm({
       bg-accent/5 space-y-2">
       {/* Name */}
       <div>
-        <label className="text-[10px] text-text-tertiary font-medium uppercase tracking-wider">
+        <label className="text-xs text-text-tertiary font-medium uppercase tracking-wider">
           {t('mcp.name')}
         </label>
         <input
@@ -277,7 +254,7 @@ function McpServerForm({
 
       {/* Command */}
       <div>
-        <label className="text-[10px] text-text-tertiary font-medium uppercase tracking-wider">
+        <label className="text-xs text-text-tertiary font-medium uppercase tracking-wider">
           {t('mcp.command')}
         </label>
         <input
@@ -290,7 +267,7 @@ function McpServerForm({
 
       {/* Args */}
       <div>
-        <label className="text-[10px] text-text-tertiary font-medium uppercase tracking-wider">
+        <label className="text-xs text-text-tertiary font-medium uppercase tracking-wider">
           {t('mcp.args')}
         </label>
         <textarea
@@ -304,7 +281,7 @@ function McpServerForm({
 
       {/* Env */}
       <div>
-        <label className="text-[10px] text-text-tertiary font-medium uppercase tracking-wider">
+        <label className="text-xs text-text-tertiary font-medium uppercase tracking-wider">
           {t('mcp.env')}
         </label>
         <textarea
