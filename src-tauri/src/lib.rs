@@ -1611,7 +1611,7 @@ fn strip_thinking_from_value(value: &mut serde_json::Value) -> Option<usize> {
 /// Reads `~/.claude.json`, extracts the `mcpServers` object, and writes
 /// `{"mcpServers": {...}}` into `~/.stavebak/mcp-session-<stdin_id>.json`.
 /// Returns `None` when there are no servers to carry over (or on I/O error).
-fn build_mcp_scratch_config(_stdin_id: &str) -> Option<std::path::PathBuf> {
+fn build_mcp_scratch_config(stdin_id: &str) -> Option<std::path::PathBuf> {
     let home = dirs::home_dir()?;
     let claude_json = home.join(".claude.json");
     let raw = std::fs::read_to_string(&claude_json).ok()?;
@@ -1636,18 +1636,28 @@ fn build_mcp_scratch_config(_stdin_id: &str) -> Option<std::path::PathBuf> {
         _ => return None,
     };
 
-    // OPT-7: Don't pass ANY MCP servers in the scratch config.
-    // Even "fast" servers (HTTP, direct binaries) block system:init while
-    // the CLI waits for their handshake. With --strict-mcp-config and no
-    // --mcp-config file, the CLI starts with zero servers and emits
-    // system:init immediately. Servers from ~/.claude.json are loaded
-    // lazily via the CLI's deferred MCP mechanism when the model needs them.
-    eprintln!(
-        "[Stavebak] MCP: all {} servers deferred for instant startup",
-        server_map.len()
-    );
-    None
+    // OPT-7: only the Stavebák server is carried over. --strict-mcp-config
+    // drops everything not passed via --mcp-config (there is no lazy
+    // fallback), so without this the app runs with zero domain tools.
+    // Other user servers stay out — their handshakes would slow cold start.
+    let carried: serde_json::Map<String, serde_json::Value> = server_map
+        .into_iter()
+        .filter(|(name, _)| name == STAVEBAK_MCP_SERVER)
+        .collect();
+    if carried.is_empty() {
+        eprintln!("[Stavebak] MCP: '{}' server not configured", STAVEBAK_MCP_SERVER);
+        return None;
+    }
+
+    let dir = home.join(".stavebak");
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join(format!("mcp-session-{}.json", safe_stdin_for_path(stdin_id)));
+    let body = serde_json::json!({ "mcpServers": carried });
+    std::fs::write(&path, body.to_string()).ok()?;
+    Some(path)
 }
+
+const STAVEBAK_MCP_SERVER: &str = "stavebak";
 
 fn safe_stdin_for_path(id: &str) -> String {
     id.chars()
