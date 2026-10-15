@@ -11,7 +11,9 @@ Stav k 2026-10-15. macOS first, Windows doladíme později. Sdílení v týmu a 
 - [x] Fáze 1: oficiální přihlášení natvrdo, žádné přechody, mrtvý kód, `tsc` čistý. Vnitřní provider logika (`providerStore`, `api-provider.ts`, spawn hash) zůstává k odstranění později.
 - [x] Fáze 2 (základ): typografická škála, Switzer, root 16 px, plochá bublina, nadpisy, řádky stromu
 - [x] Fáze 3: nastavení na jedné stránce
-- [ ] Fáze 4–8
+- [x] Fáze 4: onboarding (Stavebák OAuth zatím mock)
+- [ ] Fáze 5: checklist čeká na nasazení nového Stavebák MCP (nasazená verze má `guide` s `typ_stavby`, repo s `buildingType` a jiným výsledkem)
+- [ ] Fáze 6–8
 
 ---
 
