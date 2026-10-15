@@ -4,6 +4,15 @@ Stav k 2026-10-15. macOS first, Windows doladíme později. Sdílení v týmu a 
 
 **Neměnit:** layout (vlevo soubory složky projektu, uprostřed chat, vpravo náhled po kliknutí na soubor) a branding (Switzer, logo, barvy). Vše jen polishujeme. Žádné dekorativní animace.
 
+## Stav (2026-10-15, větev `redesign/ux`)
+
+- [x] Fáze 0: snímky a nálezy
+- [x] Nález č. 1: Stavebák MCP se předává do CLI (ověřeno voláním `fetch_cgs_data`)
+- [x] Fáze 1: oficiální přihlášení natvrdo, žádné přechody, mrtvý kód, `tsc` čistý. Vnitřní provider logika (`providerStore`, `api-provider.ts`, spawn hash) zůstává k odstranění později.
+- [x] Fáze 2 (základ): typografická škála, Switzer, root 16 px, plochá bublina, nadpisy, řádky stromu
+- [x] Fáze 3: nastavení na jedné stránce
+- [ ] Fáze 4–8
+
 ---
 
 ## Fáze 0 · Výchozí snímky
