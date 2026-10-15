@@ -14,6 +14,7 @@ import { useSettingsStore } from './stores/settingsStore';
 import { useProviderStore } from './stores/providerStore';
 import type { ColorTheme, Theme } from './stores/settingsStore';
 import { useFileStore } from './stores/fileStore';
+import { useSetupStore, type SetupStep } from './stores/setupStore';
 import { useChatStore } from './stores/chatStore';
 import { useSessionStore } from './stores/sessionStore';
 import { APP_NAME, IS_ALPHA } from './lib/edition';
@@ -134,24 +135,16 @@ function App() {
   const markFileChanged = useFileStore((s) => s.markFileChanged);
   const prevDirRef = useRef<string | null>(null);
 
-  const [onboardingDismissing, setOnboardingDismissing] = useState(false);
   const wasInSetup = useRef(!setupCompleted);
 
   const t = useT();
 
-  // When setup completes, fade out overlay then reveal sidebar
+  // When setup completes, drop the overlay and reveal the sidebar (instant)
   useEffect(() => {
     if (setupCompleted && wasInSetup.current) {
       wasInSetup.current = false;
-      setOnboardingDismissing(true);
-      // Fade out the overlay, then open sidebar
-      const t1 = setTimeout(() => {
-        setOnboardingDismissing(false);
-        // Open sidebar with animation
-        const s = useSettingsStore.getState();
-        if (!s.sidebarOpen) s.toggleSidebar();
-      }, 600);
-      return () => clearTimeout(t1);
+      const s = useSettingsStore.getState();
+      if (!s.sidebarOpen) s.toggleSidebar();
     }
   }, [setupCompleted]);
 
@@ -415,7 +408,17 @@ function App() {
           treeSize: s.tree.length,
         };
       },
+      previewOnboarding(step: string) {
+        (window as any).__onboardingPreview = step;
+        const setup = useSetupStore.getState();
+        setup.reset();
+        setup.setCli('ready');
+        setup.setStep(step as SetupStep);
+        useSettingsStore.getState().setSetupCompleted(false);
+        return { preview: step };
+      },
       setSetupCompleted(completed: boolean) {
+        delete (window as any).__onboardingPreview;
         useSettingsStore.getState().setSetupCompleted(completed);
         return { setupCompleted: completed };
       },
@@ -795,15 +798,11 @@ function App() {
         main={<ChatPanel key={selectedSessionId || 'new'} />}
         secondary={<SecondaryPanel />}
         bottomBar={<BottomBar />}
-        forceCollapseSidebar={!setupCompleted || onboardingDismissing}
+        forceCollapseSidebar={!setupCompleted}
       />
       {/* Onboarding overlay — centered, covers entire app */}
-      {(!setupCompleted || onboardingDismissing) && (
-        <div
-          className={`fixed inset-0 z-100 flex items-center justify-center bg-bg-chat
-            transition-opacity duration-500 ease-out
-            ${onboardingDismissing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-        >
+      {!setupCompleted && (
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-bg-chat">
           <SetupWizard />
         </div>
       )}

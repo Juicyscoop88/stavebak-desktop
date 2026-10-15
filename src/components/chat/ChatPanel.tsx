@@ -16,7 +16,6 @@ import { envFingerprint, is1MModel as isOneMillionModel, resolveModelForProvider
 import { useProviderStore } from '../../stores/providerStore';
 import { spawnSession } from '../../lib/sessionLifecycle';
 import { MarkdownRenderer } from '../shared/MarkdownRenderer';
-import { useSetupStore } from '../../stores/setupStore';
 import { AiAvatar } from '../shared/AiAvatar';
 import { useFindInPage } from '../../hooks/useFindInPage';
 import { FindBar } from './FindBar';
@@ -800,8 +799,6 @@ function WelcomeScreen() {
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    useSettingsStore.getState().setSetupCompleted(false);
-    useSetupStore.getState().reset();
     fetchProjects();
   }, []);
 

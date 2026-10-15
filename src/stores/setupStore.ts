@@ -1,56 +1,58 @@
 import { create } from 'zustand';
 
+/** Screens the user moves through. Everything technical runs in the background. */
 export type SetupStep =
-  | 'checking'
-  | 'not_installed'
-  | 'installing'
-  | 'install_failed'
-  | 'auth_check'
-  | 'needs_auth'
-  | 'ready';
+  | 'checking'   // silent fast path: CLI + auth already fine → straight into the app
+  | 'welcome'    // "you need two things"
+  | 'claude'     // Claude subscription sign-in
+  | 'stavebak'   // Stavebák account (UX mock until OAuth exists)
+  | 'done';
+
+/** Background state of the Claude Code runtime the user never has to see. */
+export type CliState = 'checking' | 'installing' | 'ready' | 'failed';
 
 interface SetupState {
   step: SetupStep;
+  cli: CliState;
+  cliPercent: number;
   error: string | null;
   cliVersion: string | null;
   cliPath: string | null;
   authStatus: 'unknown' | 'ok' | 'missing';
   accountName: string | null;
+  stavebakDone: boolean;
 
   setStep: (step: SetupStep) => void;
-  setError: (error: string | null) => void;
+  setCli: (cli: CliState, error?: string | null) => void;
+  setCliPercent: (percent: number) => void;
   setCliInfo: (version: string | null, path: string | null) => void;
   setAuthStatus: (status: 'unknown' | 'ok' | 'missing') => void;
   setAccountName: (name: string | null) => void;
+  setStavebakDone: (done: boolean) => void;
   reset: () => void;
 }
 
-export const useSetupStore = create<SetupState>()((set) => ({
-  step: 'checking',
+const initial = {
+  step: 'checking' as SetupStep,
+  cli: 'checking' as CliState,
+  cliPercent: 0,
   error: null,
   cliVersion: null,
   cliPath: null,
-  authStatus: 'unknown',
+  authStatus: 'unknown' as const,
   accountName: null,
+  stavebakDone: false,
+};
+
+export const useSetupStore = create<SetupState>()((set) => ({
+  ...initial,
 
   setStep: (step) => set({ step }),
-
-  setError: (error) => set({ error }),
-
-  setCliInfo: (version, path) =>
-    set({ cliVersion: version, cliPath: path }),
-
+  setCli: (cli, error = null) => set({ cli, error }),
+  setCliPercent: (cliPercent) => set({ cliPercent }),
+  setCliInfo: (version, path) => set({ cliVersion: version, cliPath: path }),
   setAuthStatus: (authStatus) => set({ authStatus }),
-
   setAccountName: (accountName) => set({ accountName }),
-
-  reset: () =>
-    set({
-      step: 'checking',
-      error: null,
-      cliVersion: null,
-      cliPath: null,
-      authStatus: 'unknown',
-      accountName: null,
-    }),
+  setStavebakDone: (stavebakDone) => set({ stavebakDone }),
+  reset: () => set(initial),
 }));

@@ -1,364 +1,312 @@
-import { useEffect, useCallback, useState } from 'react';
-import { CheckCircle, Warning, DownloadSimple, ArrowSquareOut } from '@phosphor-icons/react';
+import { useEffect, useCallback, useRef, useState, type ReactNode } from 'react';
+import { CheckCircle, Circle, SpinnerGap, ArrowSquareOut, GoogleLogo, EnvelopeSimple } from '@phosphor-icons/react';
 import { useSetupStore } from '../../stores/setupStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useMcpStore } from '../../stores/mcpStore';
 import { useT } from '../../lib/i18n';
 import { stripAnsi } from '../../lib/strip-ansi';
 import { AiAvatar } from '../shared/AiAvatar';
-import {
-  bridge,
-  onDownloadProgress,
-} from '../../lib/tauri-bridge';
-import { useMcpStore } from '../../stores/mcpStore';
+import { bridge, onDownloadProgress } from '../../lib/tauri-bridge';
 
-function isPermissionError(msg: string): boolean {
-  const hints = ['EPERM', 'EACCES', 'permission denied', 'access denied',
-    'Access is denied', 'operation not permitted'];
-  const lower = msg.toLowerCase();
-  return hints.some(h => lower.includes(h.toLowerCase()));
+const AUTH_POLL_MS = 2000;
+const CLAUDE_UPGRADE_URL = 'https://claude.ai/upgrade';
+
+function openUrl(url: string) {
+  import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url)).catch(() => {});
 }
 
-function isNetworkError(msg: string): boolean {
-  if (isPermissionError(msg)) return false;
-  const lower = msg.toLowerCase();
-  if (lower.includes('local extraction') || lower.includes('not a network issue')) return false;
-  const hints = ['timeout', 'timed out', 'network', 'connect', 'ENOTFOUND',
-    'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'fetch', 'Failed to download',
-    'All install methods failed', 'dns', 'certificate'];
-  return hints.some(h => lower.includes(h.toLowerCase()));
-}
-
+/**
+ * First-run onboarding. The user sees two plain-language requirements
+ * (Claude subscription, Stavebák account); installing the Claude Code
+ * runtime happens silently in the background and only surfaces on failure.
+ * Users who already have everything never see a screen.
+ */
 export function SetupWizard() {
   const t = useT();
   const step = useSetupStore((s) => s.step);
+  const cli = useSetupStore((s) => s.cli);
+  const cliPercent = useSetupStore((s) => s.cliPercent);
   const error = useSetupStore((s) => s.error);
-  const cliVersion = useSetupStore((s) => s.cliVersion);
+  const authStatus = useSetupStore((s) => s.authStatus);
   const accountName = useSetupStore((s) => s.accountName);
-  const setStep = useSetupStore((s) => s.setStep);
-  const setError = useSetupStore((s) => s.setError);
-  const setCliInfo = useSetupStore((s) => s.setCliInfo);
-  const setAuthStatus = useSetupStore((s) => s.setAuthStatus);
-  const setAccountName = useSetupStore((s) => s.setAccountName);
+  const stavebakDone = useSetupStore((s) => s.stavebakDone);
   const setSetupCompleted = useSettingsStore((s) => s.setSetupCompleted);
 
-  const [downloadPercent, setDownloadPercent] = useState(0);
-  const [downloadPhase, setDownloadPhase] = useState<string>('');
-  const [mcpOk, setMcpOk] = useState<boolean | null>(null);
+  const [waitingForLogin, setWaitingForLogin] = useState(false);
+  const [subscribeClicked, setSubscribeClicked] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
 
-  const runAuthAndFinish = useCallback(async () => {
-    setStep('auth_check');
-    try {
-      const auth = await bridge.checkClaudeAuth();
-      if (!auth.authenticated) {
-        setAuthStatus('missing');
-        setStep('needs_auth');
-        return;
-      }
-      setAuthStatus('ok');
-      setAccountName(auth.account ?? null);
-    } catch {
-      setAuthStatus('missing');
-      setStep('needs_auth');
-      return;
-    }
-
+  const finish = useCallback(async () => {
     try {
       await useMcpStore.getState().ensureDefaultServer();
       useMcpStore.getState().checkHealth();
-      setMcpOk(true);
-    } catch {
-      setMcpOk(false);
-    }
-
-    setStep('ready');
-    setTimeout(() => setSetupCompleted(true), 2000);
-  }, [setStep, setAuthStatus, setAccountName, setSetupCompleted]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function detect() {
-      try {
-        const status = await bridge.checkClaudeCli();
-        if (cancelled) return;
-        if (status.installed && !status.git_bash_missing) {
-          setCliInfo(status.version ?? null, status.path ?? null);
-          await runAuthAndFinish();
-          return;
-        }
-        if (status.installed && status.git_bash_missing) {
-          setCliInfo(status.version ?? null, status.path ?? null);
-        }
-        setStep('not_installed');
-      } catch {
-        if (!cancelled) setStep('not_installed');
-      }
-    }
-    detect();
-    return () => { cancelled = true; };
-  }, []);
-
-  const handleInstall = useCallback(async () => {
-    setStep('installing');
-    setError(null);
-    setDownloadPercent(0);
-    setDownloadPhase('');
-
-    const unlistenProgress = await onDownloadProgress((event) => {
-      setDownloadPercent(event.percent);
-      setDownloadPhase(event.phase);
-    });
-
-    try {
-      await bridge.installClaudeCli();
-      unlistenProgress();
-
-      const status = await bridge.checkClaudeCli();
-      if (status.installed) {
-        setCliInfo(status.version ?? null, status.path ?? null);
-        await runAuthAndFinish();
-      } else {
-        setError('CLI not found after download');
-        setStep('install_failed');
-      }
-    } catch (err) {
-      unlistenProgress();
-      setError(stripAnsi(String(err)));
-      setStep('install_failed');
-    }
-  }, [runAuthAndFinish]);
-
-  const handleLogin = useCallback(async () => {
-    try {
-      await bridge.startClaudeLogin();
-    } catch {
-      // Login process started — user completes in browser
-    }
-  }, []);
-
-  const handleRetryAuth = useCallback(async () => {
-    await runAuthAndFinish();
-  }, [runAuthAndFinish]);
-
-  const handleSkip = useCallback(() => {
+    } catch { /* MCP is verified again in settings diagnostics */ }
     setSetupCompleted(true);
   }, [setSetupCompleted]);
 
-  const phaseLabel =
-    downloadPhase === 'native_version' ? t('setup.nativeVersion')
-    : downloadPhase === 'native_manifest' ? t('setup.nativeManifest')
-    : downloadPhase === 'native_download' ? t('setup.nativeDownload')
-    : downloadPhase === 'native_verify' ? t('setup.nativeVerify')
-    : downloadPhase === 'native_install' ? t('setup.nativeInstall')
-    : downloadPhase === 'npm_fallback' ? t('setup.npmFallback')
-    : downloadPhase === 'node_downloading' ? t('setup.downloadingNode')
-    : downloadPhase === 'node_extracting' ? t('setup.extractingNode')
-    : downloadPhase === 'node_complete' ? t('setup.preparingEnv')
-    : downloadPhase === 'installing' ? t('setup.nativeInstall')
-    : downloadPhase === 'git_downloading' ? t('setup.downloadingGit')
-    : downloadPhase === 'git_extracting' ? t('setup.extractingGit')
-    : downloadPhase === 'git_complete' ? t('setup.preparingEnv')
-    : downloadPhase === 'version' ? t('setup.nativeVersion')
-    : downloadPhase === 'downloading' ? t('setup.nativeDownload')
-    : '';
+  const checkAuth = useCallback(async (): Promise<boolean> => {
+    try {
+      const auth = await bridge.checkClaudeAuth();
+      const s = useSetupStore.getState();
+      s.setAuthStatus(auth.authenticated ? 'ok' : 'missing');
+      s.setAccountName(auth.account ?? null);
+      return auth.authenticated;
+    } catch {
+      useSetupStore.getState().setAuthStatus('missing');
+      return false;
+    }
+  }, []);
+
+  const install = useCallback(async () => {
+    const s = useSetupStore.getState();
+    s.setCli('installing');
+    s.setCliPercent(0);
+    const unlisten = await onDownloadProgress((e) => useSetupStore.getState().setCliPercent(e.percent));
+    try {
+      await bridge.installClaudeCli();
+      const status = await bridge.checkClaudeCli();
+      if (!status.installed) throw new Error('CLI not found after download');
+      useSetupStore.getState().setCliInfo(status.version ?? null, status.path ?? null);
+      useSetupStore.getState().setCli('ready');
+    } catch (err) {
+      useSetupStore.getState().setCli('failed', stripAnsi(String(err)));
+    } finally {
+      unlisten();
+    }
+  }, []);
+
+  // Detect on mount: fast path straight into the app, otherwise show welcome
+  // and start installing the runtime in the background right away.
+  useEffect(() => {
+    let cancelled = false;
+    // Dev harness: render a given screen without running detection
+    const preview = import.meta.env.DEV ? (window as any).__onboardingPreview : undefined;
+    if (preview) {
+      useSetupStore.getState().setCli('ready');
+      useSetupStore.getState().setStep(preview);
+      return;
+    }
+    (async () => {
+      const s = useSetupStore.getState();
+      let installed = false;
+      try {
+        const status = await bridge.checkClaudeCli();
+        installed = status.installed && !status.git_bash_missing;
+        if (status.installed) s.setCliInfo(status.version ?? null, status.path ?? null);
+      } catch { /* treated as not installed */ }
+      if (cancelled) return;
+
+      if (installed) {
+        s.setCli('ready');
+        if (await checkAuth()) {
+          if (!cancelled) await finish();
+          return;
+        }
+      } else {
+        install();
+      }
+      if (!cancelled) s.setStep('welcome');
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Once the user started signing in, poll until the CLI reports a login.
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (step !== 'claude' || !(waitingForLogin || subscribeClicked) || cli !== 'ready') return;
+    pollRef.current = setInterval(async () => {
+      if (await checkAuth()) {
+        setWaitingForLogin(false);
+        useSetupStore.getState().setStep(useSetupStore.getState().stavebakDone ? 'done' : 'stavebak');
+      }
+    }, AUTH_POLL_MS);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [step, waitingForLogin, subscribeClicked, cli, checkAuth]);
+
+  const handleLogin = useCallback(() => {
+    setWaitingForLogin(true);
+    bridge.startClaudeLogin().catch(() => { /* login continues in the browser */ });
+  }, []);
+
+  const goNextFromWelcome = () => {
+    useSetupStore.getState().setStep(authStatus === 'ok' ? 'stavebak' : 'claude');
+  };
+
+  const completeStavebak = () => {
+    useSetupStore.getState().setStavebakDone(true);
+    useSetupStore.getState().setStep('done');
+  };
+
+  if (step === 'checking') return null;
 
   return (
-    <div className="flex flex-col items-center justify-center select-none">
-      <div className="w-full max-w-sm px-6">
-        {/* Avatar */}
-        <div className="flex justify-center mb-8">
-          <AiAvatar size="w-16 h-16" rounded="rounded-2xl" className="shadow-glow" />
-        </div>
+    <div className="w-full max-w-[400px] px-6 select-none">
+      <div className="flex justify-center mb-6">
+        <AiAvatar size="w-12 h-12" rounded="rounded-xl" />
+      </div>
 
-        {/* Checking */}
-        {step === 'checking' && (
-          <div className="text-center space-y-2 animate-in fade-in duration-300">
-            <div className="flex items-center justify-center gap-2.5">
-              <span className="text-base font-semibold animate-pulse-soft text-accent leading-none">/</span>
-              <span className="text-sm tracking-wide text-text-muted">{t('setup.checking')}</span>
-            </div>
-          </div>
-        )}
+      {step === 'welcome' && (
+        <>
+          <Heading title={t('onb.welcome.title')} subtitle={t('onb.welcome.subtitle')} />
+          <p className="text-xs text-text-tertiary mb-2">{t('onb.need')}</p>
+          <Checklist claudeDone={authStatus === 'ok'} stavebakDone={stavebakDone} />
+          <PrimaryButton onClick={goNextFromWelcome}>{t('onb.start')}</PrimaryButton>
+        </>
+      )}
 
-        {/* Not Installed */}
-        {step === 'not_installed' && (
-          <div className="text-center space-y-5 animate-in fade-in duration-300">
-            <div>
-              <h2 className="text-lg font-semibold text-text-primary tracking-tight">
-                {t('setup.notInstalled')}
-              </h2>
-              <p className="text-sm text-text-tertiary mt-2 leading-relaxed max-w-xs mx-auto">
-                {t('setup.notInstalledDesc')}
-              </p>
-            </div>
-            <button
-              onClick={handleInstall}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium
-                bg-accent text-text-inverse hover:bg-accent-hover
-                shadow-sm hover:shadow-glow transition-all duration-200
-                cursor-pointer"
-            >
-              <DownloadSimple size={15} weight="bold" />
-              {t('setup.install')}
-            </button>
-            <div>
-              <button onClick={handleSkip}
-                className="text-xs text-text-tertiary/60 hover:text-text-muted
-                  transition-colors duration-200 cursor-pointer">
-                {t('setup.skip')}
+      {step === 'claude' && (
+        <>
+          <StepLabel n={1} />
+          <Heading title={t('onb.claude.title')} subtitle={t('onb.claude.desc')} />
+
+          {cli === 'failed' ? (
+            <div className="space-y-3">
+              <p className="text-sm text-text-primary">{t('onb.prepareFailed')}</p>
+              <PrimaryButton onClick={install}>{t('onb.retry')}</PrimaryButton>
+              <button onClick={() => setShowDetails(!showDetails)}
+                className="block mx-auto text-xs text-text-tertiary hover:text-text-primary">
+                {t('onb.details')}
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* Installing */}
-        {step === 'installing' && (
-          <div className="text-center space-y-4 animate-in fade-in duration-300">
-            <div className="flex items-center justify-center gap-2.5">
-              <span className="text-base font-semibold animate-pulse-soft text-accent leading-none">/</span>
-              <span className="text-sm tracking-wide text-text-muted">
-                {phaseLabel || t('setup.installing')}
-              </span>
-            </div>
-            <div className="mx-auto max-w-50">
-              <div className="h-1 rounded-full bg-bg-tertiary overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-accent transition-all duration-500 ease-out"
-                  style={{ width: `${Math.max(downloadPercent, 3)}%` }}
-                />
-              </div>
-              {downloadPercent > 0 && (
-                <span className="text-xs text-text-tertiary/50 mt-2 block">{downloadPercent}%</span>
+              {showDetails && error && (
+                <pre className="text-xs text-text-muted font-mono whitespace-pre-wrap break-all
+                  bg-bg-secondary rounded-md px-3 py-2 max-h-32 overflow-y-auto">{error}</pre>
               )}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="space-y-2">
+              <PrimaryButton onClick={handleLogin} disabled={cli !== 'ready' || waitingForLogin}>
+                {t('onb.claude.login')}
+              </PrimaryButton>
+              <SecondaryButton onClick={() => { setSubscribeClicked(true); openUrl(CLAUDE_UPGRADE_URL); }}>
+                <ArrowSquareOut size={13} />
+                {t('onb.claude.subscribe')}
+              </SecondaryButton>
+              <div className="h-5 pt-2 text-center text-xs text-text-tertiary">
+                {cli !== 'ready' ? (
+                  <Status>{t('onb.preparing')}{cliPercent > 0 ? ` ${cliPercent} %` : ''}</Status>
+                ) : waitingForLogin ? (
+                  <Status>{t('onb.claude.waiting')}</Status>
+                ) : subscribeClicked ? (
+                  t('onb.claude.subscribeHint')
+                ) : null}
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
-        {/* Install Failed */}
-        {step === 'install_failed' && (
-          <div className="text-center space-y-4 animate-in fade-in duration-300">
-            <div>
-              <h2 className="text-lg font-semibold text-red-400 tracking-tight">
-                {t('setup.installFailed')}
-              </h2>
-              <p className="text-sm text-text-tertiary mt-2 leading-relaxed">
-                {t('setup.installFailedDesc')}
-              </p>
-            </div>
-            {error && (
-              <p className="text-xs text-red-400/80 font-mono bg-red-500/8 px-3 py-2 rounded-lg text-left leading-relaxed">
-                {error}
-              </p>
-            )}
-            {error && isPermissionError(error) && (
-              <p className="text-xs text-amber-400/80">{t('error.permissionHint')}</p>
-            )}
-            {error && !isPermissionError(error) && isNetworkError(error) && (
-              <p className="text-xs text-amber-400/80">{t('network.firewallHint')}</p>
-            )}
-            <div className="flex gap-2.5 justify-center">
-              <button onClick={handleInstall}
-                className="px-4 py-2 rounded-xl text-sm font-medium
-                  bg-accent text-text-inverse hover:bg-accent-hover
-                  transition-all duration-200 cursor-pointer">
-                {t('setup.retry')}
-              </button>
-              <button onClick={handleSkip}
-                className="px-4 py-2 rounded-xl text-sm font-medium
-                  border border-border-subtle text-text-muted
-                  hover:bg-bg-tertiary transition-all duration-200 cursor-pointer">
-                {t('setup.skip')}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Auth Check */}
-        {step === 'auth_check' && (
-          <div className="text-center space-y-2 animate-in fade-in duration-300">
-            <div className="flex items-center justify-center gap-2.5">
-              <span className="text-base font-semibold animate-pulse-soft text-accent leading-none">/</span>
-              <span className="text-sm tracking-wide text-text-muted">{t('setup.authChecking')}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Needs Auth */}
-        {step === 'needs_auth' && (
-          <div className="text-center space-y-5 animate-in fade-in duration-300">
-            <div>
-              <h2 className="text-lg font-semibold text-text-primary tracking-tight">
-                {t('setup.loginNeeded')}
-              </h2>
-              <p className="text-sm text-text-tertiary mt-2 leading-relaxed max-w-xs mx-auto">
-                {t('setup.loginNeededDesc')}
-              </p>
-            </div>
-            <div className="space-y-2.5 max-w-60 mx-auto">
-              <button
-                onClick={handleLogin}
-                className="w-full px-5 py-2.5 rounded-xl text-sm font-medium
-                  bg-accent text-text-inverse hover:bg-accent-hover
-                  shadow-sm hover:shadow-glow transition-all duration-200
-                  flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <ArrowSquareOut size={15} weight="bold" />
-                {t('setup.openClaudeLogin')}
-              </button>
-              <button
-                onClick={handleRetryAuth}
-                className="w-full px-5 py-2.5 rounded-xl text-sm font-medium
-                  border border-border-subtle text-text-muted
-                  hover:bg-bg-tertiary transition-all duration-200
-                  flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {t('setup.retry')}
-              </button>
-            </div>
-            <button onClick={handleSkip}
-              className="text-xs text-text-tertiary/60 hover:text-text-muted
-                transition-colors duration-200 cursor-pointer">
-              {t('setup.skip')}
+      {step === 'stavebak' && (
+        <>
+          <StepLabel n={2} />
+          <Heading title={t('onb.stavebak.title')} subtitle={t('onb.stavebak.desc')} />
+          {/* UX mock — no Stavebák OAuth backend yet; both buttons just continue. */}
+          <div className="space-y-2">
+            <SecondaryButton onClick={completeStavebak}>
+              <GoogleLogo size={14} weight="bold" />
+              {t('onb.stavebak.google')}
+            </SecondaryButton>
+            <SecondaryButton onClick={completeStavebak}>
+              <EnvelopeSimple size={14} />
+              {t('onb.stavebak.email')}
+            </SecondaryButton>
+            <button onClick={() => useSetupStore.getState().setStep('done')}
+              className="block mx-auto pt-2 text-xs text-text-tertiary hover:text-text-primary">
+              {t('onb.skip')}
             </button>
           </div>
-        )}
+        </>
+      )}
 
-        {/* Ready */}
-        {step === 'ready' && (
-          <div className="text-center space-y-5 animate-in fade-in zoom-in-95 duration-400">
-            <div className="flex items-center justify-center gap-2">
-              <CheckCircle size={18} weight="fill" className="text-success" />
-              <span className="text-sm font-medium text-text-primary tracking-tight">{t('setup.ready')}</span>
-            </div>
+      {step === 'done' && (
+        <>
+          <Heading title={t('onb.done.title')} subtitle={t('onb.done.desc')} />
+          <Checklist
+            claudeDone={authStatus === 'ok'}
+            stavebakDone={stavebakDone}
+            claudeNote={accountName ? t('onb.signedInAs').replace('{account}', accountName) : undefined}
+          />
+          <PrimaryButton onClick={finish}>{t('onb.done.cta')}</PrimaryButton>
+        </>
+      )}
+    </div>
+  );
+}
 
-            <div className="space-y-2 mx-auto max-w-55">
-              <div className="flex items-center gap-2.5 text-xs">
-                <CheckCircle size={14} weight="light" className="text-success/70 shrink-0" />
-                <span className="text-text-tertiary">
-                  Claude CLI {cliVersion ? `v${cliVersion}` : ''}
-                </span>
-              </div>
-              <div className="flex items-center gap-2.5 text-xs">
-                <CheckCircle size={14} weight="light" className="text-success/70 shrink-0" />
-                <span className="text-text-tertiary">
-                  {accountName
-                    ? t('setup.authenticatedAs').replace('{account}', accountName)
-                    : t('setup.authenticated')}
-                </span>
-              </div>
-              <div className="flex items-center gap-2.5 text-xs">
-                {mcpOk ? (
-                  <CheckCircle size={14} weight="light" className="text-success/70 shrink-0" />
-                ) : (
-                  <Warning size={14} weight="light" className="text-amber-400/70 shrink-0" />
-                )}
-                <span className="text-text-tertiary">
-                  {mcpOk ? t('setup.mcpConnected') : t('setup.mcpUnavailable')}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+/* ================================================================
+   Pieces
+   ================================================================ */
+
+function Heading({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="text-center mb-6">
+      <h1 className="text-xl font-semibold text-text-primary">{title}</h1>
+      <p className="text-sm text-text-muted mt-1.5 leading-relaxed">{subtitle}</p>
+    </div>
+  );
+}
+
+function StepLabel({ n }: { n: number }) {
+  return <p className="text-center text-xs text-text-tertiary mb-2 tabular-nums">{n} / 2</p>;
+}
+
+function Checklist({ claudeDone, stavebakDone, claudeNote }: {
+  claudeDone: boolean;
+  stavebakDone: boolean;
+  claudeNote?: string;
+}) {
+  const t = useT();
+  return (
+    <div className="rounded-lg border border-border divide-y divide-border-subtle mb-6">
+      <ChecklistItem done={claudeDone} title={t('onb.claude.item')} desc={claudeNote ?? t('onb.claude.itemDesc')} />
+      <ChecklistItem done={stavebakDone} title={t('onb.stavebak.item')} desc={t('onb.stavebak.itemDesc')} />
+    </div>
+  );
+}
+
+function ChecklistItem({ done, title, desc }: { done: boolean; title: string; desc: string }) {
+  return (
+    <div className="flex gap-3 px-4 py-3">
+      {done
+        ? <CheckCircle size={16} weight="fill" className="text-[#0F766E] mt-0.5 flex-shrink-0" />
+        : <Circle size={16} className="text-text-tertiary mt-0.5 flex-shrink-0" />}
+      <div className="min-w-0">
+        <div className="text-sm text-text-primary">{title}</div>
+        <div className="text-xs text-text-tertiary mt-0.5 leading-snug">{desc}</div>
       </div>
     </div>
+  );
+}
+
+function Status({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <SpinnerGap size={12} className="animate-spin" />
+      {children}
+    </span>
+  );
+}
+
+function PrimaryButton({ onClick, disabled, children }: { onClick: () => void; disabled?: boolean; children: ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="w-full h-9 rounded-lg text-sm font-medium text-white send-button
+        disabled:opacity-40 disabled:cursor-default cursor-pointer"
+    >
+      {children}
+    </button>
+  );
+}
+
+function SecondaryButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full h-9 rounded-lg text-sm text-text-primary border border-border
+        hover:bg-bg-secondary flex items-center justify-center gap-2 cursor-pointer"
+    >
+      {children}
+    </button>
   );
 }
