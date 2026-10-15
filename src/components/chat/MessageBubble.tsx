@@ -91,10 +91,9 @@ function renderCodeSegment(inner: string, key: number): ReactNode {
           useFileStore.getState().revealPath(resolved);
         }}
         className="inline-flex items-center gap-1 px-2 py-0.5 mx-0.5
-          bg-white/15 border border-white/40 rounded-full
+          bg-bg-chat/70 border border-border rounded-full
           text-xs font-medium cursor-pointer
-          hover:bg-white/25 hover:border-white/60
-          transition-all duration-150 select-none
+          hover:bg-bg-chat select-none
           align-baseline leading-normal whitespace-nowrap inline-block"
         title={resolved}
       >
@@ -105,7 +104,7 @@ function renderCodeSegment(inner: string, key: number): ReactNode {
   }
   return (
     <code key={key} className="px-1.5 py-0.5 mx-0.5 rounded-md text-sm
-      bg-white/15 border border-white/20 font-mono">
+      bg-bg-chat/70 border border-border-subtle font-mono">
       {inner}
     </code>
   );
@@ -167,18 +166,16 @@ function UserMsg({ message }: Props) {
       >
         {copied ? <Check size={13} weight="bold" /> : <Copy size={13} weight="regular" />}
       </button>
-      <div className="max-w-[75%] px-5 py-3 rounded-full
-        user-bubble text-text-inverse border border-white/[0.08]
-        text-sm leading-normal whitespace-pre-wrap">
+      <div className="max-w-[75%] px-4 py-2.5 rounded-2xl
+        user-bubble text-base leading-normal whitespace-pre-wrap">
         {renderUserContent(displayContent)}
         {!expanded && isLong && (
-          <span className="text-white/60">…</span>
+          <span className="text-text-tertiary">…</span>
         )}
         {isLong && (
           <button
             onClick={() => setExpanded(!expanded)}
-            className="block mt-1.5 text-xs text-white/60 hover:text-white/90
-              transition-smooth"
+            className="block mt-1.5 text-xs text-text-tertiary hover:text-text-primary"
           >
             {expanded ? '▲ Collapse' : '▼ Expand all'}
           </button>
@@ -196,14 +193,14 @@ function UserMsg({ message }: Props) {
                   }
                 }}
                 className="inline-flex items-center gap-2 px-2.5 py-1.5
-                  bg-white/10 hover:bg-white/20 rounded-lg border border-white/15
-                  transition-smooth cursor-pointer text-left"
+                  bg-bg-chat/70 hover:bg-bg-chat rounded-lg border border-border-subtle
+                  cursor-pointer text-left"
               >
                 {att.isImage && att.preview ? (
                   <img src={att.preview} alt="" className="w-8 h-8 rounded object-cover" />
                 ) : (
                   <span className="flex items-center justify-center w-8 h-8 rounded
-                    bg-white/10 text-xs font-mono font-semibold uppercase opacity-80">
+                    bg-bg-tertiary text-xs font-mono font-semibold uppercase opacity-80">
                     {getFileExt(att.name) || (
                       <File size={14} weight="light" />
                     )}

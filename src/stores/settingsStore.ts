@@ -157,7 +157,7 @@ export const useSettingsStore = create<SettingsState>()(
       selectedModel: 'claude-sonnet-4-6',
       sessionMode: 'bypass',
       locale: 'cs',
-      fontSize: 18,
+      fontSize: 16,
       sidebarWidth: 280,
       setupCompleted: false,
       thinkingLevel: 'medium' as ThinkingLevel,
@@ -285,7 +285,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'stavebak-settings',
-      version: 9,
+      version: 10,
       migrate: (persistedState: unknown, version: number) => {
         const persisted = persistedState as Record<string, unknown>;
         if (version === 0) {
@@ -348,6 +348,11 @@ export const useSettingsStore = create<SettingsState>()(
         if (version < 9) {
           persisted.leftPanelId = 'files';
           persisted.rightPanelId = null;
+        }
+        if (version < 10) {
+          // Root font size drives Tailwind spacing (rem). The old 18px default
+          // inflated every gap by 12.5%; reset only that untouched default.
+          if (persisted.fontSize === 18) persisted.fontSize = 16;
         }
         return persisted;
       },
