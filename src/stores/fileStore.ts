@@ -148,7 +148,6 @@ export const useFileStore = create<FileState>()((set, get) => ({
     if (selectedFile === path) {
       set({ selectedFile: null, fileContent: null, isLoadingContent: false, editContent: null, revealTarget: null });
     } else {
-      const fileExt = path.split('.').pop()?.toLowerCase() || '';
       const defaultMode = 'preview' as PreviewMode;
       set({ selectedFile: path, fileContent: null, isLoadingContent: true, previewMode: defaultMode, editContent: null, revealTarget: path });
 
@@ -208,7 +207,7 @@ export const useFileStore = create<FileState>()((set, get) => ({
 
   clearSelection: () => set({ selectedFile: null, fileContent: null, isLoadingContent: false, editContent: null }),
 
-  closePreview: () => set({ selectedFile: null, fileContent: null, isLoadingContent: false, editContent: null }),
+  closePreview: () => set({ selectedFile: null, fileContent: null, isLoadingContent: false, editContent: null, revealTarget: null }),
 
   setPreviewMode: (mode: PreviewMode) => {
     const state = get();

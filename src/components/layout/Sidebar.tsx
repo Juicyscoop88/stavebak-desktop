@@ -1,9 +1,7 @@
 import { lazy, Suspense, useState, useRef, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { useProjectStore } from '../../stores/projectStore';
 import { useFileStore } from '../../stores/fileStore';
 import { useT } from '../../lib/i18n';
-import { IS_ALPHA } from '../../lib/edition';
 import { CaretLeft, CaretUpDown, Folder, FolderPlus, Plus } from '@phosphor-icons/react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
@@ -15,7 +13,6 @@ export function Sidebar() {
   const t = useT();
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
   const setWorkingDirectory = useSettingsStore((s) => s.setWorkingDirectory);
-  const buildingType = useProjectStore((s) => s.buildingType);
   const recentProjects = useFileStore((s) => s.recentProjects);
   const fetchProjects = useFileStore((s) => s.fetchRecentProjects);
 
@@ -71,18 +68,12 @@ export function Sidebar() {
       <div className="flex items-center justify-between h-[36px] pl-3.5 pr-2
         border-b border-border-subtle flex-shrink-0 cursor-default">
         <div className="relative flex items-center gap-2 min-w-0">
-          {IS_ALPHA ? (
-            <span className="text-xs font-semibold tracking-tight text-text-primary flex-shrink-0">
-              TC<span style={{color: 'var(--color-accent)'}}>/ </span>Alpha
-            </span>
-          ) : (
-            <svg className="h-3.5 w-3.5 text-text-tertiary flex-shrink-0" viewBox="0 0 80 80" fill="none">
-              <path d="m60.49 28.48v-11.87h-7.3v7.73l-10.54-6-30.64 14.07v6.61l30.6-14.06 25.68 14.44v-6.52l-7.8-4.4z" fill="currentColor" />
-              <path d="m17.57 38.99v22.76h6.89v-25.89c-2.39 0.98-4.73 2.23-6.89 3.13z" fill="currentColor" />
-              <path d="m56.05 35.59v26.16h6.82v-22.56l-6.82-3.6z" fill="currentColor" />
-              <path d="m45.56 44.09-9.16-2.07c-1.3-0.29-1.85-0.98-1.85-1.85 0-0.88 0.87-1.48 1.86-1.48h14.46v-6.66h-14.04c-6.3 0-9.51 3.74-9.51 8.33 0 4.8 3.11 7.43 7.92 8.48l8.21 1.77c1.52 0.33 2.15 0.97 2.15 1.94 0 1.13-0.93 1.86-2.13 1.86l-16.25 0.05v7.29l14.14-0.05c7.51 0 11.65-4.08 11.65-9.43 0-4.44-2.84-7.18-7.45-8.18z" fill="currentColor" />
-            </svg>
-          )}
+          <svg className="h-3.5 w-3.5 text-text-tertiary flex-shrink-0" viewBox="0 0 80 80" fill="none">
+            <path d="m60.49 28.48v-11.87h-7.3v7.73l-10.54-6-30.64 14.07v6.61l30.6-14.06 25.68 14.44v-6.52l-7.8-4.4z" fill="currentColor" />
+            <path d="m17.57 38.99v22.76h6.89v-25.89c-2.39 0.98-4.73 2.23-6.89 3.13z" fill="currentColor" />
+            <path d="m56.05 35.59v26.16h6.82v-22.56l-6.82-3.6z" fill="currentColor" />
+            <path d="m45.56 44.09-9.16-2.07c-1.3-0.29-1.85-0.98-1.85-1.85 0-0.88 0.87-1.48 1.86-1.48h14.46v-6.66h-14.04c-6.3 0-9.51 3.74-9.51 8.33 0 4.8 3.11 7.43 7.92 8.48l8.21 1.77c1.52 0.33 2.15 0.97 2.15 1.94 0 1.13-0.93 1.86-2.13 1.86l-16.25 0.05v7.29l14.14-0.05c7.51 0 11.65-4.08 11.65-9.43 0-4.44-2.84-7.18-7.45-8.18z" fill="currentColor" />
+          </svg>
           <button
             onClick={() => setPopoverOpen(!popoverOpen)}
             className="flex items-center gap-1 min-w-0 hover:bg-bg-tertiary

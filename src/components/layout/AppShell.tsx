@@ -235,11 +235,11 @@ export function AppShell({ sidebar, main, secondary, bottomBar, forceCollapseSid
                 <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
               </div>
             )}
-            {/* Secondary Panel */}
-            {secondary && (
+            {/* Secondary Panel — mounted only while open */}
+            {secondary && showSecondary && (
               <div
                 className="flex-shrink-0 overflow-hidden"
-                style={{ width: showSecondary ? `${secondaryPanelWidth}px` : '0px' }}
+                style={{ width: `${secondaryPanelWidth}px` }}
               >
                 <div
                   className="h-full overflow-y-auto overflow-x-hidden bg-bg-chat"

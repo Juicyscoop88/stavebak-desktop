@@ -398,6 +398,16 @@
 }
 
 /* ================================================================
+   No transitions — every UI state change is instant (technical harness).
+   Functional @keyframes animations (spinner, streaming pulse) still run.
+   ================================================================ */
+*,
+*::before,
+*::after {
+  transition: none !important;
+}
+
+/* ================================================================
    Accessibility & performance
    ================================================================ */
 @media (prefers-reduced-motion: reduce) {

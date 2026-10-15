@@ -1,18 +1,15 @@
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useFileStore } from '../../stores/fileStore';
-import { useT } from '../../lib/i18n';
 import { GearSix } from '@phosphor-icons/react';
 import { InputBar } from '../chat/InputBar';
 
 export function BottomBar() {
   const toggleSettings = useSettingsStore((s) => s.toggleSettings);
   const updateAvailable = useSettingsStore((s) => s.updateAvailable);
-  const cliUpdateAvailable = useSettingsStore((s) => s.cliUpdateAvailable);
   const sidebarOpen = useSettingsStore((s) => s.sidebarOpen);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
   const directoryMissing = useFileStore((s) => s.directoryMissing);
-  const t = useT();
 
   const showInput = workingDirectory && !directoryMissing;
 
@@ -33,9 +30,9 @@ export function BottomBar() {
               text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary
               rounded-full transition-smooth">
             <GearSix size={16} weight="light" />
-            {(updateAvailable || cliUpdateAvailable) && (
-              <span className={`absolute top-0.5 right-0.5 w-2 h-2 rounded-full
-                border-[1.5px] border-bg-chat ${cliUpdateAvailable ? 'bg-red-500' : 'bg-green-500'}`} />
+            {updateAvailable && (
+              <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full
+                border-[1.5px] border-bg-chat bg-green-500" />
             )}
           </button>
         </div>

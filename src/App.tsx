@@ -582,10 +582,10 @@ function App() {
     }).catch(() => {});
   }, []);
 
-  // Load custom session names and provider config on startup
+  // Load custom session names on startup. Provider config is intentionally
+  // not loaded: Stavebak always runs on the official Anthropic login.
   useEffect(() => {
     useSessionStore.getState().loadCustomPreviewsFromDisk();
-    useProviderStore.getState().load();
     // Notification permission is requested lazily on first need (see useStreamProcessor.ts)
   }, []);
 

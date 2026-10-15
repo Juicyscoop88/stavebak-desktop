@@ -792,7 +792,6 @@ async function startDraftSession(folderPath: string) {
 /** Welcome screen shown when no project folder is selected */
 function WelcomeScreen() {
   const t = useT();
-  const recentProjects = useFileStore((s) => s.recentProjects);
   const fetchProjects = useFileStore((s) => s.fetchRecentProjects);
   const [newProjectMode, setNewProjectMode] = useState(false);
   const [parentDir, setParentDir] = useState<string | null>(null);

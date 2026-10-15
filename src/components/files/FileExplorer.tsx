@@ -11,7 +11,6 @@ import { useChatStore } from '../../stores/chatStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { FileIcon } from '../shared/FileIcon';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
-import { showToast } from '../shared/Toast';
 import { FilePlus, FolderPlus, ClipboardText, CopySimple, Copy, PencilSimple, Trash, Folder, ArrowSquareOut, CaretRight, ShareNetwork, Play } from '@phosphor-icons/react';
 
 function getChangeBadge(kind: FileChangeKind | undefined) {
