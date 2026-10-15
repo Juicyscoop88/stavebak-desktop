@@ -29,7 +29,7 @@ import { MarkdownRenderer } from '../shared/MarkdownRenderer';
 import { FileIcon } from '../shared/FileIcon';
 import { stavebakTheme, stavebakHighlight } from '../../lib/codemirror-theme';
 import { useT } from '../../lib/i18n';
-import { ArrowsClockwise, X, SpinnerGap, ArrowSquareOut } from '@phosphor-icons/react';
+import { X, SpinnerGap, ArrowSquareOut, PencilSimple, Eye, Code } from '@phosphor-icons/react';
 
 /* ================================================================
    Helpers
@@ -149,12 +149,6 @@ export function FilePreview() {
   const isEditing = previewMode === 'edit';
   const isDirty = editContent !== null && editContent !== fileContent;
 
-  const lineCount = useMemo(() => {
-    const content = isEditing ? editContent : fileContent;
-    if (!content) return 0;
-    return content.split('\n').length;
-  }, [fileContent, editContent, isEditing]);
-
   const langExtension = useMemo(() => getLanguageExtension(ext), [ext]);
 
   /* Cmd+S to save */
@@ -168,24 +162,22 @@ export function FilePreview() {
   /* Mode tabs for the header */
   const modeTabs = useMemo(() => {
     if (isMarkdown) {
-      // Markdown — preview + edit only
       return [
-        { id: 'preview' as const, label: t('files.preview') },
-        { id: 'edit' as const, label: t('files.edit') },
+        { id: 'edit' as const, icon: PencilSimple, title: t('files.edit') },
+        { id: 'preview' as const, icon: Eye, title: t('files.preview') },
       ];
     }
     if (hasPreview) {
-      // HTML, SVG — preview + source + edit
       return [
-        { id: 'preview' as const, label: t('files.preview') },
-        { id: 'source' as const, label: t('files.source') },
-        { id: 'edit' as const, label: t('files.edit') },
+        { id: 'preview' as const, icon: Eye, title: t('files.preview') },
+        { id: 'source' as const, icon: Code, title: t('files.source') },
+        { id: 'edit' as const, icon: PencilSimple, title: t('files.edit') },
       ];
     }
     if (!isBinary && !isImage && !isPdf && !isVideo && !isAudio) {
       return [
-        { id: 'source' as const, label: t('files.source') },
-        { id: 'edit' as const, label: t('files.edit') },
+        { id: 'source' as const, icon: Code, title: t('files.source') },
+        { id: 'edit' as const, icon: PencilSimple, title: t('files.edit') },
       ];
     }
     return [];
@@ -195,30 +187,27 @@ export function FilePreview() {
 
   return (
     <div className="flex flex-col h-full bg-bg-primary" onKeyDown={handleKeyDown}>
-      {/* Header bar — h-[68px]+pt-[20px] matches chat top bar exactly, top divider aligned; z-10 above iframe content */}
-      <div className="flex items-center justify-between h-[68px] px-3 pt-[20px]
-        border-b border-border-subtle bg-bg-secondary/50 flex-shrink-0 relative z-10">
+      {/* Title bar spacer — 28px for macOS traffic lights, matches ChatPanel */}
+      <div className="h-[28px] flex-shrink-0" />
+      {/* Header bar — matches chat header style */}
+      <div className="flex items-center justify-between h-[36px] px-3
+        border-b border-border-subtle flex-shrink-0 relative z-10">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <FileIcon name={fileName} size={16} className="flex-shrink-0 text-text-muted" />
-          <span className="text-sm font-medium text-text-primary truncate">
+          <span className="text-xs text-text-tertiary truncate">
             {fileName}
           </span>
-          {lineCount > 0 && (
-            <span className="text-xs text-text-muted flex-shrink-0">
-              {lineCount} {t('files.lineCount')}
-            </span>
-          )}
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {/* Save / Discard buttons — visible when editing with unsaved changes */}
           {isEditing && isDirty && (
-            <div className="flex items-center gap-1 animate-fade-in">
+            <div className="flex items-center gap-1">
               <button
                 onClick={discardEdits}
                 className="px-2.5 py-1 rounded-lg text-xs font-medium
                   text-text-muted hover:text-text-primary hover:bg-bg-tertiary
-                  transition-smooth"
+                  cursor-pointer"
               >
                 {t('files.discard')}
               </button>
@@ -227,48 +216,37 @@ export function FilePreview() {
                 disabled={isSaving}
                 className="px-2.5 py-1 rounded-lg text-xs font-medium
                   bg-accent text-text-inverse hover:bg-accent-hover
-                  transition-smooth disabled:opacity-50"
+                  disabled:opacity-50 cursor-pointer"
               >
                 {isSaving ? t('files.saving') : t('files.save')}
               </button>
             </div>
           )}
 
-          {/* Mode toggle tabs */}
+          {/* Mode toggle icons */}
           {modeTabs.length > 0 && (
-            <div className="flex gap-0.5 bg-bg-tertiary/50 rounded-xl p-1">
+            <div className="flex gap-0.5">
               {modeTabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setPreviewMode(tab.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium
-                    transition-smooth cursor-pointer
+                  title={tab.title}
+                  className={`p-1.5 rounded-lg cursor-pointer
                     ${previewMode === tab.id
-                      ? 'bg-bg-card text-accent shadow-sm'
-                      : 'text-text-muted hover:text-text-primary hover:bg-bg-card/50'
+                      ? 'text-text-primary'
+                      : 'text-text-muted hover:text-text-primary'
                     }`}
                 >
-                  {tab.label}
+                  <tab.icon size={14} weight={previewMode === tab.id ? 'regular' : 'light'} />
                 </button>
               ))}
             </div>
           )}
 
-          {/* Refresh button */}
-          <button
-            onClick={reloadContent}
-            className="p-2 rounded-lg hover:bg-bg-tertiary
-              text-text-tertiary transition-smooth cursor-pointer"
-            title={t('files.refresh')}
-          >
-            <ArrowsClockwise size={14} weight="light" />
-          </button>
-
-          {/* Close button — larger hit area for easy clicking */}
           <button
             onClick={closePreview}
             className="p-2 rounded-lg hover:bg-bg-tertiary
-              text-text-tertiary transition-smooth cursor-pointer"
+              text-text-tertiary cursor-pointer"
             title={t('files.closePreview')}
           >
             <X size={16} weight="light" />
@@ -398,8 +376,8 @@ export function FilePreview() {
           </div>
         ) : previewMode === 'preview' && isMarkdown && fileContent !== null ? (
           /* Markdown preview: rendered */
-          <div className="overflow-auto h-full p-4">
-            <div className="text-sm leading-relaxed selectable max-w-3xl mx-auto">
+          <div className="overflow-auto h-full px-4 py-3">
+            <div className="text-sm leading-relaxed selectable max-w-none">
               {(() => {
                 // Extract YAML frontmatter if present
                 const fmMatch = fileContent.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);

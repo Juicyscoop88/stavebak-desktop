@@ -179,7 +179,25 @@ function App() {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
 
-(window as any).__stavebak_test = {
+    // Answer `execute_js` requests from src-tauri/src/test_harness.rs
+    // (StrictMode mounts effects twice — unlisten even if cleanup beats listen())
+    let unlistenEval: (() => void) | undefined;
+    let disposed = false;
+    import('@tauri-apps/api/event').then(({ listen, emit }) => {
+      listen<{ reqId: string; code: string }>('harness://eval', async ({ payload }) => {
+        try {
+          const value = await (0, eval)(payload.code);
+          emit('harness://reply', { reqId: payload.reqId, result: value === undefined ? null : String(value) });
+        } catch (err) {
+          emit('harness://reply', { reqId: payload.reqId, error: String(err) });
+        }
+      }).then((fn) => {
+        if (disposed) fn();
+        else unlistenEval = fn;
+      });
+    });
+
+    (window as any).__stavebak_test = {
       getMessages(optsOrTabId?: string | { tabId?: string; last?: number; summary?: boolean }) {
         const opts = typeof optsOrTabId === 'string' ? { tabId: optsOrTabId } : (optsOrTabId || {});
         const id = opts.tabId || useSessionStore.getState().selectedSessionId;
@@ -376,6 +394,31 @@ function App() {
         useSettingsStore.getState().setSelectedModel(modelId);
         return { model: modelId };
       },
+      openFile(path: string) {
+        useFileStore.getState().selectFile(path);
+        return { opened: path };
+      },
+      closePreview() {
+        useFileStore.getState().closePreview();
+        return { closed: true };
+      },
+      toggleFolder(path: string) {
+        useFileStore.getState().toggleFolder(path);
+        return { expanded: [...useFileStore.getState().expandedFolders] };
+      },
+      fileState() {
+        const s = useFileStore.getState();
+        return {
+          rootPath: s.rootPath,
+          selectedFile: s.selectedFile,
+          expandedFolders: [...s.expandedFolders],
+          treeSize: s.tree.length,
+        };
+      },
+      setSetupCompleted(completed: boolean) {
+        useSettingsStore.getState().setSetupCompleted(completed);
+        return { setupCompleted: completed };
+      },
       switchProvider(providerId: string | null) {
         useProviderStore.getState().setActive(providerId);
         return { provider: providerId };
@@ -428,6 +471,8 @@ function App() {
     };
 
     return () => {
+      disposed = true;
+      unlistenEval?.();
       delete (window as any).__stavebak_test;
     };
   }, []);

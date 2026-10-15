@@ -42,14 +42,14 @@ export function AppShell({ sidebar, main, secondary, bottomBar, forceCollapseSid
 
   /* Preview panel resizable width — default to 50% of window */
   const [previewWidth, setPreviewWidth] = useState(() =>
-    Math.round(window.innerWidth * 0.5)
+    Math.round(window.innerWidth * 0.35)
   );
 
   /* Re-calculate default preview width when entering preview mode */
   const prevPreviewMode = useRef(false);
   useEffect(() => {
     if (isFilePreviewMode && !prevPreviewMode.current) {
-      setPreviewWidth(Math.round(window.innerWidth * 0.5));
+      setPreviewWidth(Math.round(window.innerWidth * 0.35));
     }
     prevPreviewMode.current = isFilePreviewMode;
   }, [isFilePreviewMode]);
@@ -191,34 +191,72 @@ export function AppShell({ sidebar, main, secondary, bottomBar, forceCollapseSid
         className="fixed top-0 left-0 right-0 h-[28px] z-50"
       />
 
-      {/* Content row — sidebar + main + panels */}
+      {/* Content row — left group (sidebar+main+bottombar) + file preview */}
       <div className="flex flex-1 min-h-0">
-        {/* Sidebar — animates to w-0 when hidden or preview mode */}
-        <div
-          className="flex-shrink-0  overflow-hidden"
-          style={{ width: showSidebar ? `${sidebarWidth}px` : '0px' }}
-        >
-          <div
-            className="h-full overflow-hidden bg-bg-chat"
-            style={{ width: `${sidebarWidth}px` }}
-          >
-            {sidebar}
-          </div>
-        </div>
-        {/* Sidebar resize handle */}
-        {showSidebar && (
-          <div
-            onMouseDown={handleSidebarMouseDown}
-            className="w-px h-full flex-shrink-0 relative cursor-col-resize z-20
-              bg-border-subtle hover:bg-accent/40 group"
-          >
-            <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
-          </div>
-        )}
+        {/* Left group — sidebar + main + bottom bar; preview sits beside this at full height */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          {/* Horizontal row: sidebar + main */}
+          <div className="flex flex-1 min-h-0">
+            {/* Sidebar — animates to w-0 when hidden or preview mode */}
+            <div
+              className="flex-shrink-0 overflow-hidden"
+              style={{ width: showSidebar ? `${sidebarWidth}px` : '0px' }}
+            >
+              <div
+                className="h-full overflow-hidden bg-bg-chat"
+                style={{ width: `${sidebarWidth}px` }}
+              >
+                {sidebar}
+              </div>
+            </div>
+            {/* Sidebar resize handle */}
+            {showSidebar && (
+              <div
+                onMouseDown={handleSidebarMouseDown}
+                className="w-px h-full flex-shrink-0 relative cursor-col-resize z-20
+                  bg-border-subtle hover:bg-accent/40 group"
+              >
+                <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
+              </div>
+            )}
 
-        {/* Main Panel */}
-        <div className="flex-1 min-w-0 flex flex-col bg-bg-chat overflow-hidden">
-          {main}
+            {/* Main Panel */}
+            <div className="flex-1 min-w-0 flex flex-col bg-bg-chat overflow-hidden">
+              {main}
+            </div>
+
+            {/* Secondary Panel resize handle */}
+            {secondary && showSecondary && (
+              <div
+                onMouseDown={handleRightMouseDown}
+                className="w-px h-full flex-shrink-0 relative cursor-col-resize z-10
+                  bg-border-subtle hover:bg-accent/40 group"
+              >
+                <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
+              </div>
+            )}
+            {/* Secondary Panel */}
+            {secondary && (
+              <div
+                className="flex-shrink-0 overflow-hidden"
+                style={{ width: showSecondary ? `${secondaryPanelWidth}px` : '0px' }}
+              >
+                <div
+                  className="h-full overflow-y-auto overflow-x-hidden bg-bg-chat"
+                  style={{ width: `${secondaryPanelWidth}px` }}
+                >
+                  {secondary}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom bar — spans sidebar + main width, not file preview */}
+          {bottomBar && (
+            <div className="flex-shrink-0 bg-bg-chat">
+              {bottomBar}
+            </div>
+          )}
         </div>
 
         {/* File Preview resize handle */}
@@ -231,9 +269,9 @@ export function AppShell({ sidebar, main, secondary, bottomBar, forceCollapseSid
             <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
           </div>
         )}
-        {/* File Preview Panel */}
+        {/* File Preview Panel — full height like sidebar */}
         <div
-          className="flex-shrink-0 overflow-hidden "
+          className="flex-shrink-0 overflow-hidden"
           style={{ width: isFilePreviewMode ? `${previewWidth}px` : '0px' }}
         >
           <div className="h-full overflow-hidden flex flex-col bg-bg-chat"
@@ -241,39 +279,7 @@ export function AppShell({ sidebar, main, secondary, bottomBar, forceCollapseSid
             <FilePreview />
           </div>
         </div>
-
-        {/* Secondary Panel resize handle */}
-        {secondary && showSecondary && (
-          <div
-            onMouseDown={handleRightMouseDown}
-            className="w-px h-full flex-shrink-0 relative cursor-col-resize z-10
-              bg-border-subtle hover:bg-accent/40 group"
-          >
-            <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
-          </div>
-        )}
-        {/* Secondary Panel */}
-        {secondary && (
-          <div
-            className="flex-shrink-0  overflow-hidden"
-            style={{ width: showSecondary ? `${secondaryPanelWidth}px` : '0px' }}
-          >
-            <div
-              className="h-full overflow-y-auto overflow-x-hidden bg-bg-chat"
-              style={{ width: `${secondaryPanelWidth}px` }}
-            >
-              {secondary}
-            </div>
-          </div>
-        )}
       </div>
-
-      {/* Bottom bar — full width */}
-      {bottomBar && (
-        <div className="flex-shrink-0 bg-bg-chat">
-          {bottomBar}
-        </div>
-      )}
 
     </div>
   );

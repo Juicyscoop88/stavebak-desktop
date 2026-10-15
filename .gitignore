@@ -76,3 +76,6 @@ screenshots/slash-commands.png
 
 # Test run outputs
 .test/runs/
+
+# Local UI snapshots (contain local paths and project names)
+docs/snapshots/

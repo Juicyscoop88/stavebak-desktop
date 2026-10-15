@@ -148,7 +148,9 @@ export const useFileStore = create<FileState>()((set, get) => ({
     if (selectedFile === path) {
       set({ selectedFile: null, fileContent: null, isLoadingContent: false, editContent: null, revealTarget: null });
     } else {
-      set({ selectedFile: path, fileContent: null, isLoadingContent: true, previewMode: 'preview', editContent: null, revealTarget: path });
+      const fileExt = path.split('.').pop()?.toLowerCase() || '';
+      const defaultMode = 'preview' as PreviewMode;
+      set({ selectedFile: path, fileContent: null, isLoadingContent: true, previewMode: defaultMode, editContent: null, revealTarget: path });
 
       // Binary-preview files: skip text reading, render with file:// URL in FilePreview
       const ext = path.split('.').pop()?.toLowerCase() || '';

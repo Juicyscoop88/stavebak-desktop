@@ -14,7 +14,7 @@
 
 **Stavebak** wraps the powerful [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) in a polished desktop interface — bring your own API key, connect any provider, and get a native coding experience with file exploration, session management, and structured permission control.
 
-[**Download**](https://github.com/Juicyscoop88/stavebak-desktop/releases) · [**Features**](#features) · [**Screenshots**](#screenshots)
+[**Download**](https://github.com/Juicyscoop88/stavebak-desktop/releases) · [**Features**](#features)
 
 </div>
 
@@ -24,12 +24,6 @@
 |:---:|:---:|:---:|
 | 🔑 **Bring Your Own API** | 🛡️ **SDK Control Protocol** | 🎨 **Beautiful & Native** |
 | 6 preset providers + custom endpoints. One-click config import/export. | Structured permission approval — 4 work modes (code / ask / plan / bypass) with typed allow/deny over stdin. | Tauri 2 native desktop experience. Multiple themes × light/dark mode. |
-
-<div align="center">
-
-![Main Interface](screenshots/main-interface.png?v=2)
-
-</div>
 
 ## Installation
 
@@ -169,38 +163,6 @@ Manage Claude Code skills (edit, enable/disable, right-click context menu) and M
 | Bundler | [Vite 7](https://vite.dev) |
 | Backend | Rust (tokio, reqwest, serde, notify) |
 | Package manager | pnpm |
-
-## Screenshots
-
-**Main Interface** — Three-panel layout with sidebar, chat, and file explorer
-![Main Interface](screenshots/main-interface.png?v=2)
-
-**Streaming Chat** — Real-time thinking, writing, and tool execution
-![Streaming Chat](screenshots/streaming-chat.png?v=2)
-
-**Session Management** — Pin, archive, date groups, batch operations
-![Session Management](screenshots/文件管理.png?v=2)
-
-**File Explorer** — SVG icons, change markers, flat search
-![File Explorer](screenshots/file-explorer.png?v=2)
-
-**File Editing** — Built-in CodeMirror editor with syntax highlighting
-![File Editing](screenshots/file-editing.png?v=2)
-
-**Plan Mode** — SDK permission approval cards
-![Plan Mode](screenshots/plan-mode.png?v=2)
-
-**Agent Activity** — Monitor sub-agent tasks in real-time
-![Agent Activity](screenshots/Agents.png?v=2)
-
-**Skills Management** — Right-click context menu for skills
-![Skills](screenshots/skills.png?v=2)
-
-**HTML Preview** — Live preview of HTML files
-![HTML Preview](screenshots/html-preview.png?v=2)
-
-**Settings** — Four-tab layout with theme preview cards
-![Settings](screenshots/settings.png?v=2)
 
 ## Contributing
 
