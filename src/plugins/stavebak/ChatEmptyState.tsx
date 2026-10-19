@@ -1,17 +1,32 @@
+import { useEffect } from 'react'
 import { ArrowRight } from '@phosphor-icons/react'
-import { useStavebakStore, phaseLabel, sendChat, nextStepMessage, SETUP_MESSAGE } from './store'
+import { useUiStore } from '../../stores/uiStore'
+import { useSettingsStore } from '../../stores/settingsStore'
+import { useStavebakStore, phaseLabel, runAction, nextStepAction, createProjectFile } from './store'
+import { ProjectForm } from './ProjectForm'
 
-/** Empty chat of an open folder: start the project, or pick up at the next step the server suggests. */
+/** Empty chat of an open folder: set up the project (form), or pick up at the next step the server suggests. */
 export default function ChatEmptyState() {
   const { status, guide } = useStavebakStore()
 
+  // The setup form is the only thing to do here, so no chat input next to it
+  useEffect(() => {
+    useUiStore.getState().setComposerHidden(status === 'missing')
+    return () => useUiStore.getState().setComposerHidden(false)
+  }, [status])
+
   if (status === 'missing') {
+    // Existing folder without a project: the same form, written straight into it
     return (
-      <Center>
-        <p className="text-base text-text-primary mb-1">Tahle složka zatím není projekt Stavebáku.</p>
-        <p className="text-sm text-text-muted mb-5">Claude se zeptá na pár údajů o stavbě a připraví postup.</p>
-        <PrimaryButton onClick={() => sendChat(SETUP_MESSAGE)}>Založit projekt</PrimaryButton>
-      </Center>
+      <div className="flex items-center justify-center h-full px-6">
+        <div className="w-full max-w-sm">
+          <ProjectForm onSubmit={async (values) => {
+            const dir = useSettingsStore.getState().workingDirectory
+            await createProjectFile(dir, values)
+            await useStavebakStore.getState().load(dir)
+          }} />
+        </div>
+      </div>
     )
   }
 
@@ -27,7 +42,7 @@ export default function ChatEmptyState() {
       {next && (
         <>
           <p className="text-sm text-text-secondary mb-3">Další krok: {next.title}</p>
-          <PrimaryButton onClick={() => sendChat(nextStepMessage(next.title))}>Pokračovat</PrimaryButton>
+          <PrimaryButton onClick={() => runAction(nextStepAction(next.title))}>Pokračovat</PrimaryButton>
         </>
       )}
     </Center>

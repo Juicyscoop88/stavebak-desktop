@@ -24,6 +24,7 @@ import {
   MagnifyingGlass,
   PencilSimple,
   PlusCircle,
+  Play,
   Square,
   Terminal,
   WarningCircle,
@@ -133,6 +134,9 @@ function renderUserContent(text: string): ReactNode {
   });
 }
 
+/** User turns sent by an action button start with this marker (kept in the transcript, so it survives reload). */
+export const ACTION_PREFIX = '▶ ';
+
 function UserMsg({ message }: Props) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
@@ -151,6 +155,16 @@ function UserMsg({ message }: Props) {
       setTimeout(() => setCopied(false), 2000);
     });
   }, [content]);
+
+  // Action from a button (e.g. "▶ Další krok: …"), not something the user typed
+  if (content.startsWith(ACTION_PREFIX)) {
+    return (
+      <div className="flex items-center gap-1.5 text-sm text-text-muted">
+        <Play size={11} weight="fill" className="text-text-tertiary flex-shrink-0" />
+        <span>{content.slice(ACTION_PREFIX.length)}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex justify-end group/user relative">

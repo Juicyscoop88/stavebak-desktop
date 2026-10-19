@@ -1,8 +1,9 @@
 import type { ComponentType } from 'react'
 
 /** left/right: switchable side panels. sidebar-top: always shown above the project's file tree.
- *  chat-empty: replaces the default empty-chat content of an open project. */
-export type PanelSlotId = 'left' | 'right' | 'sidebar-top' | 'chat-empty'
+ *  chat-empty: replaces the default empty-chat content of an open project.
+ *  new-project: content of the "Nový projekt…" dialog. */
+export type PanelSlotId = 'left' | 'right' | 'sidebar-top' | 'chat-empty' | 'new-project'
 
 export interface PanelDefinition {
   id: string

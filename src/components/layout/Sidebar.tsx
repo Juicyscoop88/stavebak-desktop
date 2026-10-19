@@ -4,9 +4,9 @@ import { useT } from '../../lib/i18n';
 import { CaretLeft, CaretUpDown, Check, FolderPlus, Plus, Trash } from '@phosphor-icons/react';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { open } from '@tauri-apps/plugin-dialog';
-import { invoke } from '@tauri-apps/api/core';
 import { openProject, deleteProject } from '../../lib/conversations';
 import { PluginSlotStack } from './PluginComponents';
+import { useNewProjectStore } from '../../stores/newProjectStore';
 
 const FileExplorer = lazy(() => import('../files/FileExplorer').then(m => ({ default: m.FileExplorer })));
 
@@ -47,16 +47,9 @@ export function Sidebar() {
     if (selected) openProject(selected as string);
   };
 
-  const handleNewProject = async () => {
+  const handleNewProject = () => {
     setPopoverOpen(false);
-    const dir = await open({ directory: true, multiple: false, title: t('welcome.pickParentDir') });
-    if (!dir) return;
-    const name = window.prompt(t('welcome.projectNamePlaceholder'));
-    if (!name?.trim()) return;
-    const sep = (dir as string).endsWith('/') ? '' : '/';
-    const fullPath = `${dir}${sep}${name.trim()}`;
-    await invoke('create_project_directory', { path: fullPath });
-    openProject(fullPath, { fresh: true });
+    useNewProjectStore.getState().show();
   };
 
   const handleSwitchProject = (path: string) => {

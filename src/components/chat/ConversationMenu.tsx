@@ -3,6 +3,7 @@ import { CaretDown, Plus, Check, Trash } from '@phosphor-icons/react';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useChatStore } from '../../stores/chatStore';
+import { ACTION_PREFIX } from './MessageBubble';
 import { projectConversations, openConversation, startConversation, deleteConversation } from '../../lib/conversations';
 
 function when(ts: number): string {
@@ -20,7 +21,12 @@ export function ConversationMenu() {
   const dir = useSettingsStore((s) => s.workingDirectory);
   const sessions = useSessionStore((s) => s.sessions);
   const selectedId = useSessionStore((s) => s.selectedSessionId);
-  const getDisplayName = useSessionStore((s) => s.getDisplayName);
+  const rawDisplayName = useSessionStore((s) => s.getDisplayName);
+  // A conversation started by an action button is titled by the action, without the marker
+  const getDisplayName = (s: Parameters<typeof rawDisplayName>[0]) => {
+    const name = rawDisplayName(s);
+    return name.startsWith(ACTION_PREFIX) ? name.slice(ACTION_PREFIX.length) : name;
+  };
   const hasMessages = useChatStore((s) => (selectedId ? (s.tabs.get(selectedId)?.messages.length ?? 0) > 0 : false));
   const [open, setOpen] = useState(false);
   // Two-step delete: first click arms the row, second deletes

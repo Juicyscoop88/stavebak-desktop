@@ -6,6 +6,7 @@ import { SecondaryPanel } from './components/layout/SecondaryPanel';
 import { BottomBar } from './components/layout/BottomBar';
 import { CommandPalette } from './components/commands/CommandPalette';
 import { SettingsPanel } from './components/settings/SettingsPanel';
+import { NewProjectDialog } from './components/layout/NewProjectDialog';
 import { ImageLightbox } from './components/shared/ImageLightbox';
 import { ChangelogModal } from './components/shared/ChangelogModal';
 import { Toast } from './components/shared/Toast';
@@ -818,6 +819,7 @@ function App() {
       )}
       <CommandPalette />
       {settingsOpen && <SettingsPanel />}
+      <NewProjectDialog />
       <ImageLightbox />
       {showChangelog && currentAppVersion && (
         <ChangelogModal

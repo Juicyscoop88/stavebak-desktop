@@ -7,12 +7,12 @@ import { ToolGroup } from './ToolGroup';
 import { ConversationMenu } from './ConversationMenu';
 import { PluginSlotStack } from '../layout/PluginComponents';
 import { openProject } from '../../lib/conversations';
+import { useNewProjectStore } from '../../stores/newProjectStore';
 import { UpdateButton } from '../shared/UpdateButton';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useFileStore } from '../../stores/fileStore';
 import { open } from '@tauri-apps/plugin-dialog';
-import { invoke } from '@tauri-apps/api/core';
 import { useT } from '../../lib/i18n';
 import { is1MModel as isOneMillionModel, resolveModelForProvider } from '../../lib/api-provider';
 import { MarkdownRenderer } from '../shared/MarkdownRenderer';
@@ -695,38 +695,11 @@ export function ChatPanel() {
 function WelcomeScreen() {
   const t = useT();
   const projects = useSettingsStore((s) => s.projects);
-  const [newProjectMode, setNewProjectMode] = useState(false);
-  const [parentDir, setParentDir] = useState<string | null>(null);
-  const [projectName, setProjectName] = useState('');
-  const [creating, setCreating] = useState(false);
-  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const handlePickFolder = useCallback(async () => {
     const selected = await open({ directory: true, multiple: false, title: t('project.selectFolder') });
     if (selected) openProject(selected as string);
   }, [t]);
-
-  const handleNewProjectStart = useCallback(async () => {
-    const dir = await open({ directory: true, multiple: false, title: t('welcome.pickParentDir') });
-    if (!dir) return;
-    setParentDir(dir as string);
-    setProjectName('');
-    setNewProjectMode(true);
-    setTimeout(() => nameInputRef.current?.focus(), 0);
-  }, [t]);
-
-  const handleCreateProject = useCallback(async () => {
-    if (!parentDir || !projectName.trim()) return;
-    const fullPath = `${parentDir.replace(/[\\/]+$/, '')}/${projectName.trim()}`;
-    setCreating(true);
-    try {
-      await invoke('create_project_directory', { path: fullPath });
-      openProject(fullPath, { fresh: true });
-    } catch (e) {
-      console.error('Failed to create project directory:', e);
-      setCreating(false);
-    }
-  }, [parentDir, projectName]);
 
   const shortPath = (p: string) => p.replace(/^\/Users\/[^/]+/, '~').replace(/\/[^/]+$/, '');
   const recent = projects.slice(0, 6);
@@ -751,36 +724,7 @@ function WelcomeScreen() {
           </div>
         )}
 
-        {newProjectMode ? (
-          <div className={recent.length > 0 ? 'pt-4 border-t border-border-subtle' : ''}>
-            <p className="text-xs text-text-tertiary mb-2 truncate">Nový projekt v {shortPath(`${parentDir}/x`)}</p>
-            <div className="flex gap-2">
-              <input
-                ref={nameInputRef}
-                type="text"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleCreateProject();
-                  if (e.key === 'Escape') setNewProjectMode(false);
-                }}
-                placeholder={t('welcome.projectNamePlaceholder')}
-                disabled={creating}
-                className="flex-1 min-w-0 px-3 py-1.5 rounded-lg text-sm bg-bg-input border border-border
-                  text-text-primary placeholder:text-text-tertiary focus:border-border-focus focus:outline-none"
-              />
-              <button
-                onClick={handleCreateProject}
-                disabled={!projectName.trim() || creating}
-                className="px-3 py-1.5 rounded-lg text-sm bg-text-primary text-text-inverse
-                  disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
-              >
-                {t('welcome.create')}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className={`flex flex-col -mx-3 ${recent.length > 0 ? 'pt-3 border-t border-border-subtle' : ''}`}>
+        <div className={`flex flex-col -mx-3 ${recent.length > 0 ? 'pt-3 border-t border-border-subtle' : ''}`}>
             <button
               onClick={handlePickFolder}
               className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-text-muted
@@ -790,7 +734,7 @@ function WelcomeScreen() {
               {t('sidebar.openFolder')}…
             </button>
             <button
-              onClick={handleNewProjectStart}
+              onClick={() => useNewProjectStore.getState().show()}
               className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-text-muted
                 hover:bg-bg-secondary hover:text-text-primary cursor-pointer text-left"
             >
@@ -798,7 +742,6 @@ function WelcomeScreen() {
               {t('welcome.newProject')}…
             </button>
           </div>
-        )}
       </div>
     </div>
   );

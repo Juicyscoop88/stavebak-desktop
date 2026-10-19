@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
-import { Plus, Warning } from '@phosphor-icons/react'
+import { Warning } from '@phosphor-icons/react'
 import { onFileChange } from '../../lib/tauri-bridge'
 import { useFileStore } from '../../stores/fileStore'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { useStavebakStore, PROJECT_FILE, phaseLabel, sendChat, SETUP_MESSAGE, MIGRATE_MESSAGE } from './store'
+import { useStavebakStore, PROJECT_FILE, phaseLabel, runAction, MIGRATE_ACTION } from './store'
 
 /** Pinned summary above the file tree: phase, progress, next step, expiring permits. */
 export default function ProjectOverviewCard() {
@@ -30,18 +30,8 @@ function Card({ dir }: { dir: string }) {
     return <div className="mx-2 mt-2 h-[92px] rounded-lg bg-bg-secondary/60" />
   }
 
-  if (status === 'missing') {
-    return (
-      <button
-        onClick={() => sendChat(SETUP_MESSAGE)}
-        className="mx-2 mt-2 flex items-center gap-2 px-2.5 py-2 rounded-lg w-[calc(100%-16px)]
-          text-xs text-text-muted hover:bg-bg-secondary hover:text-text-primary cursor-pointer text-left"
-      >
-        <Plus size={12} weight="light" className="flex-shrink-0 text-text-tertiary" />
-        Založit projekt Stavebáku
-      </button>
-    )
-  }
+  // No project yet: the chat area shows the setup form, nothing to pin here
+  if (status === 'missing') return null
 
   if (status === 'error' || !guide) {
     return (
@@ -85,7 +75,7 @@ function Card({ dir }: { dir: string }) {
       {guide.format?.hint && (
         <div
           role="button"
-          onClick={(e) => { e.stopPropagation(); sendChat(MIGRATE_MESSAGE) }}
+          onClick={(e) => { e.stopPropagation(); runAction(MIGRATE_ACTION) }}
           className="text-xs text-text-muted mt-2 underline decoration-border underline-offset-2 hover:text-text-primary"
         >
           Starší formát, stav nemusí sedět. Převést

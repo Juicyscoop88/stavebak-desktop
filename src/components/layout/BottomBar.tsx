@@ -2,6 +2,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useFileStore } from '../../stores/fileStore';
 import { GearSix } from '@phosphor-icons/react';
 import { InputBar } from '../chat/InputBar';
+import { useUiStore } from '../../stores/uiStore';
 
 export function BottomBar() {
   const toggleSettings = useSettingsStore((s) => s.toggleSettings);
@@ -12,6 +13,8 @@ export function BottomBar() {
   const directoryMissing = useFileStore((s) => s.directoryMissing);
 
   const showInput = workingDirectory && !directoryMissing;
+  // Hidden, not unmounted: InputBar owns the stream handler and action listeners
+  const composerHidden = useUiStore((s) => s.composerHidden);
 
   return (
     <div className="flex items-end">
@@ -44,7 +47,7 @@ export function BottomBar() {
       )}
 
       {/* Chat input area */}
-      <div className="flex-1 min-w-0">
+      <div className={`flex-1 min-w-0 ${composerHidden ? 'invisible' : ''}`}>
         {showInput && <InputBar />}
       </div>
     </div>

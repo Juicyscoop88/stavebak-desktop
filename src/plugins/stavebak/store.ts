@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { bridge } from '../../lib/tauri-bridge'
 import { useMcpStore } from '../../stores/mcpStore'
+import { ACTION_PREFIX } from '../../components/chat/MessageBubble'
 
 export const PROJECT_FILE = 'stavebak.json'
 const SERVER = 'stavebak'
@@ -50,6 +51,36 @@ interface StavebakState {
   load: (dir: string) => Promise<void>
 }
 
+export interface FormField {
+  id: string
+  type: 'text' | 'choice'
+  label: string
+  required: boolean
+  placeholder?: string
+  hint?: string
+  options?: { id: string; label: string; primary: boolean }[]
+}
+export interface ProjectForm { title: string; submitLabel: string; fields: FormField[] }
+
+let formCache: ProjectForm | null = null
+
+/** The new-project form as the server defines it (fields, building types, labels). */
+export async function fetchProjectForm(): Promise<ProjectForm> {
+  if (formCache) return formCache
+  const url = serverUrl()
+  if (!url) throw new Error('Stavebák MCP není nastavený.')
+  formCache = await bridge.callMcpTool<ProjectForm>(url, 'project_form', {})
+  return formCache
+}
+
+/** Write the server-made stavebak.json into `dir` (no AI involved). */
+export async function createProjectFile(dir: string, values: Record<string, string>): Promise<void> {
+  const url = serverUrl()
+  if (!url) throw new Error('Stavebák MCP není nastavený.')
+  const { file, fileName } = await bridge.callMcpTool<{ file: unknown; fileName: string }>(url, 'new_project_file', values)
+  await bridge.writeFileContent(`${dir}/${fileName}`, JSON.stringify(file, null, 2) + '\n')
+}
+
 function serverUrl(): string | null {
   return useMcpStore.getState().servers.find((s) => s.name === SERVER)?.config.url ?? null
 }
@@ -88,12 +119,11 @@ export const useStavebakStore = create<StavebakState>((set, get) => ({
 
 export const phaseLabel = (g: GuideResult, id: string) => g.phases?.find((p) => p.id === id)?.label ?? id
 
-/** Send a message as if the user typed it — for explicit actions that need no extra input. */
-export function sendChat(text: string) {
-  window.dispatchEvent(new CustomEvent('stavebak:send', { detail: text }))
+/** Run an action in the chat. Shown as an event row ("▶ …"), not as something the user typed;
+ *  the text carries the user's intent only — how to do it comes from the server's instructions. */
+export function runAction(label: string) {
+  window.dispatchEvent(new CustomEvent('stavebak:send', { detail: `${ACTION_PREFIX}${label}` }))
 }
 
-/** Messages carry the user's intent only — how to do it comes from the server's instructions. */
-export const SETUP_MESSAGE = 'Založ pro tuto složku projekt Stavebáku.'
-export const MIGRATE_MESSAGE = 'Převeď stavebak.json do aktuálního formátu.'
-export const nextStepMessage = (title: string) => `Pojďme na další krok: ${title}.`
+export const MIGRATE_ACTION = 'Převést stavebak.json do aktuálního formátu'
+export const nextStepAction = (title: string) => `Další krok: ${title}`

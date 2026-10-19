@@ -4119,8 +4119,15 @@ async fn create_directory(
 }
 
 #[tauri::command]
-async fn create_project_directory(path: String) -> Result<(), String> {
-    std::fs::create_dir_all(&path).map_err(|e| format!("Cannot create directory: {}", e))
+async fn create_project_directory(
+    path_access: State<'_, PathAccessManager>,
+    path: String,
+) -> Result<(), String> {
+    std::fs::create_dir_all(&path).map_err(|e| format!("Cannot create directory: {}", e))?;
+    // The user just created it as a project: it's part of the workspace (same as an opened one),
+    // so the new-project flow can write its first files before the project is opened
+    path_access.register_cwd(std::path::Path::new(&path)).await;
+    Ok(())
 }
 
 #[tauri::command]

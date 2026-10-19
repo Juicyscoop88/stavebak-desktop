@@ -7,6 +7,13 @@ export const manifest: PluginManifest = {
 
   panels: [
     {
+      id: 'stav-new-project',
+      label: 'Nový projekt',
+      slot: 'new-project',
+      priority: 100,
+      component: () => import('./NewProjectForm'),
+    },
+    {
       id: 'stav-chat-empty',
       label: 'Začátek projektu',
       slot: 'chat-empty',

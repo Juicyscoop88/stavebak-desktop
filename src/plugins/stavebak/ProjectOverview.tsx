@@ -1,5 +1,5 @@
 import { CheckCircle, Circle, CircleDashed, Warning, ArrowRight } from '@phosphor-icons/react'
-import { useStavebakStore, phaseLabel, sendChat, nextStepMessage, MIGRATE_MESSAGE, type GuideStep } from './store'
+import { useStavebakStore, phaseLabel, runAction, nextStepAction, MIGRATE_ACTION, type GuideStep } from './store'
 
 const czk = (n: number) => `${n.toLocaleString('cs-CZ')} Kč`
 
@@ -49,7 +49,7 @@ export default function ProjectOverview() {
               Projekt je uložený ve starším formátu. Stavebák z něj nepozná všechno, co už je hotové, takže skutečný stav může být dál.
             </div>
             <button
-              onClick={() => sendChat(MIGRATE_MESSAGE)}
+              onClick={() => runAction(MIGRATE_ACTION)}
               title="Pošle Claudovi pokyn v chatu"
               className="flex-shrink-0 px-2 py-1 rounded-md text-xs text-text-primary border border-border hover:bg-bg-secondary cursor-pointer"
             >
@@ -88,7 +88,7 @@ export default function ProjectOverview() {
                     {a.leadTime && <div className="text-xs text-text-tertiary mt-1">Dodání: {a.leadTime}</div>}
                   </div>
                   <button
-                    onClick={() => sendChat(nextStepMessage(a.title))}
+                    onClick={() => runAction(nextStepAction(a.title))}
                     title="Pošle Claudovi pokyn v chatu"
                     className="self-start flex items-center gap-1 px-2 py-1 rounded-md text-xs text-text-primary
                       border border-border hover:bg-bg-secondary cursor-pointer flex-shrink-0"
