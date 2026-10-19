@@ -6,6 +6,8 @@ import { MODEL_OPTIONS, useSettingsStore, type ModelId } from '../stores/setting
  * Defined once here and imported by ModelSelector, GeneralTab, etc.
  */
 export const TIER_MAP: Record<string, 'opus' | 'sonnet' | 'haiku'> = {
+  opus: 'opus',
+  sonnet: 'sonnet',
   'claude-fable-5': 'opus',
   'claude-fable-5-1m': 'opus',
   'claude-fable-5[1m]': 'opus',
@@ -22,8 +24,8 @@ export const TIER_MAP: Record<string, 'opus' | 'sonnet' | 'haiku'> = {
 const FIXED_MODEL_TIERS = new Set(['opus', 'sonnet', 'haiku']);
 const MODEL_TIER_ORDER = ['opus', 'sonnet', 'haiku'];
 const DEFAULT_MODEL_FOR_TIER: Record<string, ModelId> = {
-  opus: 'claude-opus-4-8',
-  sonnet: 'claude-sonnet-4-6',
+  opus: 'opus',
+  sonnet: 'sonnet',
   haiku: 'claude-haiku-4-5-20251001',
 };
 

@@ -148,7 +148,11 @@ function AccountsSection() {
 
   useEffect(() => {
     bridge.checkClaudeAuth()
-      .then((a) => setAccount({ authenticated: a.authenticated, email: a.account ?? null }))
+      .then((a) => {
+        const plan = a.subscription ? a.subscription.charAt(0).toUpperCase() + a.subscription.slice(1) : null;
+        const label = [a.account, plan].filter(Boolean).join(' · ') || null;
+        setAccount({ authenticated: a.authenticated, email: label });
+      })
       .catch(() => setAccount({ authenticated: false, email: null }));
   }, []);
 

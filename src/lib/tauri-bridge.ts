@@ -127,6 +127,8 @@ export interface AuthStatus {
   authenticated: boolean;
   unknown?: boolean;
   account?: string | null;
+  /** claude.ai plan ("pro", "max"…), null when signed in with an API key */
+  subscription?: string | null;
 }
 
 export interface StepResult {

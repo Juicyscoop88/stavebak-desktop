@@ -22,16 +22,7 @@ function provider(overrides: Partial<ApiProvider> = {}): ApiProvider {
 describe('provider model display options', () => {
   it('uses official model options when no provider is active', () => {
     const options = getModelDisplayOptions(null);
-    expect(options.map((option) => option.short)).toEqual([
-      'Fable 5',
-      'Fable 5 (1M)',
-      'Opus 4.8',
-      'Opus 4.8 (1M)',
-      'Opus 4.6',
-      'Opus 4.6 (1M)',
-      'Sonnet 4.6',
-      'Haiku 4.5',
-    ]);
+    expect(options.map((option) => option.short)).toEqual(['Sonnet', 'Opus']);
   });
 
   it('uses only configured non-Claude provider models without Claude suffixes', () => {
@@ -75,7 +66,7 @@ describe('provider model display options', () => {
     });
 
     expect(shouldUseProviderModelOptions(p)).toBe(false);
-    expect(getModelDisplayOptions(p)).toHaveLength(8);
+    expect(getModelDisplayOptions(p)).toHaveLength(2);
   });
 
   it('selects the configured provider option for any Claude model in the same tier', () => {
@@ -86,8 +77,8 @@ describe('provider model display options', () => {
       ],
     }));
 
-    expect(getSelectedModelOptionId('claude-fable-5', options)).toBe('claude-opus-4-8');
-    expect(getSelectedModelOptionId('claude-opus-4-6', options)).toBe('claude-opus-4-8');
-    expect(getSelectedModelOptionId('claude-sonnet-4-6', options)).toBe('claude-sonnet-4-6');
+    expect(getSelectedModelOptionId('claude-fable-5', options)).toBe('opus');
+    expect(getSelectedModelOptionId('claude-opus-4-6', options)).toBe('opus');
+    expect(getSelectedModelOptionId('claude-sonnet-4-6', options)).toBe('sonnet');
   });
 });

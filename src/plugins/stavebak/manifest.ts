@@ -38,7 +38,7 @@ export const manifest: PluginManifest = {
       icon: 'phone',
       slot: 'left',
       priority: 20,
-      requiredTools: ['get_sluzby'],
+      requiredTools: ['find_suppliers'],
       component: () => import('./panels/ServicesPanel'),
     },
   ],

@@ -7312,9 +7312,16 @@ struct AuthStatus {
     authenticated: bool,
     unknown: bool,
     account: Option<String>,
+    /// claude.ai plan ("pro", "max"…), None when signed in with an API key.
+    subscription: Option<String>,
 }
 
-/// Check whether the Claude CLI is authenticated by running a lightweight check.
+/// Check whether the Claude CLI is authenticated.
+///
+/// `claude auth status` prints JSON (`loggedIn`, `authMethod`, `email`,
+/// `subscriptionType`). Credentials live in the macOS Keychain, so file checks
+/// can't tell a signed-out user from a signed-in one. Older CLIs without the
+/// subcommand fall back to `claude doctor`.
 #[tauri::command]
 async fn check_claude_auth() -> Result<AuthStatus, String> {
     let claude_bin = find_claude_binary().unwrap_or_else(|| {
@@ -7329,46 +7336,44 @@ async fn check_claude_auth() -> Result<AuthStatus, String> {
     });
     let enriched_path = build_enriched_path();
 
-    // First try a quick credential file check (instant, no subprocess)
-    if let Some(home) = dirs::home_dir() {
-        let cred_path = home.join(".claude").join("credentials.json");
-        if cred_path.exists() {
-            // Parse JSON and check for actual token fields
-            if let Ok(content) = std::fs::read_to_string(&cred_path) {
-                if let Ok(json) = serde_json::from_str::<Value>(&content) {
-                    let has_token = ["claudeAiOAuthToken", "accessToken", "token", "apiKey"]
-                        .iter()
-                        .any(|key| {
-                            json.get(key)
-                                .and_then(|v| v.as_str())
-                                .map(|s| !s.is_empty())
-                                .unwrap_or(false)
-                        });
-                    if has_token {
-                        let account = json.get("email")
-                            .or_else(|| json.get("account"))
-                            .and_then(|v| v.as_str())
-                            .filter(|s| !s.is_empty())
-                            .map(|s| s.to_string());
-                        return Ok(AuthStatus {
-                            authenticated: true,
-                            unknown: false,
-                            account,
-                        });
-                    }
-                }
-                // JSON invalid or no token found — fall through to claude doctor
-            }
-        }
-        // Also check .claude.json (older format)
-        let alt_path = std::path::Path::new(&home).join(".claude.json");
-        if alt_path.exists() {
+    #[cfg(target_os = "windows")]
+    let mut status_cmd = if claude_needs_cmd_wrapper(&claude_bin) {
+        let mut c = Command::new("cmd");
+        c.args(["/C", &claude_bin, "auth", "status"]);
+        c
+    } else {
+        let mut c = Command::new(&claude_bin);
+        c.args(["auth", "status"]);
+        c
+    };
+    #[cfg(not(target_os = "windows"))]
+    let mut status_cmd = {
+        let mut c = Command::new(&claude_bin);
+        c.args(["auth", "status"]);
+        c
+    };
+    status_cmd.env("PATH", &enriched_path).env_remove("CLAUDECODE");
+    #[cfg(target_os = "windows")]
+    status_cmd.creation_flags(0x08000000);
+    if let Ok(Ok(output)) =
+        tokio::time::timeout(std::time::Duration::from_secs(8), status_cmd.output()).await
+    {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if let Ok(json) = serde_json::from_str::<Value>(stdout.trim()) {
+            let text = |key: &str| {
+                json.get(key)
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+            };
             return Ok(AuthStatus {
-                authenticated: true,
+                authenticated: json.get("loggedIn").and_then(|v| v.as_bool()).unwrap_or(false),
                 unknown: false,
-                account: None,
+                account: text("email"),
+                subscription: text("subscriptionType"),
             });
         }
+        // Not JSON → CLI without `auth status`, fall through to doctor.
     }
 
     // Fallback: run `claude doctor` with a shorter timeout
@@ -7409,6 +7414,7 @@ async fn check_claude_auth() -> Result<AuthStatus, String> {
                 authenticated: output.status.success() && !has_auth_issue,
                 unknown: false,
                 account: None,
+                subscription: None,
             })
         }
         Ok(Err(e)) => Err(format!("Failed to run auth check: {}", e)),
@@ -7418,6 +7424,7 @@ async fn check_claude_auth() -> Result<AuthStatus, String> {
                 authenticated: false,
                 unknown: true,
                 account: None,
+                subscription: None,
             })
         }
     }
