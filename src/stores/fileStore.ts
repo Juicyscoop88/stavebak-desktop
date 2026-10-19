@@ -157,6 +157,7 @@ export const useFileStore = create<FileState>()((set, get) => ({
         'png','jpg','jpeg','gif','webp','bmp','ico',
         'pdf','mp4','webm','mov','avi',
         'mp3','wav','ogg','aac','m4a',
+        'dxf', // can be tens of MB; the viewer fetches the data URL itself
       ]);
 
       if (BINARY_PREVIEW.has(ext)) {

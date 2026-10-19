@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useEffect, useRef } from 'react';
+import { useMemo, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import { useFileRenderer } from '../layout/PluginComponents';
 import { createPortal } from 'react-dom';
 import DOMPurify from 'dompurify';
@@ -31,6 +31,8 @@ import { FileIcon } from '../shared/FileIcon';
 import { stavebakTheme, stavebakHighlight } from '../../lib/codemirror-theme';
 import { useT } from '../../lib/i18n';
 import { X, SpinnerGap, ArrowSquareOut, PencilSimple, Eye, Code } from '@phosphor-icons/react';
+
+const DxfPreview = lazy(() => import('./DxfPreview'));
 
 /* ================================================================
    Helpers
@@ -147,6 +149,7 @@ export function FilePreview() {
   const isVideo = VIDEO_EXTS.has(ext);
   const isAudio = AUDIO_EXTS.has(ext);
   const isPdf = ext === PDF_EXT;
+  const isDxf = ext === 'dxf';
   const isBinary = BINARY_EXTS.has(ext);
   const hasPreview = isMarkdown || isHtml || isSvg || hasPluginRenderer;
   const isEditing = previewMode === 'edit';
@@ -177,7 +180,7 @@ export function FilePreview() {
         { id: 'edit' as const, icon: PencilSimple, title: t('files.edit') },
       ];
     }
-    if (!isBinary && !isImage && !isPdf && !isVideo && !isAudio) {
+    if (!isBinary && !isImage && !isPdf && !isVideo && !isAudio && !isDxf) {
       return [
         { id: 'source' as const, icon: Code, title: t('files.source') },
         { id: 'edit' as const, icon: PencilSimple, title: t('files.edit') },
@@ -276,6 +279,8 @@ export function FilePreview() {
               draggable={false}
             />
           </div>
+        ) : isDxf && fileContent ? (
+          <Suspense fallback={null}><DxfPreview url={fileContent} /></Suspense>
         ) : isPdf && selectedFile && fileContent ? (
           /* PDF preview: iframe with base64 data URL */
           <div className="flex flex-col h-full">
