@@ -1,8 +1,7 @@
 import { lazy, Suspense, useState, useRef, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { useFileStore } from '../../stores/fileStore';
 import { useT } from '../../lib/i18n';
-import { CaretLeft, CaretUpDown, Folder, FolderPlus, Plus } from '@phosphor-icons/react';
+import { CaretLeft, CaretUpDown, Check, FolderPlus, Plus, X } from '@phosphor-icons/react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { openProject } from '../../lib/conversations';
@@ -14,15 +13,15 @@ export function Sidebar() {
   const toggleSidebar = useSettingsStore((s) => s.toggleSidebar);
   const t = useT();
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
-  const recentProjects = useFileStore((s) => s.recentProjects);
-  const fetchProjects = useFileStore((s) => s.fetchRecentProjects);
+  const storedProjects = useSettingsStore((s) => s.projects);
+  const removeProject = useSettingsStore((s) => s.removeProject);
+  // Current project always first, even before it lands in the stored list
+  const projects = workingDirectory
+    ? [workingDirectory, ...storedProjects.filter((p) => p !== workingDirectory)]
+    : storedProjects;
 
   const [popoverOpen, setPopoverOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (popoverOpen) fetchProjects();
-  }, [popoverOpen]);
 
   useEffect(() => {
     if (!popoverOpen) return;
@@ -31,8 +30,13 @@ export function Sidebar() {
         setPopoverOpen(false);
       }
     };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPopoverOpen(false); };
     document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
   }, [popoverOpen]);
 
   const handlePickFolder = async () => {
@@ -66,9 +70,9 @@ export function Sidebar() {
       <div className="h-[28px] flex-shrink-0" />
 
       {/* Header row — logo + project switcher + collapse */}
-      <div className="flex items-center justify-between h-[36px] pl-3.5 pr-2
+      <div ref={popoverRef} className="relative flex items-center justify-between h-[36px] pl-3.5 pr-2
         border-b border-border-subtle flex-shrink-0 cursor-default">
-        <div className="relative flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
           <svg className="h-3.5 w-3.5 text-text-tertiary flex-shrink-0" viewBox="0 0 80 80" fill="none">
             <path d="m60.49 28.48v-11.87h-7.3v7.73l-10.54-6-30.64 14.07v6.61l30.6-14.06 25.68 14.44v-6.52l-7.8-4.4z" fill="currentColor" />
             <path d="m17.57 38.99v22.76h6.89v-25.89c-2.39 0.98-4.73 2.23-6.89 3.13z" fill="currentColor" />
@@ -85,6 +89,53 @@ export function Sidebar() {
             </span>
             <CaretUpDown size={10} weight="bold" className="text-text-tertiary flex-shrink-0" />
           </button>
+          {/* Project switcher — dropdown under the name, sidebar stays visible */}
+          {popoverOpen && (
+            <div className="absolute left-2 right-2 top-full mt-1 z-50 max-h-[70vh] overflow-y-auto
+              rounded-lg border border-border bg-bg-card shadow-lg p-1.5">
+              {projects.length > 0 && (
+                <>
+                  <div className="text-xs text-text-tertiary font-medium px-2.5 py-1">Projekty</div>
+                  {projects.map((path) => {
+                    const current = path === workingDirectory;
+                    return (
+                      <div key={path} title={path}
+                        className={`group flex items-center gap-2 pl-2.5 pr-1 py-1.5 rounded-md text-xs cursor-pointer
+                          ${current ? 'bg-bg-secondary text-text-primary font-medium' : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'}`}
+                        onClick={() => handleSwitchProject(path)}
+                      >
+                        <span className="flex-1 truncate">{path.split(/[\\/]/).pop()}</span>
+                        {current
+                          ? <Check size={11} className="text-text-muted flex-shrink-0 mr-1" />
+                          : (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); removeProject(path); }}
+                              title="Odebrat ze seznamu (složka na disku zůstane)"
+                              className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-bg-tertiary text-text-tertiary hover:text-text-primary cursor-pointer"
+                            >
+                              <X size={11} />
+                            </button>
+                          )}
+                      </div>
+                    );
+                  })}
+                  <div className="h-px bg-border-subtle my-1.5" />
+                </>
+              )}
+              <button onClick={handlePickFolder}
+                className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-xs text-text-secondary
+                  hover:bg-bg-secondary hover:text-text-primary w-full text-left cursor-pointer">
+                <FolderPlus size={13} weight="light" className="text-text-tertiary" />
+                {t('sidebar.openFolder')}…
+              </button>
+              <button onClick={handleNewProject}
+                className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-xs text-text-secondary
+                  hover:bg-bg-secondary hover:text-text-primary w-full text-left cursor-pointer">
+                <Plus size={13} weight="light" className="text-text-tertiary" />
+                {t('welcome.newProject')}…
+              </button>
+            </div>
+          )}
 
         </div>
         <button onClick={toggleSidebar}
@@ -107,62 +158,6 @@ export function Sidebar() {
           </>
         ) : null}
 
-        {/* Project switcher — overlays file explorer area */}
-        {popoverOpen && (
-          <div ref={popoverRef} className="absolute inset-0 z-50
-            bg-bg-card border-b border-border-subtle
-            animate-scale-in overflow-y-auto">
-            {/* Actions */}
-            <div className="p-1.5">
-              <button
-                onClick={handlePickFolder}
-                className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg
-                  text-xs text-text-primary hover:bg-bg-secondary
-                  transition-smooth w-full text-left cursor-pointer"
-              >
-                <FolderPlus size={14} weight="light" className="text-text-tertiary" />
-                {t('sidebar.openFolder')}
-              </button>
-              <button
-                onClick={handleNewProject}
-                className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg
-                  text-xs text-text-muted hover:bg-bg-secondary hover:text-text-primary
-                  transition-smooth w-full text-left cursor-pointer"
-              >
-                <Plus size={14} weight="light" className="text-text-tertiary" />
-                {t('welcome.newProject')}
-              </button>
-            </div>
-
-            {/* Recent projects */}
-            {recentProjects.length > 0 && (
-              <>
-                <div className="h-px bg-border-subtle mx-1.5" />
-                <div className="p-1.5">
-                  <div className="text-xs text-text-tertiary font-medium px-2.5 py-1">
-                    {t('sidebar.recent')}
-                  </div>
-                  {recentProjects.slice(0, 6).map((project) => (
-                    <button
-                      key={project.path}
-                      onClick={() => handleSwitchProject(project.path)}
-                      className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg
-                        text-xs transition-smooth w-full text-left cursor-pointer
-                        ${project.path === workingDirectory
-                          ? 'text-text-primary bg-bg-secondary font-medium'
-                          : 'text-text-muted hover:bg-bg-secondary hover:text-text-primary'
-                        }`}
-                      title={project.shortPath}
-                    >
-                      <Folder size={12} weight="light" className="flex-shrink-0 text-text-tertiary" />
-                      <span className="truncate">{project.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

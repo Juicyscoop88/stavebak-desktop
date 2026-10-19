@@ -111,6 +111,9 @@ interface SettingsState {
   toggleSettings: () => void;
   /** Last opened project folder — reopened on launch */
   lastProject: string;
+  /** Stavebák's own project list, most recent first (not Claude Code's whole history) */
+  projects: string[];
+  removeProject: (dir: string) => void;
   setWorkingDirectory: (dir: string) => void;
   setSelectedModel: (model: string) => void;
   setSessionMode: (mode: SessionMode) => void;
@@ -157,6 +160,7 @@ export const useSettingsStore = create<SettingsState>()(
       agentPanelOpen: false,
       workingDirectory: '',
       lastProject: '',
+      projects: [],
       selectedModel: 'sonnet',
       sessionMode: 'bypass',
       locale: 'cs',
@@ -212,13 +216,17 @@ export const useSettingsStore = create<SettingsState>()(
         })),
 
       setWorkingDirectory: (dir) => {
-        set(() => (dir ? { workingDirectory: dir, lastProject: dir } : { workingDirectory: dir }));
+        set((state) => (dir
+          ? { workingDirectory: dir, lastProject: dir, projects: [dir, ...state.projects.filter((p) => p !== dir)] }
+          : { workingDirectory: dir }));
         if (dir) {
           import('@tauri-apps/api/core').then(({ invoke }) => {
             invoke('ensure_claude_md', { path: dir }).catch(() => {});
           });
         }
       },
+
+      removeProject: (dir) => set((state) => ({ projects: state.projects.filter((p) => p !== dir) })),
 
       setSelectedModel: (model) => {
         const old = get().selectedModel;
@@ -370,6 +378,7 @@ export const useSettingsStore = create<SettingsState>()(
         secondaryPanelWidth: state.secondaryPanelWidth,
         // workingDirectory itself isn't persisted; launch reopens lastProject via openProject()
         lastProject: state.lastProject,
+        projects: state.projects,
         selectedModel: state.selectedModel,
         sessionMode: state.sessionMode,
         locale: state.locale,

@@ -13,6 +13,7 @@ import { useAgentStore } from '../stores/agentStore';
 import { bridge, type SessionListItem } from './tauri-bridge';
 import { parseSessionMessages } from './session-loader';
 import { t } from './i18n';
+import { teardownSession, waitForStdinCleared } from './sessionLifecycle';
 
 const sameDir = (a: string, b: string) => a.replace(/[\\/]+$/, '') === b.replace(/[\\/]+$/, '');
 
@@ -124,5 +125,36 @@ export async function openProject(dir: string): Promise<void> {
 
   const last = projectConversations(useSessionStore.getState().sessions, dir)[0];
   if (last) await openConversation(last);
+  else startConversation(dir);
+}
+
+/** Delete a saved conversation; if it's the open one, continue with the project's next latest. */
+export async function deleteConversation(session: SessionListItem): Promise<void> {
+  const { id: sessionId, path: sessionPath } = session;
+  // Stop its CLI process first so nothing keeps writing to the deleted transcript
+  const tab = useChatStore.getState().getTab(sessionId);
+  const stdinIds = new Set([
+    ...(tab?.sessionMeta.stdinId ? [tab.sessionMeta.stdinId] : []),
+    ...Object.entries(useSessionStore.getState().stdinToTab).filter(([, id]) => id === sessionId).map(([stdin]) => stdin),
+  ]);
+  for (const stdinId of stdinIds) {
+    await teardownSession(stdinId, sessionId, 'delete');
+    if (tab?.sessionMeta.stdinId === stdinId) await waitForStdinCleared(sessionId, stdinId).catch(() => {});
+  }
+
+  if (sessionPath) await bridge.deleteSession(sessionId, sessionPath);
+  else useSessionStore.getState().removeDraft(sessionId);
+  useChatStore.getState().removeFromCache(sessionId);
+  useAgentStore.getState().clearCacheForTab(sessionId);
+  bridge.clearPathGrants(sessionId).catch(() => {});
+
+  const wasOpen = useSessionStore.getState().selectedSessionId === sessionId;
+  await useSessionStore.getState().fetchSessions();
+  if (!wasOpen) return;
+  useChatStore.getState().removeTab(sessionId);
+  const dir = useSettingsStore.getState().workingDirectory;
+  const next = projectConversations(useSessionStore.getState().sessions, dir)[0];
+  useSessionStore.getState().setSelectedSession(null);
+  if (next) await openConversation(next);
   else startConversation(dir);
 }
