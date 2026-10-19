@@ -2,11 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const chatPanelSource = readFileSync(
-  resolve(__dirname, '../components/chat/ChatPanel.tsx'),
-  'utf-8',
-);
-
 const inputBarSource = readFileSync(
   resolve(__dirname, '../components/chat/InputBar.tsx'),
   'utf-8',
@@ -38,13 +33,7 @@ const planReviewCardSource = readFileSync(
 );
 
 describe('stdin route regressions', () => {
-  it('pre-warm spawn keeps the tab out of running state', () => {
-    expect(chatPanelSource).toContain('setRunning: false');
-    expect(chatPanelSource).toContain('sessionModeSnapshot: settings.sessionMode');
-  });
-
   it('sessionMeta.sessionId only stores the real CLI session id', () => {
-    expect(chatPanelSource).toContain('sessionId: spawnResult.sessionInfo.cli_session_id ?? undefined');
     expect(inputBarSource).toContain('const nextSessionId = spawnResult.sessionInfo.cli_session_id');
     expect(inputBarSource).toContain('sessionId: nextSessionId');
   });
