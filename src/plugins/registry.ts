@@ -7,15 +7,19 @@ const pluginModules = import.meta.glob('./*/manifest.ts', { eager: true }) as Re
   { manifest: PluginManifest }
 >
 
-export function registerPlugins() {
+/** A plugin is active while its MCP server is configured (~/.claude.json). */
+function sync() {
   const servers = useMcpStore.getState().servers
-
-  for (const [, mod] of Object.entries(pluginModules)) {
-    const manifest = mod.manifest
+  for (const { manifest } of Object.values(pluginModules)) {
     const hasServer = servers.some(s => s.name === manifest.mcpServer)
-
-    if (!hasServer) continue
-
-    panelRegistry.register(manifest.id, manifest.panels)
+    const registered = panelRegistry.isRegistered(manifest.id)
+    if (hasServer && !registered) panelRegistry.register(manifest.id, manifest.panels, manifest.fileRenderers)
+    if (!hasServer && registered) panelRegistry.unregister(manifest.id)
   }
+}
+
+export function registerPlugins() {
+  useMcpStore.subscribe((state, prev) => { if (state.servers !== prev.servers) sync() })
+  useMcpStore.getState().fetchServers().catch(() => {})
+  sync()
 }

@@ -3893,10 +3893,18 @@ async fn read_file_content(
     std::fs::read_to_string(&p).map_err(|e| format!("Cannot read file: {}", e))
 }
 
-/// Stavebák MCP `guide` over plain JSON-RPC (stateless, works without an account).
+/// Call one tool of a configured streamable-HTTP MCP server over plain JSON-RPC, for plugin
+/// panels that need data without a model turn. Stateless servers only (no session handshake).
 /// Runs in Rust so the webview isn't subject to CORS. Returns the tool's structured result.
 #[tauri::command]
-async fn stavebak_guide(args: serde_json::Value) -> Result<serde_json::Value, String> {
+async fn mcp_call_tool(
+    url: String,
+    tool: String,
+    args: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    if !url.starts_with("https://") && !url.starts_with("http://localhost") && !url.starts_with("http://127.0.0.1") {
+        return Err("MCP URL musí být https".to_string());
+    }
     let client = build_smart_http_client(
         std::time::Duration::from_secs(5),
         std::time::Duration::from_secs(20),
@@ -3906,15 +3914,15 @@ async fn stavebak_guide(args: serde_json::Value) -> Result<serde_json::Value, St
         "jsonrpc": "2.0",
         "id": 1,
         "method": "tools/call",
-        "params": { "name": "guide", "arguments": args },
+        "params": { "name": tool, "arguments": args },
     });
     let text = client
-        .post("https://stavebak.cz/mcp")
+        .post(&url)
         .header("Accept", "application/json, text/event-stream")
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("Stavebák není dostupný: {}", e))?
+        .map_err(|e| format!("MCP server není dostupný: {}", e))?
         .text()
         .await
         .map_err(|e| e.to_string())?;
@@ -7962,7 +7970,7 @@ pub fn run() {
             decode_project_dir,
             read_file_tree,
             read_file_content,
-            stavebak_guide,
+            mcp_call_tool,
             write_file_content,
             copy_file,
             rename_file,

@@ -1,14 +1,5 @@
 import { CheckCircle, Circle, CircleDashed, Warning, ArrowRight } from '@phosphor-icons/react'
-import { useStavebakStore, PHASE_LABEL, prefillChat, MIGRATE_PROMPT, type GuideStep, type NextAction } from './store'
-
-const ACTION_LABEL: Record<NextAction['kind'], string> = {
-  'ask-client': 'Investor',
-  'public-data': 'Veřejná data',
-  'order-supplier': 'Objednat',
-  'request-authority': 'Úřad',
-  design: 'Projekt',
-  confirm: 'Ověřit',
-}
+import { useStavebakStore, phaseLabel, prefillChat, type GuideStep } from './store'
 
 const czk = (n: number) => `${n.toLocaleString('cs-CZ')} Kč`
 
@@ -19,8 +10,8 @@ function StepIcon({ status }: { status: GuideStep['status'] }) {
 }
 
 /** Renderer for stavebak.json: project status from Stavebák `guide`. */
-export function ProjectOverview() {
-  const { status, guide, name, outdated, error } = useStavebakStore()
+export default function ProjectOverview() {
+  const { status, guide, error } = useStavebakStore()
 
   if (!guide) {
     return (
@@ -31,7 +22,7 @@ export function ProjectOverview() {
   }
 
   const { done, total } = guide.progress
-  const phases = Object.keys(PHASE_LABEL).filter((p) => guide.steps.some((s) => s.phase === p))
+  const phases = guide.phases?.map((p) => p.id) ?? [...new Set(guide.steps.map((s) => s.phase))]
   const facts = [
     guide.category.label,
     guide.category.authorityDeadlineDays ? `lhůta úřadu ${guide.category.authorityDeadlineDays} dní` : null,
@@ -42,7 +33,7 @@ export function ProjectOverview() {
     <div className="overflow-auto h-full selectable">
       <div className="max-w-xl px-6 py-5 space-y-7">
         <header>
-          <h1 className="text-lg font-semibold text-text-primary leading-snug">{name ?? guide.buildingType.label}</h1>
+          <h1 className="text-lg font-semibold text-text-primary leading-snug">{guide.projectName ?? guide.buildingType.label}</h1>
           <p className="text-sm text-text-muted mt-0.5">{guide.buildingType.label} · {facts.join(' · ')}</p>
           <div className="flex items-center gap-3 mt-3">
             <div className="flex-1 h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
@@ -52,13 +43,13 @@ export function ProjectOverview() {
           </div>
         </header>
 
-        {outdated && (
+        {guide.format?.hint && (
           <div className="flex items-start gap-3 rounded-lg border border-border px-3.5 py-3">
             <div className="flex-1 text-sm text-text-secondary leading-snug">
               Projekt je uložený ve starším formátu. Stavebák z něj nepozná všechno, co už je hotové, takže skutečný stav může být dál.
             </div>
             <button
-              onClick={() => prefillChat(MIGRATE_PROMPT)}
+              onClick={() => prefillChat(guide.format!.hint!)}
               title="Připraví pokyn do chatu, neodešle ho"
               className="flex-shrink-0 px-2 py-1 rounded-md text-xs text-text-primary border border-border hover:bg-bg-secondary cursor-pointer"
             >
@@ -90,7 +81,7 @@ export function ProjectOverview() {
             <ul className="divide-y divide-border-subtle border-y border-border-subtle">
               {guide.nextActions.map((a, i) => (
                 <li key={i} className="py-3 flex gap-3">
-                  <span className="w-20 flex-shrink-0 text-xs text-text-tertiary pt-0.5">{ACTION_LABEL[a.kind] ?? a.kind}</span>
+                  <span className="w-20 flex-shrink-0 text-xs text-text-tertiary pt-0.5">{a.kindLabel ?? a.kind}</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-text-primary">{a.title}</div>
                     {a.detail && <div className="text-sm text-text-muted mt-0.5 leading-snug">{a.detail}</div>}
@@ -116,7 +107,7 @@ export function ProjectOverview() {
             {phases.map((phase) => (
               <div key={phase}>
                 <h3 className={`text-sm font-semibold mb-1.5 ${phase === guide.currentPhase ? 'text-text-primary' : 'text-text-muted'}`}>
-                  {PHASE_LABEL[phase]}
+                  {phaseLabel(guide, phase)}
                 </h3>
                 <ul className="space-y-1.5">
                   {guide.steps.filter((s) => s.phase === phase).map((s) => {

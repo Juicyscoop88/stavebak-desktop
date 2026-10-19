@@ -7,6 +7,13 @@ export const manifest: PluginManifest = {
 
   panels: [
     {
+      id: 'stav-overview-card',
+      label: 'Přehled projektu',
+      slot: 'sidebar-top',
+      priority: 100,
+      component: () => import('./ProjectOverviewCard'),
+    },
+    {
       id: 'stav-documents',
       label: 'Dokumenty',
       icon: 'file-text',
@@ -41,5 +48,9 @@ export const manifest: PluginManifest = {
       requiredTools: ['find_suppliers'],
       component: () => import('./panels/ServicesPanel'),
     },
+  ],
+
+  fileRenderers: [
+    { fileName: 'stavebak.json', component: () => import('./ProjectOverview') },
   ],
 }

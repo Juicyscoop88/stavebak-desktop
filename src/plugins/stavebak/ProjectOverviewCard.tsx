@@ -2,14 +2,20 @@ import { useEffect } from 'react'
 import { Plus, Warning } from '@phosphor-icons/react'
 import { onFileChange } from '../../lib/tauri-bridge'
 import { useFileStore } from '../../stores/fileStore'
-import { useStavebakStore, PROJECT_FILE, PHASE_LABEL, prefillChat, MIGRATE_PROMPT } from './store'
+import { useSettingsStore } from '../../stores/settingsStore'
+import { useStavebakStore, PROJECT_FILE, phaseLabel, prefillChat } from './store'
 
-const SETUP_PROMPT =
-  'Zařaď tento záměr podle stavebního zákona a založ v kořeni složky stavebak.json. Na co potřebuješ, se mě zeptej.'
+const SETUP_PROMPT = 'Založ pro tuto složku projekt Stavebáku. Na co potřebuješ, se mě zeptej.'
 
 /** Pinned summary above the file tree: phase, progress, next step, expiring permits. */
-export function ProjectOverviewCard({ dir }: { dir: string }) {
-  const { status, guide, name, outdated, load } = useStavebakStore()
+export default function ProjectOverviewCard() {
+  const dir = useSettingsStore((s) => s.workingDirectory)
+  if (!dir) return null
+  return <Card dir={dir} />
+}
+
+function Card({ dir }: { dir: string }) {
+  const { status, guide, load } = useStavebakStore()
   const selectFile = useFileStore((s) => s.selectFile)
   const selectedFile = useFileStore((s) => s.selectedFile)
   const filePath = `${dir}/${PROJECT_FILE}`
@@ -46,7 +52,7 @@ export function ProjectOverviewCard({ dir }: { dir: string }) {
         className="mx-2 mt-2 px-3 py-2.5 rounded-lg border border-border-subtle w-[calc(100%-16px)]
           text-left hover:bg-bg-secondary cursor-pointer"
       >
-        <div className="text-sm font-medium text-text-primary truncate">{name ?? 'Projekt'}</div>
+        <div className="text-sm font-medium text-text-primary truncate">Projekt</div>
         <div className="text-xs text-text-muted mt-0.5">Stav teď nejde načíst. Zkusit znovu</div>
       </button>
     )
@@ -64,10 +70,10 @@ export function ProjectOverviewCard({ dir }: { dir: string }) {
         ${active ? 'border-border bg-bg-secondary' : 'border-border-subtle hover:bg-bg-secondary'}`}
     >
       <div className="text-sm font-medium text-text-primary line-clamp-2 leading-snug">
-        {name ?? guide.buildingType.label}
+        {guide.projectName ?? guide.buildingType.label}
       </div>
       <div className="flex items-baseline justify-between text-xs text-text-muted mt-0.5">
-        <span>{PHASE_LABEL[guide.currentPhase] ?? guide.currentPhase}</span>
+        <span>{phaseLabel(guide, guide.currentPhase)}</span>
         <span className="tabular-nums">{done} / {total}</span>
       </div>
       <div className="h-1 rounded-full bg-bg-tertiary mt-1.5 overflow-hidden">
@@ -78,10 +84,10 @@ export function ProjectOverviewCard({ dir }: { dir: string }) {
           <span className="text-text-tertiary">Další: </span>{next.title}
         </div>
       )}
-      {outdated && (
+      {guide.format?.hint && (
         <div
           role="button"
-          onClick={(e) => { e.stopPropagation(); prefillChat(MIGRATE_PROMPT) }}
+          onClick={(e) => { e.stopPropagation(); prefillChat(guide.format!.hint!) }}
           className="text-xs text-text-muted mt-2 underline decoration-border underline-offset-2 hover:text-text-primary"
         >
           Starší formát, stav nemusí sedět. Převést

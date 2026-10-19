@@ -229,6 +229,10 @@ export const bridge = {
   deleteSession: (sessionId: string, sessionPath: string) =>
     invoke<void>('delete_session', { sessionId, sessionPath }),
 
+  /** One tool call on a configured streamable-HTTP MCP server; returns its structuredContent. */
+  callMcpTool: <T = unknown>(url: string, tool: string, args: Record<string, unknown>) =>
+    invoke<T>('mcp_call_tool', { url, tool, args }),
+
   listSessions: () =>
     invoke<SessionListItem[]>('list_sessions'),
 

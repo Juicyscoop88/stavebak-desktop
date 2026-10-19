@@ -1,6 +1,5 @@
 import { useMemo, useCallback, useEffect, useRef } from 'react';
-import { ProjectOverview } from '../../plugins/stavebak/ProjectOverview';
-import { PROJECT_FILE } from '../../plugins/stavebak/store';
+import { useFileRenderer } from '../layout/PluginComponents';
 import { createPortal } from 'react-dom';
 import DOMPurify from 'dompurify';
 import CodeMirror from '@uiw/react-codemirror';
@@ -140,7 +139,8 @@ export function FilePreview() {
   const ext = useMemo(() => selectedFile ? getExt(selectedFile) : '', [selectedFile]);
   const fileName = useMemo(() => selectedFile ? getFileName(selectedFile) : '', [selectedFile]);
   const isMarkdown = MARKDOWN_EXTS.has(ext);
-  const isProjectFile = fileName === PROJECT_FILE;
+  const PluginRenderer = useFileRenderer(fileName);
+  const hasPluginRenderer = PluginRenderer !== null;
   const isHtml = HTML_EXTS.has(ext);
   const isSvg = ext === SVG_EXT;
   const isImage = IMAGE_EXTS.has(ext);
@@ -148,7 +148,7 @@ export function FilePreview() {
   const isAudio = AUDIO_EXTS.has(ext);
   const isPdf = ext === PDF_EXT;
   const isBinary = BINARY_EXTS.has(ext);
-  const hasPreview = isMarkdown || isHtml || isSvg || isProjectFile;
+  const hasPreview = isMarkdown || isHtml || isSvg || hasPluginRenderer;
   const isEditing = previewMode === 'edit';
   const isDirty = editContent !== null && editContent !== fileContent;
 
@@ -377,8 +377,8 @@ export function FilePreview() {
               }}
             />
           </div>
-        ) : previewMode === 'preview' && isProjectFile ? (
-          <ProjectOverview />
+        ) : previewMode === 'preview' && PluginRenderer ? (
+          <PluginRenderer />
         ) : previewMode === 'preview' && isMarkdown && fileContent !== null ? (
           /* Markdown preview: rendered */
           <div className="overflow-auto h-full px-4 py-3">

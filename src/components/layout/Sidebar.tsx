@@ -6,7 +6,7 @@ import { CaretLeft, CaretUpDown, Folder, FolderPlus, Plus } from '@phosphor-icon
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { openProject } from '../../lib/conversations';
-import { ProjectOverviewCard } from '../../plugins/stavebak/ProjectOverviewCard';
+import { PluginSlotStack } from './PluginComponents';
 
 const FileExplorer = lazy(() => import('../files/FileExplorer').then(m => ({ default: m.FileExplorer })));
 
@@ -94,11 +94,11 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* Project overview (stavebak.json) + file explorer */}
+      {/* Plugin panels (e.g. project overview) + file explorer */}
       <div className="flex-1 overflow-hidden relative flex flex-col">
         {workingDirectory ? (
           <>
-            <ProjectOverviewCard dir={workingDirectory} />
+            <PluginSlotStack slot="sidebar-top" />
             <div className="flex-1 min-h-0">
               <Suspense fallback={null}>
                 <FileExplorer />
