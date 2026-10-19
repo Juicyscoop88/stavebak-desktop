@@ -132,17 +132,18 @@ export function QuestionCard({ message, floating }: Props) {
       const owner = resolveOwner();
       if (!owner) return;
       const { setInteractionState, setSessionStatus, setActivityStatus } = useChatStore.getState();
+      // Claude Code's AskUserQuestion looks answers up by question text, not by index
       const answers: Record<string, string> = {};
       questions.forEach((q, qIdx) => {
         if (useOther[qIdx] && otherText[qIdx]?.trim()) {
-          answers[String(qIdx)] = otherText[qIdx].trim();
+          answers[q.question] = otherText[qIdx].trim();
         } else {
           const selected = selectedMap[qIdx] || new Set<number>();
           const labels = Array.from(selected)
             .map((i) => q.options[i]?.label)
             .filter(Boolean);
           if (labels.length > 0) {
-            answers[String(qIdx)] = labels.join(', ');
+            answers[q.question] = labels.join(', ');
           }
         }
       });
