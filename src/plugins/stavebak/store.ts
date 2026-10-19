@@ -88,7 +88,12 @@ export const useStavebakStore = create<StavebakState>((set, get) => ({
 
 export const phaseLabel = (g: GuideResult, id: string) => g.phases?.find((p) => p.id === id)?.label ?? id
 
-/** Put a prepared instruction into the chat input without sending it. */
-export function prefillChat(text: string) {
-  window.dispatchEvent(new CustomEvent('stavebak:prefill', { detail: text }))
+/** Send a message as if the user typed it — for explicit actions that need no extra input. */
+export function sendChat(text: string) {
+  window.dispatchEvent(new CustomEvent('stavebak:send', { detail: text }))
 }
+
+/** Messages carry the user's intent only — how to do it comes from the server's instructions. */
+export const SETUP_MESSAGE = 'Založ pro tuto složku projekt Stavebáku.'
+export const MIGRATE_MESSAGE = 'Převeď stavebak.json do aktuálního formátu.'
+export const nextStepMessage = (title: string) => `Pojďme na další krok: ${title}.`

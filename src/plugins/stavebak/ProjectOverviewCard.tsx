@@ -3,9 +3,7 @@ import { Plus, Warning } from '@phosphor-icons/react'
 import { onFileChange } from '../../lib/tauri-bridge'
 import { useFileStore } from '../../stores/fileStore'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { useStavebakStore, PROJECT_FILE, phaseLabel, prefillChat } from './store'
-
-const SETUP_PROMPT = 'Založ pro tuto složku projekt Stavebáku. Na co potřebuješ, se mě zeptej.'
+import { useStavebakStore, PROJECT_FILE, phaseLabel, sendChat, SETUP_MESSAGE, MIGRATE_MESSAGE } from './store'
 
 /** Pinned summary above the file tree: phase, progress, next step, expiring permits. */
 export default function ProjectOverviewCard() {
@@ -35,12 +33,12 @@ function Card({ dir }: { dir: string }) {
   if (status === 'missing') {
     return (
       <button
-        onClick={() => prefillChat(SETUP_PROMPT)}
+        onClick={() => sendChat(SETUP_MESSAGE)}
         className="mx-2 mt-2 flex items-center gap-2 px-2.5 py-2 rounded-lg w-[calc(100%-16px)]
           text-xs text-text-muted hover:bg-bg-secondary hover:text-text-primary cursor-pointer text-left"
       >
         <Plus size={12} weight="light" className="flex-shrink-0 text-text-tertiary" />
-        Nastavit projekt Stavebáku
+        Založit projekt Stavebáku
       </button>
     )
   }
@@ -87,7 +85,7 @@ function Card({ dir }: { dir: string }) {
       {guide.format?.hint && (
         <div
           role="button"
-          onClick={(e) => { e.stopPropagation(); prefillChat(guide.format!.hint!) }}
+          onClick={(e) => { e.stopPropagation(); sendChat(MIGRATE_MESSAGE) }}
           className="text-xs text-text-muted mt-2 underline decoration-border underline-offset-2 hover:text-text-primary"
         >
           Starší formát, stav nemusí sedět. Převést

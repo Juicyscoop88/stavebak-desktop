@@ -1,7 +1,8 @@
 import type { ComponentType } from 'react'
 
-/** left/right: switchable side panels. sidebar-top: always shown above the project's file tree. */
-export type PanelSlotId = 'left' | 'right' | 'sidebar-top'
+/** left/right: switchable side panels. sidebar-top: always shown above the project's file tree.
+ *  chat-empty: replaces the default empty-chat content of an open project. */
+export type PanelSlotId = 'left' | 'right' | 'sidebar-top' | 'chat-empty'
 
 export interface PanelDefinition {
   id: string

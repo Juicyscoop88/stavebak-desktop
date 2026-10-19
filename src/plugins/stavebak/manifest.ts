@@ -7,6 +7,13 @@ export const manifest: PluginManifest = {
 
   panels: [
     {
+      id: 'stav-chat-empty',
+      label: 'Začátek projektu',
+      slot: 'chat-empty',
+      priority: 100,
+      component: () => import('./ChatEmptyState'),
+    },
+    {
       id: 'stav-overview-card',
       label: 'Přehled projektu',
       slot: 'sidebar-top',

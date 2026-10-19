@@ -237,16 +237,17 @@ export function InputBar() {
     return () => window.removeEventListener('stavebak:tree-file-inline', onTreeFileInline);
   }, []);
 
-  // Prepared instruction from a panel ("Pokračovat") — fill the input, never send
+  // Explicit action from a plugin panel (e.g. "Založit projekt")
   useEffect(() => {
-    const onPrefill = (e: Event) => {
+    // An explicit action ("Založit projekt") sends right away, as if typed and submitted
+    const onSend = (e: Event) => {
       const text = (e as CustomEvent<string>).detail;
       if (!text || !textareaRef.current) return;
       textareaRef.current.setText(text);
-      textareaRef.current.focus();
+      handleSubmitRef.current();
     };
-    window.addEventListener('stavebak:prefill', onPrefill);
-    return () => window.removeEventListener('stavebak:prefill', onPrefill);
+    window.addEventListener('stavebak:send', onSend);
+    return () => window.removeEventListener('stavebak:send', onSend);
   }, []);
 
   // Slash command state

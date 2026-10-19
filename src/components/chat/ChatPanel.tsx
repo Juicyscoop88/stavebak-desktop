@@ -5,6 +5,7 @@ import { useChatStore, useActiveTab, type ChatMessage } from '../../stores/chatS
 import { MessageBubble } from './MessageBubble';
 import { ToolGroup } from './ToolGroup';
 import { ConversationMenu } from './ConversationMenu';
+import { PluginSlotStack } from '../layout/PluginComponents';
 import { openProject } from '../../lib/conversations';
 import { UpdateButton } from '../shared/UpdateButton';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -494,7 +495,7 @@ export function ChatPanel() {
         {!workingDirectory && messages.length === 0 && !isStreaming ? (
           <WelcomeScreen />
         ) : messages.length === 0 && !isStreaming ? (
-          <EmptyReadyState />
+          <PluginSlotStack slot="chat-empty" fallback={<EmptyReadyState />} />
         ) : (
           <div className="max-w-2xl mx-auto">
             {displayItems.map((item, displayIdx) => {
