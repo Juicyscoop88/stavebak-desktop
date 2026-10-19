@@ -229,6 +229,10 @@ export const bridge = {
   deleteSession: (sessionId: string, sessionPath: string) =>
     invoke<void>('delete_session', { sessionId, sessionPath }),
 
+  /** POST a project file to a conversion endpoint; returns the response as a data URL. */
+  postFileForConversion: (url: string, path: string, mime: string) =>
+    invoke<string>('post_file_for_conversion', { url, path, mime }),
+
   /** One tool call on a configured streamable-HTTP MCP server; returns its structuredContent. */
   callMcpTool: <T = unknown>(url: string, tool: string, args: Record<string, unknown>) =>
     invoke<T>('mcp_call_tool', { url, tool, args }),

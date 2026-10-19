@@ -64,6 +64,10 @@ export const manifest: PluginManifest = {
     },
   ],
 
+  fileConverters: [
+    { from: 'dwg', to: 'dxf', convert: (path) => import('./store').then((m) => m.convertDwg(path)) },
+  ],
+
   fileRenderers: [
     { fileName: 'stavebak.json', component: () => import('./ProjectOverview') },
   ],

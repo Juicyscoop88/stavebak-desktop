@@ -3894,6 +3894,49 @@ async fn read_file_content(
     std::fs::read_to_string(&p).map_err(|e| format!("Cannot read file: {}", e))
 }
 
+/// POST a project file's bytes to an HTTP endpoint and return the response as a data URL.
+/// For plugin-provided file conversions (e.g. a drawing format the preview can't read).
+#[tauri::command]
+async fn post_file_for_conversion(
+    path_access: State<'_, PathAccessManager>,
+    url: String,
+    path: String,
+    mime: String,
+) -> Result<String, String> {
+    use base64::Engine as _;
+    if !url.starts_with("https://") && !url.starts_with("http://localhost") && !url.starts_with("http://127.0.0.1") {
+        return Err("Převodní služba musí být https".to_string());
+    }
+    let p = path_access
+        .validate(std::path::Path::new(&path), None, PathCapability::Read)
+        .await?;
+    let bytes = std::fs::read(&p).map_err(|e| format!("Cannot read file: {}", e))?;
+    let client = build_smart_http_client(
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_secs(120),
+    )
+    .await;
+    let resp = client
+        .post(&url)
+        .header("Content-Type", "application/octet-stream")
+        .body(bytes)
+        .send()
+        .await
+        .map_err(|e| format!("Převodní služba není dostupná: {}", e))?;
+    let status = resp.status();
+    let body = resp.bytes().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        // Server errors come as {"error": "..."}; show that message, not raw JSON
+        let msg = serde_json::from_slice::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(String::from))
+            .unwrap_or_else(|| format!("HTTP {}", status));
+        return Err(msg);
+    }
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&body);
+    Ok(format!("data:{};base64,{}", mime, b64))
+}
+
 /// Call one tool of a configured streamable-HTTP MCP server over plain JSON-RPC, for plugin
 /// panels that need data without a model turn. Stateless servers only (no session handshake).
 /// Runs in Rust so the webview isn't subject to CORS. Returns the tool's structured result.
@@ -7979,6 +8022,7 @@ pub fn run() {
             read_file_tree,
             read_file_content,
             mcp_call_tool,
+            post_file_for_conversion,
             write_file_content,
             copy_file,
             rename_file,

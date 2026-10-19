@@ -85,6 +85,13 @@ export async function createProjectFile(dir: string, values: Record<string, stri
   await bridge.writeFileContent(`${dir}/${fileName}`, JSON.stringify(file, null, 2) + '\n')
 }
 
+/** DWG → DXF on the Stavebák server (LibreDWG runs there, nothing GPL ships in the app). */
+export async function convertDwg(path: string): Promise<string> {
+  const url = serverUrl()
+  if (!url) throw new Error('Stavebák MCP není nastavený.')
+  return bridge.postFileForConversion(url.replace(/\/mcp\/?$/, '/convert/dwg'), path, 'application/dxf')
+}
+
 function serverUrl(): string | null {
   return useMcpStore.getState().servers.find((s) => s.name === SERVER)?.config.url ?? null
 }

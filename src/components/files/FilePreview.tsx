@@ -33,6 +33,7 @@ import { useT } from '../../lib/i18n';
 import { X, SpinnerGap, ArrowSquareOut, PencilSimple, Eye, Code } from '@phosphor-icons/react';
 
 const DxfPreview = lazy(() => import('./DxfPreview'));
+const DwgPreview = lazy(() => import('./DwgPreview'));
 
 /* ================================================================
    Helpers
@@ -150,6 +151,7 @@ export function FilePreview() {
   const isAudio = AUDIO_EXTS.has(ext);
   const isPdf = ext === PDF_EXT;
   const isDxf = ext === 'dxf';
+  const isDwg = ext === 'dwg';
   const isBinary = BINARY_EXTS.has(ext);
   const hasPreview = isMarkdown || isHtml || isSvg || hasPluginRenderer;
   const isEditing = previewMode === 'edit';
@@ -180,7 +182,7 @@ export function FilePreview() {
         { id: 'edit' as const, icon: PencilSimple, title: t('files.edit') },
       ];
     }
-    if (!isBinary && !isImage && !isPdf && !isVideo && !isAudio && !isDxf) {
+    if (!isBinary && !isImage && !isPdf && !isVideo && !isAudio && !isDxf && !isDwg) {
       return [
         { id: 'source' as const, icon: Code, title: t('files.source') },
         { id: 'edit' as const, icon: PencilSimple, title: t('files.edit') },
@@ -279,6 +281,8 @@ export function FilePreview() {
               draggable={false}
             />
           </div>
+        ) : isDwg && selectedFile ? (
+          <Suspense fallback={null}><DwgPreview path={selectedFile} /></Suspense>
         ) : isDxf && fileContent ? (
           <Suspense fallback={null}><DxfPreview url={fileContent} /></Suspense>
         ) : isPdf && selectedFile && fileContent ? (

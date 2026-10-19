@@ -160,6 +160,12 @@ export const useFileStore = create<FileState>()((set, get) => ({
         'dxf', // can be tens of MB; the viewer fetches the data URL itself
       ]);
 
+      // Converted for preview (DwgPreview): nothing to read here
+      if (ext === 'dwg') {
+        set({ fileContent: null, isLoadingContent: false });
+        return;
+      }
+
       if (BINARY_PREVIEW.has(ext)) {
         // Load binary files as base64 data URL for rendering in webview
         try {

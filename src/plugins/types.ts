@@ -1,4 +1,4 @@
-import type { PanelDefinition, FileRendererDefinition } from '../lib/panel-registry'
+import type { PanelDefinition, FileRendererDefinition, FileConverterDefinition } from '../lib/panel-registry'
 
 export interface PluginManifest {
   id: string
@@ -6,4 +6,5 @@ export interface PluginManifest {
   mcpServer: string
   panels: PanelDefinition[]
   fileRenderers?: FileRendererDefinition[]
+  fileConverters?: FileConverterDefinition[]
 }

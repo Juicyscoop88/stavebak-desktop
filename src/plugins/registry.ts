@@ -13,7 +13,7 @@ function sync() {
   for (const { manifest } of Object.values(pluginModules)) {
     const hasServer = servers.some(s => s.name === manifest.mcpServer)
     const registered = panelRegistry.isRegistered(manifest.id)
-    if (hasServer && !registered) panelRegistry.register(manifest.id, manifest.panels, manifest.fileRenderers)
+    if (hasServer && !registered) panelRegistry.register(manifest.id, manifest.panels, manifest.fileRenderers, manifest.fileConverters)
     if (!hasServer && registered) panelRegistry.unregister(manifest.id)
   }
 }
