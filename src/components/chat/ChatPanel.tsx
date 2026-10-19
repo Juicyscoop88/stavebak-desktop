@@ -437,29 +437,34 @@ export function ChatPanel() {
       {/* Title bar spacer — 28px for macOS traffic lights */}
       <div className="h-[28px] flex-shrink-0" />
 
-      {/* Header row — project name + status */}
+      {/* Header row — conversation title aligned to the message column (px-5, max-w-2xl) */}
       <div
-        className="flex items-center h-[36px] pl-3.5 pr-5 border-b border-border-subtle
+        className="relative flex items-center h-[36px] pl-3.5 pr-5 border-b border-border-subtle
         flex-shrink-0 bg-bg-chat cursor-default">
         {(!sidebarOpen || isFilePreviewMode) && (
           <button onClick={toggleSidebar}
-            className="p-1 rounded-lg hover:bg-bg-tertiary text-text-tertiary
+            className="relative z-10 p-1 rounded-lg hover:bg-bg-tertiary text-text-tertiary
               transition-smooth mr-2" title={t('chat.showSidebar')}>
             <List size={14} weight="light" />
           </button>
         )}
-        {workingDirectory && sessionStatus !== 'idle' && (
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 transition-smooth
-            ${sessionStatus === 'running'
-              ? 'bg-success shadow-[0_0_6px_var(--color-accent-glow)] animate-pulse-soft'
-              : sessionStatus === 'error'
-                ? 'bg-error'
-                : 'bg-transparent'}`} />
-        )}
-        <div className="ml-2 min-w-0 flex-1 flex">
-          <ConversationMenu />
+        <div className="absolute inset-0 px-5 flex items-center pointer-events-none">
+          {/* When the sidebar toggle is shown, keep clear of it if the column reaches the edge */}
+          <div className={`relative flex items-center pointer-events-auto ${(!sidebarOpen || isFilePreviewMode)
+            ? 'ml-[max(24px,calc((100%-42rem)/2))] w-[min(42rem,calc(100%-max(24px,calc((100%-42rem)/2))))]'
+            : 'w-full max-w-2xl mx-auto'}`}>
+            {workingDirectory && sessionStatus !== 'idle' && (
+              <span className={`absolute -left-3 w-1.5 h-1.5 rounded-full shrink-0
+                ${sessionStatus === 'running'
+                  ? 'bg-success'
+                  : sessionStatus === 'error'
+                    ? 'bg-error'
+                    : 'bg-transparent'}`} />
+            )}
+            <ConversationMenu />
+          </div>
         </div>
-        <div className="ml-auto flex items-center">
+        <div className="relative z-10 ml-auto flex items-center">
           <UpdateButton />
         </div>
       </div>

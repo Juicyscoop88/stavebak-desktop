@@ -47,7 +47,7 @@ export function ConversationMenu() {
         <button
           onClick={() => setOpen(!open)}
           disabled={history.length === 0}
-          className="flex items-center gap-1 min-w-0 max-w-[420px] px-1.5 py-0.5 -ml-1.5 rounded-md
+          className="flex items-center gap-1 min-w-0 px-1.5 py-0.5 -ml-1.5 rounded-md
             hover:bg-bg-tertiary disabled:hover:bg-transparent cursor-pointer disabled:cursor-default"
           title="Historie konverzací v tomto projektu"
         >
@@ -80,7 +80,7 @@ export function ConversationMenu() {
       {hasMessages && (
         <button
           onClick={() => startConversation(dir)}
-          className="flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded-md text-xs text-text-muted
+          className="flex items-center gap-1 ml-auto pl-3 px-1.5 py-0.5 -mr-1.5 rounded-md text-xs text-text-muted
             hover:bg-bg-tertiary hover:text-text-primary cursor-pointer flex-shrink-0"
           title="Začít novou konverzaci v tomto projektu"
         >
