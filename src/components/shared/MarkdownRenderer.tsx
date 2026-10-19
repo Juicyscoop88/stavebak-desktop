@@ -523,7 +523,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, classN
   }), [t, resolveBase]);
 
   return (
-    <div className={`prose max-w-none text-sm leading-loose
+    <div className={`prose max-w-none text-base leading-relaxed
       prose-code:bg-bg-secondary prose-code:px-1.5 prose-code:py-0.5
       prose-code:rounded-md prose-code:text-sm prose-code:text-accent
       prose-pre:bg-bg-secondary prose-pre:rounded-xl prose-pre:p-4

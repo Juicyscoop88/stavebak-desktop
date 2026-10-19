@@ -867,11 +867,15 @@ function ThinkingMsg({ message }: Props) {
     if (idx < 0) return undefined;
     const next = tab.messages[idx + 1];
     if (!next) return undefined;
-    return Math.max(1, Math.round((next.timestamp - message.timestamp) / 1000));
+    // Messages replayed from disk carry no timestamps — duration is unknown, not running
+    const ms = next.timestamp - message.timestamp;
+    return Number.isFinite(ms) ? Math.max(1, Math.round(ms / 1000)) : null;
   });
-  const label = durationSec != null
-    ? t('msg.thoughtFor').replace('{seconds}', String(durationSec))
-    : t('msg.thinking');
+  const label = durationSec === undefined
+    ? t('msg.thinking')
+    : durationSec === null
+      ? t('msg.thought')
+      : t('msg.thoughtFor').replace('{seconds}', String(durationSec));
   return (
     <div className="mr-0">
       <details className="group">

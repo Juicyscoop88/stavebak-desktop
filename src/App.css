@@ -624,6 +624,12 @@ input, textarea, [contenteditable="true"],
   font-weight: 500;
 }
 
+/* Typography plugin wraps inline code in literal backticks — we already style it as a pill */
+.prose :where(code):not(:where(pre *))::before,
+.prose :where(code):not(:where(pre *))::after {
+  content: none;
+}
+
 /* ================================================================
    highlight.js — theme-aware syntax highlighting (uses --syntax-* vars)
    ================================================================ */

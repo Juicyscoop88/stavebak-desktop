@@ -45,7 +45,7 @@ export function ToolGroup({ messages }: Props) {
   const depth = messages[0]?.subAgentDepth ?? 0;
 
   return (
-    <div className={`ml-11 ${depth > 0 ? 'ml-16 pl-3 border-l-2 border-accent/15' : ''}`}>
+    <div className={depth > 0 ? 'ml-4 pl-3 border-l-2 border-accent/15' : ''}>
       {/* Summary header — always visible */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -70,11 +70,9 @@ export function ToolGroup({ messages }: Props) {
 
       {/* Expanded: individual tool messages with connector */}
       {expanded && (
-        <div className="border-l-2 border-border-subtle ml-[5px] pl-2 space-y-0">
+        <div className="border-l border-border-subtle ml-[4px] pl-3">
           {messages.map((msg) => (
-            <div key={msg.id} className="-ml-11">
-              <ToolUseMsg message={msg} />
-            </div>
+            <ToolUseMsg key={msg.id} message={msg} />
           ))}
         </div>
       )}
