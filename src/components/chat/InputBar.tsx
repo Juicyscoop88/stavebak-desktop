@@ -246,8 +246,19 @@ export function InputBar() {
       textareaRef.current.setText(text);
       handleSubmitRef.current();
     };
+    // A suggestion fills the input for the user to finish (e.g. add the region), never sends
+    const onPrefill = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail;
+      if (!text || !textareaRef.current) return;
+      textareaRef.current.setText(text);
+      textareaRef.current.focus();
+    };
     window.addEventListener('stavebak:send', onSend);
-    return () => window.removeEventListener('stavebak:send', onSend);
+    window.addEventListener('stavebak:prefill', onPrefill);
+    return () => {
+      window.removeEventListener('stavebak:send', onSend);
+      window.removeEventListener('stavebak:prefill', onPrefill);
+    };
   }, []);
 
   // Slash command state

@@ -21,6 +21,8 @@ export interface GuideStep {
 export interface NextAction {
   kind: string
   kindLabel?: string
+  /** for people; `title` is the instruction for Claude */
+  userTitle?: string
   step: string
   title: string
   detail: string
@@ -36,6 +38,8 @@ export interface GuideResult {
   progress: { done: number; total: number }
   currentPhase: string
   phases?: { id: string; label: string }[]
+  suggestions?: string[]
+  expectedDocuments?: string[]
   steps: GuideStep[]
   nextActions: NextAction[]
   expiring: { id: string; label: string; validUntil: string; daysLeft: number }[]
@@ -124,6 +128,13 @@ export const phaseLabel = (g: GuideResult, id: string) => g.phases?.find((p) => 
 export function runAction(label: string) {
   window.dispatchEvent(new CustomEvent('stavebak:send', { detail: `${ACTION_PREFIX}${label}` }))
 }
+
+/** Put a suggestion into the chat input for the user to finish; never sends. */
+export function prefillChat(text: string) {
+  window.dispatchEvent(new CustomEvent('stavebak:prefill', { detail: text }))
+}
+
+export const actionTitle = (a: NextAction) => a.userTitle ?? a.title
 
 export const MIGRATE_ACTION = 'Převést stavebak.json do aktuálního formátu'
 export const nextStepAction = (title: string) => `Další krok: ${title}`

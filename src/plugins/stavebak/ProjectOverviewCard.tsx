@@ -3,7 +3,7 @@ import { Warning } from '@phosphor-icons/react'
 import { onFileChange } from '../../lib/tauri-bridge'
 import { useFileStore } from '../../stores/fileStore'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { useStavebakStore, PROJECT_FILE, phaseLabel, runAction, MIGRATE_ACTION } from './store'
+import { useStavebakStore, PROJECT_FILE, phaseLabel, runAction, MIGRATE_ACTION, actionTitle } from './store'
 
 /** Pinned summary above the file tree: phase, progress, next step, expiring permits. */
 export default function ProjectOverviewCard() {
@@ -69,7 +69,7 @@ function Card({ dir }: { dir: string }) {
       </div>
       {next && (
         <div className="text-xs text-text-secondary mt-2 line-clamp-2 leading-snug">
-          <span className="text-text-tertiary">Další: </span>{next.title}
+          <span className="text-text-tertiary">Další: </span>{actionTitle(next)}
         </div>
       )}
       {guide.format?.hint && (

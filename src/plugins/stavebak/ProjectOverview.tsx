@@ -1,5 +1,5 @@
 import { CheckCircle, Circle, CircleDashed, Warning, ArrowRight } from '@phosphor-icons/react'
-import { useStavebakStore, phaseLabel, runAction, nextStepAction, MIGRATE_ACTION, type GuideStep } from './store'
+import { useStavebakStore, phaseLabel, runAction, nextStepAction, MIGRATE_ACTION, type GuideStep, actionTitle } from './store'
 
 const czk = (n: number) => `${n.toLocaleString('cs-CZ')} Kč`
 
@@ -83,12 +83,12 @@ export default function ProjectOverview() {
                 <li key={i} className="py-3 flex gap-3">
                   <span className="w-20 flex-shrink-0 text-xs text-text-tertiary pt-0.5">{a.kindLabel ?? a.kind}</span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-text-primary">{a.title}</div>
+                    <div className="text-sm font-medium text-text-primary">{actionTitle(a)}</div>
                     {a.detail && <div className="text-sm text-text-muted mt-0.5 leading-snug">{a.detail}</div>}
                     {a.leadTime && <div className="text-xs text-text-tertiary mt-1">Dodání: {a.leadTime}</div>}
                   </div>
                   <button
-                    onClick={() => runAction(nextStepAction(a.title))}
+                    onClick={() => runAction(nextStepAction(actionTitle(a)))}
                     title="Pošle Claudovi pokyn v chatu"
                     className="self-start flex items-center gap-1 px-2 py-1 rounded-md text-xs text-text-primary
                       border border-border hover:bg-bg-secondary cursor-pointer flex-shrink-0"
