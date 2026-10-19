@@ -1,10 +1,11 @@
 import { lazy, Suspense, useState, useRef, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useT } from '../../lib/i18n';
-import { CaretLeft, CaretUpDown, Check, FolderPlus, Plus, X } from '@phosphor-icons/react';
+import { CaretLeft, CaretUpDown, Check, FolderPlus, Plus, Trash } from '@phosphor-icons/react';
+import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
-import { openProject } from '../../lib/conversations';
+import { openProject, deleteProject } from '../../lib/conversations';
 import { PluginSlotStack } from './PluginComponents';
 
 const FileExplorer = lazy(() => import('../files/FileExplorer').then(m => ({ default: m.FileExplorer })));
@@ -14,7 +15,8 @@ export function Sidebar() {
   const t = useT();
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
   const storedProjects = useSettingsStore((s) => s.projects);
-  const removeProject = useSettingsStore((s) => s.removeProject);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   // Current project always first, even before it lands in the stored list
   const projects = workingDirectory
     ? [workingDirectory, ...storedProjects.filter((p) => p !== workingDirectory)]
@@ -105,17 +107,14 @@ export function Sidebar() {
                         onClick={() => handleSwitchProject(path)}
                       >
                         <span className="flex-1 truncate">{path.split(/[\\/]/).pop()}</span>
-                        {current
-                          ? <Check size={11} className="text-text-muted flex-shrink-0 mr-1" />
-                          : (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); removeProject(path); }}
-                              title="Odebrat ze seznamu (složka na disku zůstane)"
-                              className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-bg-tertiary text-text-tertiary hover:text-text-primary cursor-pointer"
-                            >
-                              <X size={11} />
-                            </button>
-                          )}
+                        {current && <Check size={11} className="text-text-muted flex-shrink-0 group-hover:hidden" />}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setPopoverOpen(false); setDeleteError(null); setDeleteTarget(path); }}
+                          title="Smazat projekt"
+                          className="hidden group-hover:block p-0.5 rounded hover:bg-bg-tertiary text-text-tertiary hover:text-text-primary cursor-pointer flex-shrink-0"
+                        >
+                          <Trash size={12} />
+                        </button>
                       </div>
                     );
                   })}
@@ -159,6 +158,25 @@ export function Sidebar() {
         ) : null}
 
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Smazat projekt"
+        message={`Složka „${deleteTarget?.split(/[\\/]/).pop() ?? ''}“ se všemi podklady a výstupy se přesune do Koše. Dokud Koš nevysypeš, můžeš ji odtamtud obnovit.`}
+        detail={deleteError ?? deleteTarget ?? undefined}
+        variant="danger"
+        confirmLabel="Přesunout do Koše"
+        onConfirm={async () => {
+          const dir = deleteTarget!;
+          try {
+            await deleteProject(dir);
+            setDeleteTarget(null);
+          } catch (e) {
+            setDeleteError(`Nepodařilo se smazat: ${e}`);
+          }
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

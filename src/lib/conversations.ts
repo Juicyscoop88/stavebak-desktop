@@ -158,3 +158,16 @@ export async function deleteConversation(session: SessionListItem): Promise<void
   if (next) await openConversation(next);
   else startConversation(dir);
 }
+
+/** Move a project folder to the system Trash (recoverable) and drop it from the project list. */
+export async function deleteProject(dir: string): Promise<void> {
+  const isOpen = useSettingsStore.getState().workingDirectory === dir;
+  if (isOpen) {
+    stashCurrent();
+    useFileStore.getState().closePreview();
+    useSessionStore.getState().setSelectedSession(null);
+  }
+  await bridge.deleteFile(dir);
+  useSettingsStore.getState().removeProject(dir);
+  if (isOpen) useSettingsStore.getState().setWorkingDirectory('');
+}
