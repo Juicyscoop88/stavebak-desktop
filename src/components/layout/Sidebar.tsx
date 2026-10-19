@@ -56,7 +56,7 @@ export function Sidebar() {
     const sep = (dir as string).endsWith('/') ? '' : '/';
     const fullPath = `${dir}${sep}${name.trim()}`;
     await invoke('create_project_directory', { path: fullPath });
-    openProject(fullPath);
+    openProject(fullPath, { fresh: true });
   };
 
   const handleSwitchProject = (path: string) => {
@@ -162,7 +162,7 @@ export function Sidebar() {
       <ConfirmDialog
         open={!!deleteTarget}
         title="Smazat projekt"
-        message={`Složka „${deleteTarget?.split(/[\\/]/).pop() ?? ''}“ se všemi podklady a výstupy se přesune do Koše. Dokud Koš nevysypeš, můžeš ji odtamtud obnovit.`}
+        message={`Složka „${deleteTarget?.split(/[\\/]/).pop() ?? ''}“ se všemi podklady, výstupy i konverzacemi se přesune do Koše. Dokud Koš nevysypeš, můžeš je odtamtud obnovit.`}
         detail={deleteError ?? deleteTarget ?? undefined}
         variant="danger"
         confirmLabel="Přesunout do Koše"

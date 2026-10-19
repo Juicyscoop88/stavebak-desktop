@@ -721,7 +721,7 @@ function WelcomeScreen() {
     setCreating(true);
     try {
       await invoke('create_project_directory', { path: fullPath });
-      openProject(fullPath);
+      openProject(fullPath, { fresh: true });
     } catch (e) {
       console.error('Failed to create project directory:', e);
       setCreating(false);

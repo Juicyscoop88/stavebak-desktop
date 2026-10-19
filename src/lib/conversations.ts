@@ -116,10 +116,16 @@ function nameIfUntitled(sessionId: string) {
     .catch(() => {});
 }
 
-/** Switch to a project folder and pick up where its last conversation left off. */
-export async function openProject(dir: string): Promise<void> {
+/** Switch to a project folder and pick up where its last conversation left off.
+ *  `fresh` (a just-created project) always starts empty, even if an older folder at the
+ *  same path left conversations behind. */
+export async function openProject(dir: string, { fresh = false }: { fresh?: boolean } = {}): Promise<void> {
   useFileStore.getState().closePreview();
   useSettingsStore.getState().setWorkingDirectory(dir);
+  if (fresh) {
+    startConversation(dir);
+    return;
+  }
   await useSessionStore.getState().fetchSessions();
   if (useSettingsStore.getState().workingDirectory !== dir) return;
 
@@ -159,13 +165,18 @@ export async function deleteConversation(session: SessionListItem): Promise<void
   else startConversation(dir);
 }
 
-/** Move a project folder to the system Trash (recoverable) and drop it from the project list. */
+/** Move a project folder and its conversations to the system Trash (recoverable), drop it from the list. */
 export async function deleteProject(dir: string): Promise<void> {
   const isOpen = useSettingsStore.getState().workingDirectory === dir;
   if (isOpen) {
     stashCurrent();
     useFileStore.getState().closePreview();
     useSessionStore.getState().setSelectedSession(null);
+  }
+  // Its conversations go too — otherwise they resurface if a folder with the same name is created
+  await useSessionStore.getState().fetchSessions();
+  for (const session of projectConversations(useSessionStore.getState().sessions, dir)) {
+    await deleteConversation(session);
   }
   await bridge.deleteFile(dir);
   useSettingsStore.getState().removeProject(dir);

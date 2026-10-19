@@ -2930,7 +2930,8 @@ async fn delete_session(session_id: String, session_path: String) -> Result<(), 
                     canonical
                 ));
             }
-            std::fs::remove_file(&canonical)
+            // To the system Trash like project folders, so a deleted conversation is recoverable
+            trash::delete(&canonical)
                 .map_err(|e| format!("Failed to delete session file: {}", e))?;
         }
     }
