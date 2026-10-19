@@ -3893,6 +3893,49 @@ async fn read_file_content(
     std::fs::read_to_string(&p).map_err(|e| format!("Cannot read file: {}", e))
 }
 
+/// Stavebák MCP `guide` over plain JSON-RPC (stateless, works without an account).
+/// Runs in Rust so the webview isn't subject to CORS. Returns the tool's structured result.
+#[tauri::command]
+async fn stavebak_guide(args: serde_json::Value) -> Result<serde_json::Value, String> {
+    let client = build_smart_http_client(
+        std::time::Duration::from_secs(5),
+        std::time::Duration::from_secs(20),
+    )
+    .await;
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": { "name": "guide", "arguments": args },
+    });
+    let text = client
+        .post("https://stavebak.cz/mcp")
+        .header("Accept", "application/json, text/event-stream")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Stavebák není dostupný: {}", e))?
+        .text()
+        .await
+        .map_err(|e| e.to_string())?;
+    // Streamable HTTP may answer as SSE ("data: {...}") or as plain JSON
+    let payload = text
+        .lines()
+        .find_map(|l| l.strip_prefix("data:"))
+        .unwrap_or(&text)
+        .trim();
+    let rpc: serde_json::Value = serde_json::from_str(payload).map_err(|e| e.to_string())?;
+    if let Some(err) = rpc.get("error") {
+        return Err(err.get("message").and_then(|m| m.as_str()).unwrap_or("MCP error").to_string());
+    }
+    let result = rpc.get("result").ok_or("Prázdná odpověď")?;
+    let structured = result.get("structuredContent").cloned().unwrap_or(serde_json::Value::Null);
+    if let Some(msg) = structured.get("error").and_then(|e| e.as_str()) {
+        return Err(msg.to_string());
+    }
+    Ok(structured)
+}
+
 #[tauri::command]
 fn get_home_dir() -> Result<String, String> {
     dirs::home_dir()
@@ -7570,7 +7613,7 @@ async fn generate_session_title(
     let asst_msg = safe_truncate(&assistant_message, 500);
 
     let prompt = format!(
-        "Generate a very short title (5-10 words, in the same language as the conversation) for this conversation. Reply with ONLY the title text, no quotes, no extra text, no explanation.\n\nUser: {}\n\nAssistant: {}",
+        "Name the topic of this conversation in 2-6 words, in the same language as the conversation, the way a site engineer would label a folder (e.g. \"Stav rekonstrukce\", \"Poptávka elektrikáře\", \"Radon a IGP posudek\"). No greeting, no quotes, no trailing punctuation. Reply with ONLY the title.\n\nUser: {}\n\nAssistant: {}",
         user_msg, asst_msg
     );
 
@@ -7601,7 +7644,7 @@ async fn generate_session_title(
         (
             HashMap::new(),
             vec![],
-            "claude-haiku-4-5-20251001".to_string(),
+            "haiku".to_string(),
         )
     };
 
@@ -7919,6 +7962,7 @@ pub fn run() {
             decode_project_dir,
             read_file_tree,
             read_file_content,
+            stavebak_guide,
             write_file_content,
             copy_file,
             rename_file,

@@ -237,6 +237,18 @@ export function InputBar() {
     return () => window.removeEventListener('stavebak:tree-file-inline', onTreeFileInline);
   }, []);
 
+  // Prepared instruction from a panel ("Pokračovat") — fill the input, never send
+  useEffect(() => {
+    const onPrefill = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail;
+      if (!text || !textareaRef.current) return;
+      textareaRef.current.setText(text);
+      textareaRef.current.focus();
+    };
+    window.addEventListener('stavebak:prefill', onPrefill);
+    return () => window.removeEventListener('stavebak:prefill', onPrefill);
+  }, []);
+
   // Slash command state
   const [slashQuery, setSlashQuery] = useState('');
   const [slashVisible, setSlashVisible] = useState(false);

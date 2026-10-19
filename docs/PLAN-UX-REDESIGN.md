@@ -12,7 +12,10 @@ Stav k 2026-10-15. macOS first, Windows doladíme později. Sdílení v týmu a 
 - [x] Fáze 2 (základ): typografická škála, Switzer, root 16 px, plochá bublina, nadpisy, řádky stromu
 - [x] Fáze 3: nastavení na jedné stránce
 - [x] Fáze 4: onboarding (Stavebák OAuth zatím mock)
-- [ ] Fáze 5: checklist čeká na nasazení nového Stavebák MCP (nasazená verze má `guide` s `typ_stavby`, repo s `buildingType` a jiným výsledkem)
+- [x] Fáze 5 (základ, 2026-10-19): karta Přehled nad stromem souborů a renderer `stavebak.json` v náhledu (fáze, kroky, „Co teď“ s „Pokračovat“, platnost vyjádření). Data z nasazeného `guide` (anonymně, Rust příkaz `stavebak_guide`). Zbývá: prázdný stav bez projektu a ukázkový projekt.
+- [x] Konverzace po projektech (2026-10-19): otevření projektu naváže na poslední konverzaci, v hlavičce chatu historie projektu a „Nové téma“ (`lib/conversations.ts`).
+- [x] Konverzace se pojmenují podle obsahu (Haiku po první odpovědi, starší při prvním otevření). Po startu se otevře poslední projekt.
+- `stavebak.json` bez `parameters` (vlastní struktura z dřívějška, např. RD Hluboká) server převede jen zčásti, `guide` pak hlásí 1/15. Přehled to oznámí a nabídne „Převést“ (pokyn pro Clauda přes `set_parameters`). Hádat cizí klíče na serveru nebudeme.
 - [ ] Fáze 6–8
 
 ---

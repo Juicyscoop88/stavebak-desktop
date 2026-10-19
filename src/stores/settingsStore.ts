@@ -109,6 +109,8 @@ interface SettingsState {
   setSecondaryTab: (tab: SecondaryPanelTab) => void;
   setSecondaryPanelWidth: (width: number) => void;
   toggleSettings: () => void;
+  /** Last opened project folder — reopened on launch */
+  lastProject: string;
   setWorkingDirectory: (dir: string) => void;
   setSelectedModel: (model: string) => void;
   setSessionMode: (mode: SessionMode) => void;
@@ -154,6 +156,7 @@ export const useSettingsStore = create<SettingsState>()(
       settingsOpen: false,
       agentPanelOpen: false,
       workingDirectory: '',
+      lastProject: '',
       selectedModel: 'sonnet',
       sessionMode: 'bypass',
       locale: 'cs',
@@ -209,7 +212,7 @@ export const useSettingsStore = create<SettingsState>()(
         })),
 
       setWorkingDirectory: (dir) => {
-        set(() => ({ workingDirectory: dir }));
+        set(() => (dir ? { workingDirectory: dir, lastProject: dir } : { workingDirectory: dir }));
         if (dir) {
           import('@tauri-apps/api/core').then(({ invoke }) => {
             invoke('ensure_claude_md', { path: dir }).catch(() => {});
@@ -365,7 +368,8 @@ export const useSettingsStore = create<SettingsState>()(
         colorTheme: state.colorTheme,
         sidebarOpen: state.sidebarOpen,
         secondaryPanelWidth: state.secondaryPanelWidth,
-        // workingDirectory intentionally NOT persisted — app starts at WelcomeScreen
+        // workingDirectory itself isn't persisted; launch reopens lastProject via openProject()
+        lastProject: state.lastProject,
         selectedModel: state.selectedModel,
         sessionMode: state.sessionMode,
         locale: state.locale,

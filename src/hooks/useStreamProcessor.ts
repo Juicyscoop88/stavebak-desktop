@@ -1349,7 +1349,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
           }
         }
 
-        // AI Title Generation for background tabs (same 3rd-turn logic)
+        // AI Title Generation for background tabs (after the first answer, like the foreground tab)
         if (msg.subtype === 'success') {
           const customPreviews = useSessionStore.getState().customPreviews;
           if (!customPreviews[tabId]) {
@@ -1360,7 +1360,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
             const bgAssistantMsgs = bgTab?.messages.filter(
               (m) => m.role === 'assistant' && m.type === 'text' && m.content,
             ) || [];
-            if (bgUserMsgs.length >= 3 && bgAssistantMsgs.length >= 3) {
+            if (bgUserMsgs.length >= 1 && bgAssistantMsgs.length >= 1) {
               const userMsg = bgUserMsgs.map((m) => m.content).join('\n').slice(0, 500);
               const assistantMsg = bgAssistantMsgs.map((m) => m.content).join('\n').slice(0, 500);
               bridge.generateSessionTitle(userMsg, assistantMsg, useProviderStore.getState().activeProviderId || undefined)
@@ -2722,11 +2722,11 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
               const userTextMsgs = currentMessages.filter(
                 (m) => m.role === 'user' && m.type === 'text' && m.content,
               );
-              if (userTextMsgs.length >= 3) {
+              if (userTextMsgs.length >= 1) {
                 const assistantTextMsgs = currentMessages.filter(
                   (m) => m.role === 'assistant' && m.type === 'text' && m.content,
                 );
-                if (assistantTextMsgs.length >= 3) {
+                if (assistantTextMsgs.length >= 1) {
                   const userMsg = userTextMsgs.map((m) => m.content).join('\n').slice(0, 500);
                   const assistantMsg = assistantTextMsgs.map((m) => m.content).join('\n').slice(0, 500);
                   bridge.generateSessionTitle(userMsg, assistantMsg, useProviderStore.getState().activeProviderId || undefined)

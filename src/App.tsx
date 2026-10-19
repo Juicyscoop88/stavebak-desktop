@@ -27,6 +27,7 @@ import { useT } from './lib/i18n';
 import { Warning } from '@phosphor-icons/react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { panelRegistry } from './lib/panel-registry';
+import { openProject } from './lib/conversations';
 import { registerPlugins } from './plugins/registry';
 import './App.css';
 
@@ -138,6 +139,15 @@ function App() {
   const wasInSetup = useRef(!setupCompleted);
 
   const t = useT();
+
+  // On launch, reopen the last project where its latest conversation left off
+  useEffect(() => {
+    const { lastProject, setupCompleted } = useSettingsStore.getState();
+    if (!setupCompleted || !lastProject || useSettingsStore.getState().workingDirectory) return;
+    bridge.readFileTree(lastProject, 1)
+      .then(() => openProject(lastProject))
+      .catch(() => {}); // folder moved or deleted — stay on the welcome screen
+  }, []);
 
   // When setup completes, drop the overlay and reveal the sidebar (instant)
   useEffect(() => {

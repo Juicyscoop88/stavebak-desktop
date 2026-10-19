@@ -5,6 +5,8 @@ import { useT } from '../../lib/i18n';
 import { CaretLeft, CaretUpDown, Folder, FolderPlus, Plus } from '@phosphor-icons/react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
+import { openProject } from '../../lib/conversations';
+import { ProjectOverviewCard } from '../../plugins/stavebak/ProjectOverviewCard';
 
 const FileExplorer = lazy(() => import('../files/FileExplorer').then(m => ({ default: m.FileExplorer })));
 
@@ -12,7 +14,6 @@ export function Sidebar() {
   const toggleSidebar = useSettingsStore((s) => s.toggleSidebar);
   const t = useT();
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
-  const setWorkingDirectory = useSettingsStore((s) => s.setWorkingDirectory);
   const recentProjects = useFileStore((s) => s.recentProjects);
   const fetchProjects = useFileStore((s) => s.fetchRecentProjects);
 
@@ -37,7 +38,7 @@ export function Sidebar() {
   const handlePickFolder = async () => {
     setPopoverOpen(false);
     const selected = await open({ directory: true, multiple: false, title: t('project.selectFolder') });
-    if (selected) setWorkingDirectory(selected as string);
+    if (selected) openProject(selected as string);
   };
 
   const handleNewProject = async () => {
@@ -49,12 +50,12 @@ export function Sidebar() {
     const sep = (dir as string).endsWith('/') ? '' : '/';
     const fullPath = `${dir}${sep}${name.trim()}`;
     await invoke('create_project_directory', { path: fullPath });
-    setWorkingDirectory(fullPath);
+    openProject(fullPath);
   };
 
   const handleSwitchProject = (path: string) => {
     setPopoverOpen(false);
-    setWorkingDirectory(path);
+    if (path !== workingDirectory) openProject(path);
   };
 
   const currentName = workingDirectory ? workingDirectory.split(/[\\/]/).pop() : 'Stavebak';
@@ -93,12 +94,17 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* File explorer — direct, no panel switcher */}
-      <div className="flex-1 overflow-hidden relative">
+      {/* Project overview (stavebak.json) + file explorer */}
+      <div className="flex-1 overflow-hidden relative flex flex-col">
         {workingDirectory ? (
-          <Suspense fallback={null}>
-            <FileExplorer />
-          </Suspense>
+          <>
+            <ProjectOverviewCard dir={workingDirectory} />
+            <div className="flex-1 min-h-0">
+              <Suspense fallback={null}>
+                <FileExplorer />
+              </Suspense>
+            </div>
+          </>
         ) : null}
 
         {/* Project switcher — overlays file explorer area */}

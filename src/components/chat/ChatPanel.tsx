@@ -4,6 +4,8 @@ import { create } from 'zustand';
 import { useChatStore, useActiveTab, type ChatMessage } from '../../stores/chatStore';
 import { MessageBubble } from './MessageBubble';
 import { ToolGroup } from './ToolGroup';
+import { ConversationMenu } from './ConversationMenu';
+import { openProject } from '../../lib/conversations';
 import { UpdateButton } from '../shared/UpdateButton';
 import { useSettingsStore, mapSessionModeToPermissionMode } from '../../stores/settingsStore';
 import { useSessionStore } from '../../stores/sessionStore';
@@ -454,6 +456,9 @@ export function ChatPanel() {
                 ? 'bg-error'
                 : 'bg-transparent'}`} />
         )}
+        <div className="ml-2 min-w-0 flex-1 flex">
+          <ConversationMenu />
+        </div>
         <div className="ml-auto flex items-center">
           <UpdateButton />
         </div>
@@ -809,7 +814,7 @@ function WelcomeScreen() {
       title: t('project.selectFolder'),
     });
     if (selected) {
-      startDraftSession(selected as string);
+      openProject(selected as string);
     }
   }, [t]);
 
