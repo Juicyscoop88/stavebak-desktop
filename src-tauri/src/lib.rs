@@ -3894,18 +3894,17 @@ async fn read_file_content(
     std::fs::read_to_string(&p).map_err(|e| format!("Cannot read file: {}", e))
 }
 
-/// POST a project file's bytes to an HTTP endpoint and return the response as a data URL.
-/// For plugin-provided file conversions (e.g. a drawing format the preview can't read).
+/// PUT a project file's bytes to a presigned upload URL (e.g. the one a Stavebák MCP tool returns).
+/// The URL is trusted only as far as scheme: https, or localhost for local development.
 #[tauri::command]
-async fn post_file_for_conversion(
+async fn put_file_to_url(
     path_access: State<'_, PathAccessManager>,
     url: String,
     path: String,
-    mime: String,
-) -> Result<String, String> {
-    use base64::Engine as _;
+    headers: std::collections::HashMap<String, String>,
+) -> Result<(), String> {
     if !url.starts_with("https://") && !url.starts_with("http://localhost") && !url.starts_with("http://127.0.0.1") {
-        return Err("Převodní služba musí být https".to_string());
+        return Err("Nahrávací adresa musí být https".to_string());
     }
     let p = path_access
         .validate(std::path::Path::new(&path), None, PathCapability::Read)
@@ -3913,25 +3912,48 @@ async fn post_file_for_conversion(
     let bytes = std::fs::read(&p).map_err(|e| format!("Cannot read file: {}", e))?;
     let client = build_smart_http_client(
         std::time::Duration::from_secs(10),
+        std::time::Duration::from_secs(300),
+    )
+    .await;
+    let mut req = client.put(&url);
+    for (k, v) in &headers {
+        req = req.header(k.as_str(), v.as_str());
+    }
+    let resp = req
+        .body(bytes)
+        .send()
+        .await
+        .map_err(|e| format!("Nahrání selhalo: {}", e))?;
+    if !resp.status().is_success() {
+        return Err(format!("Nahrání selhalo (HTTP {})", resp.status()));
+    }
+    Ok(())
+}
+
+/// GET a download URL and return the body as a data URL (for previews the webview can't fetch itself).
+/// Limit: 100MB.
+#[tauri::command]
+async fn get_url_as_data_url(url: String, mime: String) -> Result<String, String> {
+    use base64::Engine as _;
+    if !url.starts_with("https://") && !url.starts_with("http://localhost") && !url.starts_with("http://127.0.0.1") {
+        return Err("Adresa ke stažení musí být https".to_string());
+    }
+    let client = build_smart_http_client(
+        std::time::Duration::from_secs(10),
         std::time::Duration::from_secs(120),
     )
     .await;
     let resp = client
-        .post(&url)
-        .header("Content-Type", "application/octet-stream")
-        .body(bytes)
+        .get(&url)
         .send()
         .await
-        .map_err(|e| format!("Převodní služba není dostupná: {}", e))?;
-    let status = resp.status();
+        .map_err(|e| format!("Stažení selhalo: {}", e))?;
+    if !resp.status().is_success() {
+        return Err(format!("Stažení selhalo (HTTP {})", resp.status()));
+    }
     let body = resp.bytes().await.map_err(|e| e.to_string())?;
-    if !status.is_success() {
-        // Server errors come as {"error": "..."}; show that message, not raw JSON
-        let msg = serde_json::from_slice::<serde_json::Value>(&body)
-            .ok()
-            .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(String::from))
-            .unwrap_or_else(|| format!("HTTP {}", status));
-        return Err(msg);
+    if body.len() > 100_000_000 {
+        return Err("Soubor je příliš velký (>100MB)".to_string());
     }
     let b64 = base64::engine::general_purpose::STANDARD.encode(&body);
     Ok(format!("data:{};base64,{}", mime, b64))
@@ -3945,13 +3967,14 @@ async fn mcp_call_tool(
     url: String,
     tool: String,
     args: serde_json::Value,
+    timeout_secs: Option<u64>,
 ) -> Result<serde_json::Value, String> {
     if !url.starts_with("https://") && !url.starts_with("http://localhost") && !url.starts_with("http://127.0.0.1") {
         return Err("MCP URL musí být https".to_string());
     }
     let client = build_smart_http_client(
         std::time::Duration::from_secs(5),
-        std::time::Duration::from_secs(20),
+        std::time::Duration::from_secs(timeout_secs.unwrap_or(20)),
     )
     .await;
     let body = serde_json::json!({
@@ -8022,7 +8045,8 @@ pub fn run() {
             read_file_tree,
             read_file_content,
             mcp_call_tool,
-            post_file_for_conversion,
+            put_file_to_url,
+            get_url_as_data_url,
             write_file_content,
             copy_file,
             rename_file,

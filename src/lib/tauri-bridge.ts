@@ -229,13 +229,17 @@ export const bridge = {
   deleteSession: (sessionId: string, sessionPath: string) =>
     invoke<void>('delete_session', { sessionId, sessionPath }),
 
-  /** POST a project file to a conversion endpoint; returns the response as a data URL. */
-  postFileForConversion: (url: string, path: string, mime: string) =>
-    invoke<string>('post_file_for_conversion', { url, path, mime }),
+  /** PUT a project file to a presigned upload URL (returned by an MCP tool). */
+  putFileToUrl: (url: string, path: string, headers: Record<string, string>) =>
+    invoke<void>('put_file_to_url', { url, path, headers }),
+
+  /** GET a download URL; returns the body as a data URL. */
+  getUrlAsDataUrl: (url: string, mime: string) =>
+    invoke<string>('get_url_as_data_url', { url, mime }),
 
   /** One tool call on a configured streamable-HTTP MCP server; returns its structuredContent. */
-  callMcpTool: <T = unknown>(url: string, tool: string, args: Record<string, unknown>) =>
-    invoke<T>('mcp_call_tool', { url, tool, args }),
+  callMcpTool: <T = unknown>(url: string, tool: string, args: Record<string, unknown>, timeoutSecs?: number) =>
+    invoke<T>('mcp_call_tool', { url, tool, args, timeoutSecs: timeoutSecs ?? null }),
 
   listSessions: () =>
     invoke<SessionListItem[]>('list_sessions'),
