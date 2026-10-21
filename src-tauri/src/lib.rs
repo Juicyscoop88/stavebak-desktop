@@ -3969,6 +3969,39 @@ async fn mcp_call_tool(
     args: serde_json::Value,
     timeout_secs: Option<u64>,
 ) -> Result<serde_json::Value, String> {
+    let result = mcp_rpc(&url, "tools/call", serde_json::json!({ "name": tool, "arguments": args }), timeout_secs).await?;
+    let structured = result.get("structuredContent").cloned().unwrap_or(serde_json::Value::Null);
+    if let Some(msg) = structured.get("error").and_then(|e| e.as_str()) {
+        return Err(msg.to_string());
+    }
+    Ok(structured)
+}
+
+/// Read one resource of a configured streamable-HTTP MCP server (MCP `resources/read`), the same
+/// data the model reads. JSON resources come back parsed, anything else as a string.
+#[tauri::command]
+async fn mcp_read_resource(url: String, uri: String) -> Result<serde_json::Value, String> {
+    let result = mcp_rpc(&url, "resources/read", serde_json::json!({ "uri": uri }), None).await?;
+    let content = result
+        .get("contents")
+        .and_then(|c| c.get(0))
+        .ok_or("Prázdný resource")?;
+    let text = content.get("text").and_then(|t| t.as_str()).ok_or("Resource nemá text")?;
+    let is_json = content.get("mimeType").and_then(|m| m.as_str()) == Some("application/json");
+    Ok(if is_json {
+        serde_json::from_str(text).map_err(|e| e.to_string())?
+    } else {
+        serde_json::Value::String(text.to_string())
+    })
+}
+
+/// One stateless JSON-RPC request to a streamable-HTTP MCP server; returns its `result`.
+async fn mcp_rpc(
+    url: &str,
+    method: &str,
+    params: serde_json::Value,
+    timeout_secs: Option<u64>,
+) -> Result<serde_json::Value, String> {
     if !url.starts_with("https://") && !url.starts_with("http://localhost") && !url.starts_with("http://127.0.0.1") {
         return Err("MCP URL musí být https".to_string());
     }
@@ -3977,14 +4010,9 @@ async fn mcp_call_tool(
         std::time::Duration::from_secs(timeout_secs.unwrap_or(20)),
     )
     .await;
-    let body = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/call",
-        "params": { "name": tool, "arguments": args },
-    });
+    let body = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params });
     let text = client
-        .post(&url)
+        .post(url)
         .header("Accept", "application/json, text/event-stream")
         .json(&body)
         .send()
@@ -4003,12 +4031,7 @@ async fn mcp_call_tool(
     if let Some(err) = rpc.get("error") {
         return Err(err.get("message").and_then(|m| m.as_str()).unwrap_or("MCP error").to_string());
     }
-    let result = rpc.get("result").ok_or("Prázdná odpověď")?;
-    let structured = result.get("structuredContent").cloned().unwrap_or(serde_json::Value::Null);
-    if let Some(msg) = structured.get("error").and_then(|e| e.as_str()) {
-        return Err(msg.to_string());
-    }
-    Ok(structured)
+    rpc.get("result").cloned().ok_or_else(|| "Prázdná odpověď".to_string())
 }
 
 #[tauri::command]
@@ -8079,6 +8102,7 @@ pub fn run() {
             read_file_tree,
             read_file_content,
             mcp_call_tool,
+            mcp_read_resource,
             put_file_to_url,
             get_url_as_data_url,
             write_file_content,

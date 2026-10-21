@@ -1,5 +1,7 @@
-import { CheckCircle, Circle, CircleDashed, Warning, ArrowRight } from '@phosphor-icons/react'
-import { useStavebakStore, phaseLabel, runAction, nextStepAction, MIGRATE_ACTION, type GuideStep, actionTitle } from './store'
+import { useState } from 'react'
+import { CheckCircle, Circle, CircleDashed, Warning, ArrowRight, CaretUp } from '@phosphor-icons/react'
+import { useStavebakStore, phaseLabel, runAction, nextStepAction, MIGRATE_ACTION, type GuideStep, type NextAction, actionTitle } from './store'
+import { ActionForm, FORM_KINDS } from './ActionForm'
 
 const czk = (n: number) => `${n.toLocaleString('cs-CZ')} Kč`
 
@@ -78,26 +80,13 @@ export default function ProjectOverview() {
         {guide.nextActions.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold uppercase tracking-wide text-text-tertiary mb-2">Co teď</h2>
-            <ul className="divide-y divide-border-subtle border-y border-border-subtle">
-              {guide.nextActions.map((a, i) => (
-                <li key={i} className="py-3 flex gap-3">
-                  <span className="w-20 flex-shrink-0 text-xs text-text-tertiary pt-0.5">{a.kindLabel ?? a.kind}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-text-primary">{actionTitle(a)}</div>
-                    {a.detail && <div className="text-sm text-text-muted mt-0.5 leading-snug">{a.detail}</div>}
-                    {a.leadTime && <div className="text-xs text-text-tertiary mt-1">Dodání: {a.leadTime}</div>}
-                  </div>
-                  <button
-                    onClick={() => runAction(nextStepAction(actionTitle(a)))}
-                    title="Pošle Claudovi pokyn v chatu"
-                    className="self-start flex items-center gap-1 px-2 py-1 rounded-md text-xs text-text-primary
-                      border border-border hover:bg-bg-secondary cursor-pointer flex-shrink-0"
-                  >
-                    Pokračovat <ArrowRight size={11} />
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {/* One next step stands out; the rest are there, quieter */}
+            <NextActionCard action={guide.nextActions[0]} primary />
+            {guide.nextActions.length > 1 && (
+              <ul className="mt-3 divide-y divide-border-subtle border-y border-border-subtle">
+                {guide.nextActions.slice(1).map((a, i) => <li key={i}><NextActionCard action={a} /></li>)}
+              </ul>
+            )}
           </section>
         )}
 
@@ -133,6 +122,41 @@ export default function ProjectOverview() {
           </div>
         </section>
       </div>
+    </div>
+  )
+}
+
+/**
+ * One guide action. Values a person knows open a form right here (set_parameters, same as Claude);
+ * anything else is handed to Claude in the chat.
+ */
+function NextActionCard({ action, primary = false }: { action: NextAction; primary?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const hasForm = FORM_KINDS.has(action.kind) && Object.keys(action.parameters ?? {}).length > 0
+  const missing = Object.keys(action.parameters ?? {}).length
+  const button = hasForm
+    ? (open ? <>Skrýt <CaretUp size={11} /></> : <>Vyplnit{missing ? ` (${missing})` : ''} <ArrowRight size={11} /></>)
+    : <>Pokračovat <ArrowRight size={11} /></>
+  const onClick = () => (hasForm ? setOpen(!open) : runAction(nextStepAction(actionTitle(action))))
+
+  return (
+    <div className={primary ? 'rounded-xl border border-border bg-bg-card p-4' : 'py-3'}>
+      <div className="flex gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-xs text-text-tertiary">{primary ? 'Další krok' : ''}{primary && action.kindLabel ? ' · ' : ''}{action.kindLabel ?? action.kind}</div>
+          <div className={`${primary ? 'text-base' : 'text-sm'} font-medium text-text-primary mt-0.5`}>{actionTitle(action)}</div>
+          {action.detail && <div className="text-sm text-text-muted mt-0.5">{action.detail}</div>}
+          {action.leadTime && <div className="text-xs text-text-tertiary mt-1">Dodání: {action.leadTime}</div>}
+        </div>
+        <button onClick={onClick}
+          title={hasForm ? 'Vyplnit chybějící údaje' : 'Pošle Claudovi pokyn v chatu'}
+          className={`self-start flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm flex-shrink-0 cursor-pointer ${primary && !open
+            ? 'bg-text-primary text-text-inverse'
+            : 'text-text-primary border border-border hover:bg-bg-secondary'}`}>
+          {button}
+        </button>
+      </div>
+      {open && <div className="mt-4 pt-4 border-t border-border-subtle"><ActionForm action={action} onDone={() => setOpen(false)} /></div>}
     </div>
   )
 }

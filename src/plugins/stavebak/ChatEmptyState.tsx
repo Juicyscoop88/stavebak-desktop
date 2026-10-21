@@ -1,16 +1,10 @@
 import { useEffect } from 'react'
 import { DownloadSimple } from '@phosphor-icons/react'
-import { open } from '@tauri-apps/plugin-dialog'
-import { bridge } from '../../lib/tauri-bridge'
 import { useUiStore } from '../../stores/uiStore'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { useSessionStore } from '../../stores/sessionStore'
-import { useFileStore } from '../../stores/fileStore'
-import { useStavebakStore, runAction, prefillChat, createProjectFile } from './store'
+import { useStavebakStore, runAction, prefillChat, createProjectFile, importDocuments, DOCUMENTS_DIR } from './store'
 import { ProjectForm } from './ProjectForm'
 
-/** Uploaded documents land here; the core drop handler copies into it (data-drop-import). */
-const DOCUMENTS_DIR = 'podklady'
 
 const fileName = (p: string) => p.split(/[\\/]/).pop() ?? p
 
@@ -94,27 +88,8 @@ export default function ChatEmptyState() {
   )
 }
 
-/** "Vybrat soubory": same as a drop — copy into podklady/ and announce. */
+/** "Vybrat soubory": copy into podklady/ and hand the files to Claude right away. */
 async function pickDocuments() {
-  const picked = await open({ multiple: true, title: 'Vyberte podklady' })
-  const paths = (Array.isArray(picked) ? picked : picked ? [picked] : []) as string[]
-  if (paths.length === 0) return
-  const root = useSettingsStore.getState().workingDirectory
-  const tabId = useSessionStore.getState().selectedSessionId ?? undefined
-  const dir = `${root}/${DOCUMENTS_DIR}`
-  await bridge.createDirectory(dir).catch(() => {})
-  const imported: string[] = []
-  for (const src of paths) {
-    // Picked in a system dialog = user-authorized, like a drop
-    if (tabId) await bridge.addPathGrant(tabId, src).catch(() => {})
-    const dest = `${dir}/${fileName(src)}`
-    try {
-      await bridge.copyFile(src, dest, tabId)
-      imported.push(dest)
-    } catch (e) {
-      console.error('Failed to import document:', src, e)
-    }
-  }
-  useFileStore.getState().refreshTree(root)
-  if (imported.length) window.dispatchEvent(new CustomEvent('stavebak:files-imported', { detail: imported }))
+  const names = await importDocuments()
+  if (names.length) runAction(`Nahrané podklady: ${names.join(', ')}`)
 }

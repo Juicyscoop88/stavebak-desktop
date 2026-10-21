@@ -2,6 +2,10 @@ import { create } from 'zustand'
 import { bridge } from '../../lib/tauri-bridge'
 import { useMcpStore } from '../../stores/mcpStore'
 import { ACTION_PREFIX } from '../../components/chat/MessageBubble'
+import { open } from '@tauri-apps/plugin-dialog'
+import { useSettingsStore } from '../../stores/settingsStore'
+import { useSessionStore } from '../../stores/sessionStore'
+import { useFileStore } from '../../stores/fileStore'
 
 export const PROJECT_FILE = 'stavebak.json'
 const SERVER = 'stavebak'
@@ -27,6 +31,25 @@ export interface NextAction {
   title: string
   detail: string
   leadTime?: string
+  /** missing parameters this action fills (id → label) */
+  parameters?: Record<string, string>
+}
+
+/** One entry of the server's parameter dictionary (stavebak://parameters), as the model reads it. */
+export interface ParameterDef {
+  label: string
+  type: 'text' | 'number' | 'boolean' | 'enum' | 'date' | 'list' | 'geometry'
+  unit?: string
+  values?: string[]
+  valueLabels?: Record<string, string>
+  plausible?: { min?: number; max?: number }
+}
+
+export interface SaveResult {
+  applied: string[]
+  conflicts: { id: string; message?: string }[]
+  errors: { id: string; message: string }[]
+  warnings: { id: string; message: string }[]
 }
 
 /** What the Stavebák MCP `guide` returns for a stavebak.json — rendered as-is, no domain logic here. */
@@ -67,6 +90,68 @@ export interface FormField {
 export interface ProjectForm { title: string; submitLabel: string; fields: FormField[] }
 
 let formCache: ProjectForm | null = null
+let parametersCache: Record<string, ParameterDef> | null = null
+
+/** The parameter dictionary: field types, units and value labels come from the server, not from here. */
+export async function fetchParameterDictionary(): Promise<Record<string, ParameterDef>> {
+  if (parametersCache) return parametersCache
+  const url = serverUrl()
+  if (!url) throw new Error('Stavebák MCP není nastavený.')
+  parametersCache = await bridge.readMcpResource<Record<string, ParameterDef>>(url, 'stavebak://parameters')
+  return parametersCache
+}
+
+/**
+ * Write values the user entered, the same way the model does: set_parameters validates them,
+ * keeps stronger sources (conflicts come back, nothing is overwritten), and returns the new state
+ * for stavebak.json. Then the guide reloads.
+ */
+export async function saveParameters(dir: string, values: Record<string, unknown>): Promise<SaveResult> {
+  const url = serverUrl()
+  if (!url) throw new Error('Stavebák MCP není nastavený.')
+  const path = `${dir}/${PROJECT_FILE}`
+  const project = JSON.parse(await bridge.readFileContent(path)) as Record<string, unknown>
+  const updates = Object.entries(values).map(([id, value]) => ({ id, value, source: { channel: 'user', ref: 'formulář Stavebáku' } }))
+  const result = await bridge.callMcpTool<SaveResult & { parameters: Record<string, unknown> }>(url, 'set_parameters', {
+    updates,
+    parameters: project.parameters ?? {},
+    ...(typeof project.typ_stavby === 'string' && { buildingType: project.typ_stavby }),
+  })
+  if (result.applied.length) {
+    await bridge.writeFileContent(path, JSON.stringify({ ...project, parameters: result.parameters }, null, 2) + '\n')
+    await useStavebakStore.getState().load(dir)
+  }
+  return result
+}
+
+/** Uploaded documents land here; the core drop handler copies into it too (data-drop-import). */
+export const DOCUMENTS_DIR = 'podklady'
+
+const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p
+
+/** "Vybrat soubory": copy picked files into podklady/ (like a drop); returns their names. */
+export async function importDocuments(title = 'Vyberte podklady'): Promise<string[]> {
+  const picked = await open({ multiple: true, title })
+  const paths = (Array.isArray(picked) ? picked : picked ? [picked] : []) as string[]
+  if (paths.length === 0) return []
+  const root = useSettingsStore.getState().workingDirectory
+  const tabId = useSessionStore.getState().selectedSessionId ?? undefined
+  const dir = `${root}/${DOCUMENTS_DIR}`
+  await bridge.createDirectory(dir).catch(() => {})
+  const imported: string[] = []
+  for (const src of paths) {
+    // Picked in a system dialog = user-authorized, like a drop
+    if (tabId) await bridge.addPathGrant(tabId, src).catch(() => {})
+    try {
+      await bridge.copyFile(src, `${dir}/${baseName(src)}`, tabId)
+      imported.push(baseName(src))
+    } catch (e) {
+      console.error('Failed to import document:', src, e)
+    }
+  }
+  useFileStore.getState().refreshTree(root)
+  return imported
+}
 
 /** The new-project form as the server defines it (fields, building types, labels). */
 export async function fetchProjectForm(): Promise<ProjectForm> {
