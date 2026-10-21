@@ -201,7 +201,7 @@ export function AgentPanel() {
           <span className="text-xs font-semibold text-text-tertiary
             uppercase tracking-wider">{t('agents.title')}</span>
           {activeCount > 0 && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full
+            <span className="text-2xs px-1.5 py-0.5 rounded-full
               bg-accent/15 text-accent font-medium">
               {activeCount} {t('agents.active')}
             </span>

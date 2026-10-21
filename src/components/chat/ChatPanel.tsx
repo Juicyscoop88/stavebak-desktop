@@ -594,9 +594,9 @@ export function ChatPanel() {
               return (
               <div className="flex gap-3 mt-2">
                 {showStreamAvatar ? (
-                  <div className="w-8 h-8 rounded-[10px] bg-accent
+                  <div className="w-8 h-8 rounded-lg bg-accent
                     flex items-center justify-center flex-shrink-0 text-text-inverse
-                    text-xs font-bold shadow-md mt-0.5">C</div>
+                    text-xs font-semibold shadow-md mt-0.5">C</div>
                 ) : (
                   <div className="w-8 flex-shrink-0" />
                 )}

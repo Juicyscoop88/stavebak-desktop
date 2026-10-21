@@ -845,7 +845,7 @@ function App() {
               </div>
             </div>
             {/* Path hint */}
-            <div className="mx-6 px-3 py-2 rounded-lg bg-bg-secondary text-[11px] text-text-tertiary font-mono">
+            <div className="mx-6 px-3 py-2 rounded-lg bg-bg-secondary text-2xs text-text-tertiary font-mono">
               {t('perm.path')}
             </div>
             {/* Actions */}

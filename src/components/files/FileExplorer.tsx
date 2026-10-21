@@ -22,8 +22,8 @@ function getChangeBadge(kind: FileChangeKind | undefined) {
   };
   const labels = { created: 'A', modified: 'M', removed: 'D' };
   return (
-    <span className={`ml-auto flex-shrink-0 w-4 h-4 rounded text-[9px]
-      font-bold text-text-inverse flex items-center justify-center ${colors[kind]}`}>
+    <span className={`ml-auto flex-shrink-0 w-4 h-4 rounded text-2xs
+      font-semibold text-text-inverse flex items-center justify-center ${colors[kind]}`}>
       {labels[kind]}
     </span>
   );

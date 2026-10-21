@@ -1405,7 +1405,7 @@ export function InputBar() {
             className={`flex items-center gap-2 bg-bg-secondary/50 border px-5 py-3
               focus-within:border-border-focus/40 focus-within:bg-bg-input focus-within:shadow-md
               transition-all duration-200 group/input
-              ${input.includes('\n') || input.length > 80 ? 'rounded-2xl' : 'rounded-full'}
+              ${input.includes('\n') || input.length > 80 ? 'rounded-[var(--radius-message)]' : 'rounded-full'}
               ${isDragging
                 ? 'border-accent/40 bg-accent/5'
                 : 'border-border'

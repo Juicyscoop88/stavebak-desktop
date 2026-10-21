@@ -180,7 +180,7 @@ function UserMsg({ message }: Props) {
       >
         {copied ? <Check size={13} weight="bold" /> : <Copy size={13} weight="regular" />}
       </button>
-      <div className="max-w-[75%] px-4 py-2.5 rounded-2xl
+      <div className="max-w-[75%] px-4 py-2.5 rounded-[var(--radius-message)]
         user-bubble text-base leading-normal whitespace-pre-wrap">
         {renderUserContent(displayContent)}
         {!expanded && isLong && (
@@ -973,7 +973,7 @@ function TodoMsg({ message }: Props) {
         <CaretRight size={10} weight="light"
           className={`flex-shrink-0 text-text-tertiary transition-transform
             duration-150 ${expanded ? 'rotate-90' : ''}`} />
-        <span className="text-xs font-bold text-text-primary">{t('msg.todo')}</span>
+        <span className="text-xs font-semibold text-text-primary">{t('msg.todo')}</span>
         <span className="text-xs text-text-tertiary">
           {completedCount}/{items.length}
         </span>

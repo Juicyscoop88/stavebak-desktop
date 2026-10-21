@@ -166,7 +166,7 @@ export function SessionItem({
         ${isArchived ? 'opacity-50' : ''}`}
     >
       {isSelected && (
-        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 w-1 h-4 rounded-[2px]
+        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 w-1 h-4 rounded-xs
           bg-accent" />
       )}
       <div className="flex items-center gap-2">

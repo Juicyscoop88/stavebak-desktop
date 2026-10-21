@@ -267,7 +267,7 @@ export function QuestionCard({ message, floating }: Props) {
             <div className="flex items-start gap-2 mb-3">
               {currentQ.header && (
                 <span className="flex-shrink-0 px-1.5 py-0.5 rounded
-                  bg-accent/10 text-accent text-xs font-bold
+                  bg-accent/10 text-accent text-xs font-semibold
                   uppercase tracking-wider mt-px">
                   {decodeUnicodeEscapes(currentQ.header)}
                 </span>

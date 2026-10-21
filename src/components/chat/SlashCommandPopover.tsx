@@ -128,7 +128,7 @@ export function SlashCommandPopover({
                 {/* Icon: / for commands, diamond for skills */}
                 <span className={`flex-shrink-0 w-6 h-6 rounded-lg
                   bg-bg-tertiary flex items-center justify-center
-                  text-xs font-bold ${isSkill ? 'text-accent' : 'text-text-tertiary font-mono'}`}>
+                  text-xs font-semibold ${isSkill ? 'text-accent' : 'text-text-tertiary font-mono'}`}>
                   {isSkill ? (
                     <Star size={12} weight="fill" />
                   ) : '/'}
@@ -138,22 +138,22 @@ export function SlashCommandPopover({
                   <div className="flex items-center gap-2">
                     <span className="font-medium font-mono text-xs">{cmd.name}</span>
                     {cmd.execution === 'cli' && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-medium">
+                      <span className="text-2xs px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-medium">
                         {t('slash.cli')}
                       </span>
                     )}
                     {cmd.execution === 'session' && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500 font-medium">
+                      <span className="text-2xs px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500 font-medium">
                         {t('slash.session')}
                       </span>
                     )}
                     {cmd.execution === 'ui' && cmd.immediate && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-bg-tertiary text-text-tertiary font-medium">
+                      <span className="text-2xs px-1.5 py-0.5 rounded-full bg-bg-tertiary text-text-tertiary font-medium">
                         {t('slash.immediate')}
                       </span>
                     )}
                     {cmd.has_args && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent font-medium">
+                      <span className="text-2xs px-1.5 py-0.5 rounded-full bg-accent/10 text-accent font-medium">
                         {t('slash.hasArgs')}
                       </span>
                     )}
