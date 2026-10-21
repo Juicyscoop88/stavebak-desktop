@@ -113,6 +113,9 @@ interface SettingsState {
   lastProject: string;
   /** Stavebák's own project list, most recent first (not Claude Code's whole history) */
   projects: string[];
+  /** Where new projects go, set only when the user picks a folder ("Změnit"); empty = ~/Documents/Stavebák */
+  projectsDir: string;
+  setProjectsDir: (dir: string) => void;
   removeProject: (dir: string) => void;
   setWorkingDirectory: (dir: string) => void;
   setSelectedModel: (model: string) => void;
@@ -161,6 +164,7 @@ export const useSettingsStore = create<SettingsState>()(
       workingDirectory: '',
       lastProject: '',
       projects: [],
+      projectsDir: '',
       selectedModel: 'sonnet',
       sessionMode: 'bypass',
       locale: 'cs',
@@ -214,6 +218,8 @@ export const useSettingsStore = create<SettingsState>()(
           // Clear update badge when opening settings
           ...(!state.settingsOpen && state.updateAvailable ? { updateAvailable: false } : {}),
         })),
+
+      setProjectsDir: (dir) => set({ projectsDir: dir }),
 
       setWorkingDirectory: (dir) => {
         set((state) => (dir
@@ -379,6 +385,7 @@ export const useSettingsStore = create<SettingsState>()(
         // workingDirectory itself isn't persisted; launch reopens lastProject via openProject()
         lastProject: state.lastProject,
         projects: state.projects,
+        projectsDir: state.projectsDir,
         selectedModel: state.selectedModel,
         sessionMode: state.sessionMode,
         locale: state.locale,

@@ -4187,13 +4187,47 @@ async fn create_directory(
 #[tauri::command]
 async fn create_project_directory(
     path_access: State<'_, PathAccessManager>,
-    path: String,
-) -> Result<(), String> {
-    std::fs::create_dir_all(&path).map_err(|e| format!("Cannot create directory: {}", e))?;
+    parent: String,
+    name: String,
+) -> Result<String, String> {
+    let parent = std::path::Path::new(&parent);
+    std::fs::create_dir_all(parent).map_err(|e| format!("Cannot create directory: {}", e))?;
+    let dir = create_unique_dir(parent, &name)?;
     // The user just created it as a project: it's part of the workspace (same as an opened one),
     // so the new-project flow can write its first files before the project is opened
-    path_access.register_cwd(std::path::Path::new(&path)).await;
-    Ok(())
+    path_access.register_cwd(&dir).await;
+    Ok(dir.to_string_lossy().into_owned())
+}
+
+/// `parent/name`, or `parent/name 2`, `name 3`… when taken. Never reuses an existing folder,
+/// so a new project can't overwrite another project's files.
+fn create_unique_dir(parent: &std::path::Path, name: &str) -> Result<std::path::PathBuf, String> {
+    for n in 1..1000 {
+        let candidate = parent.join(if n == 1 { name.to_string() } else { format!("{} {}", name, n) });
+        match std::fs::create_dir(&candidate) {
+            Ok(()) => return Ok(candidate),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("Cannot create directory: {}", e)),
+        }
+    }
+    Err("Cannot find a free folder name".to_string())
+}
+
+#[cfg(test)]
+mod create_unique_dir_tests {
+    use super::create_unique_dir;
+
+    #[test]
+    fn existing_folder_gets_a_number_instead_of_being_reused() {
+        let parent = std::env::temp_dir().join(format!("stavebak-unique-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&parent);
+        std::fs::create_dir_all(&parent).unwrap();
+        let first = create_unique_dir(&parent, "RD Tuchoměřice").unwrap();
+        let second = create_unique_dir(&parent, "RD Tuchoměřice").unwrap();
+        assert_eq!(first, parent.join("RD Tuchoměřice"));
+        assert_eq!(second, parent.join("RD Tuchoměřice 2"));
+        std::fs::remove_dir_all(&parent).unwrap();
+    }
 }
 
 #[tauri::command]

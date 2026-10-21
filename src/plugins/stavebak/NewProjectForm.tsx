@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { invoke } from '@tauri-apps/api/core'
-import { useNewProjectStore, defaultProjectsDir, folderNameFor } from '../../stores/newProjectStore'
+import { useNewProjectStore, defaultProjectsDir, createProjectDirectory } from '../../stores/newProjectStore'
 import { openProject } from '../../lib/conversations'
 import { LocationRow } from '../../components/layout/NewProjectDialog'
 import { ProjectForm } from './ProjectForm'
@@ -15,10 +14,9 @@ export default function NewProjectForm() {
   return (
     <ProjectForm
       onCancel={close}
-      extra={<LocationRow parent={parent} onChange={setParent} />}
+      extra={(values) => <LocationRow parent={parent} name={values.name} onChange={setParent} />}
       onSubmit={async (values) => {
-        const dir = `${parent}/${folderNameFor(values.name ?? 'Projekt')}`
-        await invoke('create_project_directory', { path: dir })
+        const dir = await createProjectDirectory(parent, values.name || 'Projekt')
         await createProjectFile(dir, values)
         close()
         await openProject(dir, { fresh: true })

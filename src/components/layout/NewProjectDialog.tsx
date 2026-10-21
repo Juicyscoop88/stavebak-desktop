@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
-import { invoke } from '@tauri-apps/api/core';
-import { useNewProjectStore, defaultProjectsDir, folderNameFor } from '../../stores/newProjectStore';
+import { useNewProjectStore, defaultProjectsDir, folderNameFor, displayPath, createProjectDirectory } from '../../stores/newProjectStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { openProject } from '../../lib/conversations';
 import { PluginSlotStack } from './PluginComponents';
 
@@ -40,8 +40,7 @@ function BasicNewProject() {
   const submit = async () => {
     if (!name.trim() || !parent) return;
     setBusy(true);
-    const dir = `${parent}/${folderNameFor(name)}`;
-    await invoke('create_project_directory', { path: dir });
+    const dir = await createProjectDirectory(parent, name);
     close();
     openProject(dir, { fresh: true });
   };
@@ -55,7 +54,7 @@ function BasicNewProject() {
         placeholder="Název projektu"
         className="w-full px-3 py-2 rounded-lg text-sm bg-bg-input border border-border focus:border-border-focus focus:outline-none"
       />
-      <LocationRow parent={parent} onChange={setParent} />
+      <LocationRow parent={parent} name={name} onChange={setParent} />
       <div className="flex justify-end gap-2 mt-5">
         <button onClick={close} className="px-3 py-1.5 rounded-lg text-sm text-text-muted hover:bg-bg-secondary cursor-pointer">Zrušit</button>
         <button onClick={submit} disabled={!name.trim() || busy}
@@ -65,16 +64,20 @@ function BasicNewProject() {
   );
 }
 
-/** "Uložit do ~/Projects [Změnit]" — shared with plugin forms. */
-export function LocationRow({ parent, onChange }: { parent: string; onChange: (dir: string) => void }) {
+/** "Uloží se do Dokumenty › Stavebák › <název> [Změnit]" — shared with plugin forms. A folder picked here is remembered. */
+export function LocationRow({ parent, name, onChange }: { parent: string; name?: string; onChange: (dir: string) => void }) {
+  const setProjectsDir = useSettingsStore((s) => s.setProjectsDir);
   const pick = async () => {
-    const dir = await openDialog({ directory: true, multiple: false, defaultPath: parent, title: 'Kam uložit projekt' });
-    if (dir) onChange(dir as string);
+    const dir = await openDialog({ directory: true, multiple: false, defaultPath: parent, title: 'Kam ukládat projekty' });
+    if (!dir) return;
+    setProjectsDir(dir as string);
+    onChange(dir as string);
   };
+  const target = name?.trim() ? `${parent}/${folderNameFor(name)}` : parent;
   return (
     <div className="flex items-center gap-2 mt-4 text-xs text-text-muted">
-      <span>Uložit do</span>
-      <span className="text-text-secondary truncate" title={parent}>{parent.replace(/^\/Users\/[^/]+/, '~')}</span>
+      <span className="shrink-0">Uloží se do</span>
+      <span className="text-text-secondary truncate" title={target}>{displayPath(target)}</span>
       <button onClick={pick} className="ml-auto text-text-secondary hover:text-text-primary underline underline-offset-2 cursor-pointer">Změnit</button>
     </div>
   );

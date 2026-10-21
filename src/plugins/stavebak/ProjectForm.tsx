@@ -4,7 +4,8 @@ import { fetchProjectForm, type ProjectForm as Form } from './store'
 /** Renders the server's new-project form generically: text fields and choices, no domain knowledge here. */
 export function ProjectForm({ onSubmit, extra, onCancel }: {
   onSubmit: (values: Record<string, string>) => Promise<void>
-  extra?: React.ReactNode
+  /** Below the fields; a function gets the current values (e.g. to preview the folder name) */
+  extra?: React.ReactNode | ((values: Record<string, string>) => React.ReactNode)
   onCancel?: () => void
 }) {
   const [form, setForm] = useState<Form | null>(null)
@@ -73,7 +74,7 @@ export function ProjectForm({ onSubmit, extra, onCancel }: {
           </div>
         ))}
       </div>
-      {extra}
+      {typeof extra === 'function' ? extra(values) : extra}
       {error && <p className="text-xs text-error mt-3">{error}</p>}
       <div className="flex justify-end gap-2 mt-6">
         {onCancel && (
