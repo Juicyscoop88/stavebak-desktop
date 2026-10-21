@@ -27,8 +27,8 @@ if (cmd === 'up') {
   if (!(await healthy())) {
     if (!existsSync(SERVER_REPO)) throw new Error(`Server repo not found: ${SERVER_REPO}`);
     const out = openSync(LOG, 'a');
-    // --watch: restarts on every code change, so server edits apply without a deploy
-    spawn('node', ['--watch', '--import', 'tsx', 'server/index.ts'], {
+    // The server repo owns how it starts and is configured; dev:watch restarts on every code change
+    spawn('npm', ['run', 'dev:watch'], {
       cwd: SERVER_REPO, detached: true, stdio: ['ignore', out, out],
     }).unref();
     for (let i = 0; i < 30 && !(await healthy()); i++) await new Promise((r) => setTimeout(r, 500));
