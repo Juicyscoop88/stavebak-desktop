@@ -736,4 +736,7 @@ input, textarea, [contenteditable="true"],
   overflow-y: auto;
   outline: none;
   line-height: 1.5;
+  /* A single line (1.5em) is shorter than min-height: split the rest above and below so the text
+     sits on the same center as the send button, at any font size */
+  padding-block: max(0px, calc((24px - 1.5em) / 2));
 }
