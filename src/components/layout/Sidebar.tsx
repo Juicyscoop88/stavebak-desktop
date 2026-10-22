@@ -1,6 +1,5 @@
 import { lazy, Suspense, useState, useRef, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { useProjectStore } from '../../stores/projectStore';
 import { useFileStore } from '../../stores/fileStore';
 import { useT } from '../../lib/i18n';
 import { IS_ALPHA } from '../../lib/edition';
@@ -15,7 +14,6 @@ export function Sidebar() {
   const t = useT();
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
   const setWorkingDirectory = useSettingsStore((s) => s.setWorkingDirectory);
-  const buildingType = useProjectStore((s) => s.buildingType);
   const recentProjects = useFileStore((s) => s.recentProjects);
   const fetchProjects = useFileStore((s) => s.fetchRecentProjects);
 

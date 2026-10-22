@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
-import { Lightbulb, CaretDown, Check, X, Stop, PaperPlaneRight, Paperclip, ArrowsClockwise } from '@phosphor-icons/react';
+import { X, Stop, PaperPlaneRight, ArrowsClockwise } from '@phosphor-icons/react';
 import { useChatStore, useActiveTab, getActiveTabState, generateMessageId, isSessionBusy, registerLiveComposerSnapshotProvider, type ChatMessage } from '../../stores/chatStore';
-import { useSettingsStore, MODEL_OPTIONS, mapSessionModeToPermissionMode, setSessionModeLocal, type ThinkingLevel } from '../../stores/settingsStore';
+import { useSettingsStore, MODEL_OPTIONS, mapSessionModeToPermissionMode, setSessionModeLocal } from '../../stores/settingsStore';
 import { bridge, type UnifiedCommand } from '../../lib/tauri-bridge';
 import { FileUploadChips } from './FileUploadChips';
 import { RewindPanel } from './RewindPanel';
@@ -15,7 +15,6 @@ import { SlashCommandPopover, getFilteredCommandList } from './SlashCommandPopov
 import { useCommandStore } from '../../stores/commandStore';
 import { envFingerprint, resolveModelForProvider, resolveModelOrError, spawnConfigHash } from '../../lib/api-provider';
 import { useProviderStore } from '../../stores/providerStore';
-import { PROVIDER_PRESETS } from '../../lib/provider-presets';
 import { stripAnsi } from '../../lib/strip-ansi';
 import { PlanReviewCard } from './PlanReviewCard';
 import { PermissionCard } from './PermissionCard';
@@ -24,15 +23,6 @@ import { TiptapEditor, type TiptapEditorHandle } from './TiptapEditor';
 import { spawnSession, teardownSession, cleanupStdinRoute, waitForStdinCleared } from '../../lib/sessionLifecycle';
 import type { FileAttachment } from '../../hooks/useFileAttachments';
 // drag-state import removed — tree drag handled by ChatPanel
-
-/** Thinking effort level configuration data */
-const THINK_LEVELS: { id: ThinkingLevel; labelKey: string }[] = [
-  { id: 'off', labelKey: 'think.off' },
-  { id: 'low', labelKey: 'think.low' },
-  { id: 'medium', labelKey: 'think.medium' },
-  { id: 'high', labelKey: 'think.high' },
-  { id: 'max', labelKey: 'think.max' },
-];
 
 function buildInterruptedContinuationPrompt(interruptedAssistantText: string, nextUserText: string): string {
   const cleanInterrupted = interruptedAssistantText.trim();
@@ -54,85 +44,6 @@ function hasResumableConversationEvidence(messages: ChatMessage[]): boolean {
       m.role === 'assistant'
       && (m.type === 'text' || m.type === 'tool_use' || m.type === 'thinking')
       && m.content.trim().length > 0,
-  );
-}
-
-/** Thinking effort level selector dropdown for the toolbar */
-function ThinkLevelSelector({ disabled = false }: { disabled?: boolean }) {
-  const t = useT();
-  const thinkingLevel = useSettingsStore((s) => s.thinkingLevel);
-  const setThinkingLevel = useSettingsStore((s) => s.setThinkingLevel);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  const thinkingSupport = useProviderStore((s) => {
-    if (!s.activeProviderId) return 'full';
-    const provider = s.providers.find((p) => p.id === s.activeProviderId);
-    if (!provider?.preset) return 'unknown';
-    return PROVIDER_PRESETS.find((p) => p.id === provider.preset)?.thinkingSupport ?? 'unknown';
-  });
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  const isOff = thinkingLevel === 'off';
-  const current = THINK_LEVELS.find((l) => l.id === thinkingLevel) || THINK_LEVELS[3];
-
-  return (
-    <div ref={ref} className={`relative ${disabled ? 'opacity-40 pointer-events-none' : ''}`}>
-      <button
-        onClick={() => setOpen(!open)}
-        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs
-          border transition-smooth cursor-pointer
-          ${isOff
-            ? 'border-border-subtle bg-bg-secondary/50 text-text-muted hover:text-text-primary hover:bg-bg-secondary'
-            : 'border-accent/30 bg-accent/10 text-accent'
-          }`}
-      >
-        <Lightbulb size={12} weight="light" />
-        <span className="font-medium">{t(current.labelKey)}</span>
-        <CaretDown size={8} weight="light"
-          className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {open && (
-        <div className="absolute bottom-full left-0 mb-1 min-w-[140px]
-          bg-bg-card border border-border-subtle rounded-lg shadow-lg
-          py-1 z-50 animate-fade-in">
-          {THINK_LEVELS.map((level) => {
-            const isActive = level.id === thinkingLevel;
-            return (
-              <button
-                key={level.id}
-                onClick={() => { setThinkingLevel(level.id); setOpen(false); }}
-                className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs
-                  transition-smooth cursor-pointer
-                  ${isActive
-                    ? 'bg-accent/10 text-accent font-medium'
-                    : 'text-text-muted hover:text-text-primary hover:bg-bg-secondary'
-                  }`}
-              >
-                {t(level.labelKey)}
-                {isActive && (
-                  <Check size={10} weight="light" className="ml-auto" />
-                )}
-              </button>
-            );
-          })}
-          {thinkingSupport === 'ignored' && (
-            <div className="px-3 py-1.5 text-xs text-text-tertiary border-t border-border-subtle mt-1">
-              {t('think.providerIgnored')}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
   );
 }
 

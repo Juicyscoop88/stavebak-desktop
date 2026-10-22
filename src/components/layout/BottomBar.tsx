@@ -1,6 +1,5 @@
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useFileStore } from '../../stores/fileStore';
-import { useT } from '../../lib/i18n';
 import { GearSix } from '@phosphor-icons/react';
 import { InputBar } from '../chat/InputBar';
 
@@ -12,7 +11,6 @@ export function BottomBar() {
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
   const directoryMissing = useFileStore((s) => s.directoryMissing);
-  const t = useT();
 
   const showInput = workingDirectory && !directoryMissing;
 
