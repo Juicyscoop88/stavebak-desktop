@@ -1,9 +1,18 @@
 name: Release
 
+# Tag v* sestaví aplikaci a založí draft release s artefakty. Nic se nepublikuje samo.
+# Postup, tajemství a otevřená rozhodnutí: docs/ops/release.md
 on:
   push:
     tags:
       - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -34,15 +43,19 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           if [[ "$TAG" == *"-alpha"* ]]; then
-            echo "edition=alpha" >> $GITHUB_OUTPUT
-            echo "prerelease=true" >> $GITHUB_OUTPUT
-            echo "release_name=TCAlpha $TAG" >> $GITHUB_OUTPUT
-            echo "extra_args=--config editions/alpha/tauri.alpha.conf.json" >> $GITHUB_OUTPUT
+            {
+              echo "edition=alpha"
+              echo "prerelease=true"
+              echo "release_name=Stavebák Alpha $TAG"
+              echo "extra_args=--config editions/alpha/tauri.alpha.conf.json"
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "edition=stable" >> $GITHUB_OUTPUT
-            echo "prerelease=false" >> $GITHUB_OUTPUT
-            echo "release_name=TOKENICODE $TAG" >> $GITHUB_OUTPUT
-            echo "extra_args=" >> $GITHUB_OUTPUT
+            {
+              echo "edition=stable"
+              echo "prerelease=false"
+              echo "release_name=Stavebák $TAG"
+              echo "extra_args="
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install dependencies (Ubuntu only)
@@ -59,7 +72,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -72,7 +85,7 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: Install frontend dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
@@ -90,7 +103,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: ${{ steps.edition.outputs.release_name }}
-          releaseBody: 'See the assets to download and install this version.'
+          releaseBody: 'Instalační soubory jsou v sekci Assets.'
           releaseDraft: true
           prerelease: ${{ steps.edition.outputs.prerelease == 'true' }}
           args: ${{ matrix.args }} ${{ steps.edition.outputs.extra_args }}
