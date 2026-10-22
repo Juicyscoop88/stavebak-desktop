@@ -3,6 +3,10 @@ import { useFileStore } from '../../stores/fileStore';
 import { GearSix } from '@phosphor-icons/react';
 import { InputBar } from '../chat/InputBar';
 import { useUiStore } from '../../stores/uiStore';
+import { useMcpStore } from '../../stores/mcpStore';
+
+// Not shown for production: users of the release build never see it
+const TARGET_LABEL = { local: 'lokální server', custom: 'vlastní server' } as const;
 
 export function BottomBar() {
   const toggleSettings = useSettingsStore((s) => s.toggleSettings);
@@ -11,6 +15,7 @@ export function BottomBar() {
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
   const directoryMissing = useFileStore((s) => s.directoryMissing);
+  const mcpTarget = useMcpStore((s) => s.target);
 
   const showInput = workingDirectory && !directoryMissing;
   // Hidden, not unmounted: InputBar owns the stream handler and action listeners
@@ -38,6 +43,12 @@ export function BottomBar() {
                 border-[1.5px] border-bg-chat bg-green-500" />
             )}
           </button>
+          {mcpTarget && mcpTarget.env !== 'prod' && (
+            <span title={mcpTarget.url}
+              className="ml-2 px-2 py-0.5 rounded-full text-xs text-text-tertiary bg-bg-tertiary truncate">
+              {TARGET_LABEL[mcpTarget.env]}
+            </span>
+          )}
         </div>
       </div>
 

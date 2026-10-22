@@ -12,10 +12,12 @@ export interface McpServerConfig {
 }
 
 export const BUILTIN_SERVER_NAME = 'stavebak';
-export const BUILTIN_SERVER_CONFIG = {
-  type: 'streamable-http',
-  url: 'https://stavebak.cz/mcp',
-} as const;
+
+/** Where the built-in Stavebák server lives. Owned by the app (Rust `get_stavebak_mcp`), never by ~/.claude.json. */
+export interface McpTarget {
+  url: string;
+  env: 'prod' | 'local' | 'custom';
+}
 
 export interface McpServer {
   name: string;
@@ -28,6 +30,7 @@ interface McpState {
   editingServer: string | null;
   isAdding: boolean;
   healthStatus: 'unknown' | 'checking' | 'ok' | 'error';
+  target: McpTarget | null;
 
   fetchServers: () => Promise<void>;
   ensureDefaultServer: () => Promise<void>;
@@ -92,31 +95,46 @@ function parseServers(mcpServers: Record<string, unknown> | undefined): McpServe
   });
 }
 
+/** Built-in server first (from the app), then the user's own servers from ~/.claude.json. */
+function withBuiltin(target: McpTarget | null, servers: McpServer[]): McpServer[] {
+  const own = servers.filter((s) => s.name !== BUILTIN_SERVER_NAME);
+  if (!target) return own;
+  const builtin: McpServer = {
+    name: BUILTIN_SERVER_NAME,
+    config: { command: '', args: [], env: {}, type: 'http', url: target.url },
+  };
+  return [builtin, ...own];
+}
+
+async function loadTarget(): Promise<McpTarget | null> {
+  try {
+    return await bridge.getStavebakMcp();
+  } catch {
+    return null;
+  }
+}
+
 // --- Store ---
 
-export const useMcpStore = create<McpState>()((set) => ({
+export const useMcpStore = create<McpState>()((set, get) => ({
   servers: [],
   isLoading: false,
   editingServer: null,
   isAdding: false,
   healthStatus: 'unknown' as const,
+  target: null,
 
+  // The built-in server comes from the app, nothing is written to ~/.claude.json.
   ensureDefaultServer: async () => {
-    const json = await readClaudeJson();
-    const mcpServers = (json.mcpServers as Record<string, unknown>) || {};
-    if (!(BUILTIN_SERVER_NAME in mcpServers)) {
-      mcpServers[BUILTIN_SERVER_NAME] = { ...BUILTIN_SERVER_CONFIG };
-      json.mcpServers = mcpServers;
-      await writeClaudeJson(json);
-      const servers = parseServers(mcpServers);
-      set({ servers });
-    }
+    await get().fetchServers();
   },
 
   checkHealth: async () => {
     set({ healthStatus: 'checking' });
     try {
-      const resp = await fetch(BUILTIN_SERVER_CONFIG.url, { method: 'HEAD', mode: 'no-cors' });
+      const target = get().target ?? (await loadTarget());
+      if (!target) throw new Error('no target');
+      const resp = await fetch(target.url, { method: 'HEAD', mode: 'no-cors' });
       set({ healthStatus: resp.ok || resp.type === 'opaque' ? 'ok' : 'error' });
     } catch {
       set({ healthStatus: 'error' });
@@ -138,8 +156,9 @@ export const useMcpStore = create<McpState>()((set) => ({
         json.mcpServers = rawMcp.mcpServers;
         await writeClaudeJson(json);
       }
-      const servers = parseServers(json.mcpServers as Record<string, unknown> | undefined);
-      set({ servers, isLoading: false });
+      const target = await loadTarget();
+      const servers = withBuiltin(target, parseServers(json.mcpServers as Record<string, unknown> | undefined));
+      set({ servers, target, isLoading: false });
     } catch {
       set({ isLoading: false });
     }
@@ -158,7 +177,7 @@ export const useMcpStore = create<McpState>()((set) => ({
         };
     json.mcpServers = mcpServers;
     await writeClaudeJson(json);
-    const servers = parseServers(mcpServers);
+    const servers = withBuiltin(get().target, parseServers(mcpServers));
     set({ servers, isAdding: false });
   },
 
@@ -178,7 +197,7 @@ export const useMcpStore = create<McpState>()((set) => ({
         };
     json.mcpServers = mcpServers;
     await writeClaudeJson(json);
-    const servers = parseServers(mcpServers);
+    const servers = withBuiltin(get().target, parseServers(mcpServers));
     set({ servers, editingServer: null });
   },
 
@@ -188,7 +207,7 @@ export const useMcpStore = create<McpState>()((set) => ({
     delete mcpServers[name];
     json.mcpServers = mcpServers;
     await writeClaudeJson(json);
-    const servers = parseServers(mcpServers);
+    const servers = withBuiltin(get().target, parseServers(mcpServers));
     set({ servers });
   },
 

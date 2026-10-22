@@ -1605,59 +1605,105 @@ fn strip_thinking_from_value(value: &mut serde_json::Value) -> Option<usize> {
     }
 }
 
-/// Phase 4 §5.4 (S10): write a per-session MCP config scratch file so the
-/// CLI's `--strict-mcp-config` doesn't strip the user's configured servers.
+/// Which Stavebák MCP server this build talks to. The app owns this choice and never
+/// reads or writes the user's `~/.claude.json` for it (a designer may run their own
+/// Claude Code with their own config).
 ///
-/// Reads `~/.claude.json`, extracts the `mcpServers` object, and writes
-/// `{"mcpServers": {...}}` into `~/.stavebak/mcp-session-<stdin_id>.json`.
-/// Returns `None` when there are no servers to carry over (or on I/O error).
+/// Order: `STAVEBAK_MCP_URL` env (any build) > debug build = local dev server >
+/// release build = production. The model and the UI panels both use this one target,
+/// so they always talk to the same server.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct StavebakMcpTarget {
+    pub url: String,
+    /// "prod", "local" or "custom" (shown as a badge in the UI when not prod)
+    pub env: &'static str,
+}
+
+const STAVEBAK_MCP_PROD: &str = "https://stavebak.cz/mcp";
+const STAVEBAK_MCP_LOCAL: &str = "http://localhost:3535/mcp";
+
+fn stavebak_mcp_target() -> StavebakMcpTarget {
+    resolve_stavebak_mcp_target(std::env::var("STAVEBAK_MCP_URL").ok(), cfg!(debug_assertions))
+}
+
+fn resolve_stavebak_mcp_target(env_url: Option<String>, debug: bool) -> StavebakMcpTarget {
+    match env_url.map(|u| u.trim().to_string()).filter(|u| !u.is_empty()) {
+        Some(url) => {
+            let env = match url.as_str() {
+                STAVEBAK_MCP_PROD => "prod",
+                STAVEBAK_MCP_LOCAL => "local",
+                _ => "custom",
+            };
+            StavebakMcpTarget { url, env }
+        }
+        None if debug => StavebakMcpTarget { url: STAVEBAK_MCP_LOCAL.to_string(), env: "local" },
+        None => StavebakMcpTarget { url: STAVEBAK_MCP_PROD.to_string(), env: "prod" },
+    }
+}
+
+#[tauri::command]
+fn get_stavebak_mcp() -> StavebakMcpTarget {
+    stavebak_mcp_target()
+}
+
+/// Phase 4 §5.4 (S10): write a per-session MCP config scratch file for
+/// `--mcp-config`. The CLI runs with `--strict-mcp-config`, so this file is the
+/// only MCP source of the session: just the Stavebák server (OPT-7, other
+/// servers would slow cold start), under the fixed name `stavebak` so tool names
+/// (`mcp__stavebak__*`) are the same against local and production.
+///
+/// Writes `~/.stavebak/mcp-session-<stdin_id>.json`. Returns `None` on I/O error.
 fn build_mcp_scratch_config(stdin_id: &str) -> Option<std::path::PathBuf> {
     let home = dirs::home_dir()?;
-    let claude_json = home.join(".claude.json");
-    let raw = std::fs::read_to_string(&claude_json).ok()?;
-    let value: serde_json::Value = serde_json::from_str(&raw).ok()?;
-
-    // Tolerate the double-nested mcpServers.mcpServers shape the frontend
-    // already auto-fixes; prefer the outer layer when present.
-    let mut servers = value
-        .get("mcpServers")
-        .cloned()
-        .unwrap_or(serde_json::Value::Object(Default::default()));
-    if let Some(inner) = servers.get("mcpServers").cloned() {
-        if inner.is_object() {
-            servers = inner;
-        }
-    }
-
-    // No servers → skip --mcp-config entirely (CLI starts faster).
-    let server_map = match &servers {
-        serde_json::Value::Object(m) if m.is_empty() => return None,
-        serde_json::Value::Object(m) => m.clone(),
-        _ => return None,
-    };
-
-    // OPT-7: only the Stavebák server is carried over. --strict-mcp-config
-    // drops everything not passed via --mcp-config (there is no lazy
-    // fallback), so without this the app runs with zero domain tools.
-    // Other user servers stay out — their handshakes would slow cold start.
-    let carried: serde_json::Map<String, serde_json::Value> = server_map
-        .into_iter()
-        .filter(|(name, _)| name == STAVEBAK_MCP_SERVER)
-        .collect();
-    if carried.is_empty() {
-        eprintln!("[Stavebak] MCP: '{}' server not configured", STAVEBAK_MCP_SERVER);
-        return None;
-    }
-
+    let target = stavebak_mcp_target();
     let dir = home.join(".stavebak");
     std::fs::create_dir_all(&dir).ok()?;
     let path = dir.join(format!("mcp-session-{}.json", safe_stdin_for_path(stdin_id)));
-    let body = serde_json::json!({ "mcpServers": carried });
-    std::fs::write(&path, body.to_string()).ok()?;
+    std::fs::write(&path, mcp_session_config(&target).to_string()).ok()?;
+    eprintln!("[Stavebak] MCP: {} ({})", target.url, target.env);
     Some(path)
 }
 
+fn mcp_session_config(target: &StavebakMcpTarget) -> serde_json::Value {
+    serde_json::json!({ "mcpServers": { STAVEBAK_MCP_SERVER: { "type": "http", "url": target.url } } })
+}
+
 const STAVEBAK_MCP_SERVER: &str = "stavebak";
+
+#[cfg(test)]
+mod stavebak_mcp_target_tests {
+    use super::{mcp_session_config, resolve_stavebak_mcp_target, STAVEBAK_MCP_LOCAL, STAVEBAK_MCP_PROD};
+
+    #[test]
+    fn release_build_talks_to_production() {
+        let t = resolve_stavebak_mcp_target(None, false);
+        assert_eq!((t.url.as_str(), t.env), (STAVEBAK_MCP_PROD, "prod"));
+    }
+
+    #[test]
+    fn debug_build_talks_to_local_dev_server() {
+        let t = resolve_stavebak_mcp_target(None, true);
+        assert_eq!((t.url.as_str(), t.env), (STAVEBAK_MCP_LOCAL, "local"));
+    }
+
+    #[test]
+    fn env_overrides_both_builds() {
+        assert_eq!(resolve_stavebak_mcp_target(Some(STAVEBAK_MCP_PROD.into()), true).env, "prod");
+        assert_eq!(resolve_stavebak_mcp_target(Some(STAVEBAK_MCP_LOCAL.into()), false).env, "local");
+        let c = resolve_stavebak_mcp_target(Some(" http://10.0.0.5:3535/mcp ".into()), false);
+        assert_eq!((c.url.as_str(), c.env), ("http://10.0.0.5:3535/mcp", "custom"));
+        assert_eq!(resolve_stavebak_mcp_target(Some("  ".into()), false).env, "prod");
+    }
+
+    #[test]
+    fn session_config_has_only_stavebak_under_fixed_name() {
+        let cfg = mcp_session_config(&resolve_stavebak_mcp_target(None, false));
+        let servers = cfg["mcpServers"].as_object().unwrap();
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers["stavebak"]["url"], STAVEBAK_MCP_PROD);
+        assert_eq!(servers["stavebak"]["type"], "http");
+    }
+}
 
 fn safe_stdin_for_path(id: &str) -> String {
     id.chars()
@@ -1728,18 +1774,17 @@ async fn start_claude_session(
         // Skip global MCP servers from ~/.claude.json to avoid slow cold start.
         // MCP servers (chrome-devtools, codex, gemini, pencil etc.) add 20-30s startup
         // overhead as each must initialize before the CLI accepts input.
-        // Phase 4 §5.4 (S10): pair with a per-session scratch config so the
-        // user's configured servers remain available (see below).
+        // Phase 4 §5.4 (S10): paired with a per-session scratch config that
+        // carries the Stavebák server (see below).
         "--strict-mcp-config".to_string(),
     ];
 
     // Phase 4 §5.4 (S10): build a per-session MCP scratch config file.
     // The CLI is spawned with --strict-mcp-config to exclude global MCP
     // servers from ~/.claude.json (they'd slow cold start by 20-30 seconds).
-    // BUT users also need their explicitly-configured MCP servers available
-    // inside the session. Solution: write the mcpServers block from
-    // ~/.claude.json into a scratch file at ~/.stavebak/mcp-session-<id>.json
-    // and pass it via --mcp-config. Cleaned up on process exit.
+    // The session gets only the Stavebák server, from the app's own target
+    // (see stavebak_mcp_target), in ~/.stavebak/mcp-session-<id>.json via
+    // --mcp-config. Cleaned up on process exit.
     perf!("args_built");
     let mcp_scratch_path = build_mcp_scratch_config(&session_id);
     perf!("mcp_scratch");
@@ -8125,6 +8170,7 @@ pub fn run() {
             get_file_size,
             check_file_access,
             get_home_dir,
+            get_stavebak_mcp,
             read_file_base64,
             list_slash_commands,
             list_skills,
