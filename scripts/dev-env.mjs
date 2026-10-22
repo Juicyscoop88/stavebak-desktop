@@ -1,8 +1,11 @@
 #!/usr/bin/env node
-// Local dev environment for desktop + Stavebák MCP. Safe to run any time (idempotent).
-//   node scripts/dev-env.mjs up      start local MCP server if needed, point `stavebak` at it
-//   node scripts/dev-env.mjs status  what is running and where `stavebak` points
-//   node scripts/dev-env.mjs down    point `stavebak` back at production, stop the local server
+// Local Stavebák MCP server for development. Safe to run any time (idempotent).
+//   node scripts/dev-env.mjs up      start the local MCP server (localhost:3535) if not running
+//   node scripts/dev-env.mjs status  is it running
+//   node scripts/dev-env.mjs down    stop it
+// Nothing is switched: a dev build of the app (`pnpm tauri dev`) always talks to the local server,
+// a release build to production, STAVEBAK_MCP_URL overrides both (see stavebak_mcp_target in lib.rs).
+// The user's ~/.claude.json is never touched.
 import { spawn, execSync } from 'node:child_process';
 import { openSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -11,12 +14,10 @@ import { join } from 'node:path';
 const SERVER_REPO = join(homedir(), 'Projects', 'stavebak.cz');
 const HEALTH = 'http://localhost:3535/health';
 const LOG = '/tmp/stavebak-mcp.log';
-const TARGET = join(import.meta.dirname, 'mcp-target.mjs');
 
 const healthy = async () => {
   try { return (await fetch(HEALTH, { signal: AbortSignal.timeout(2000) })).ok; } catch { return false; }
 };
-const target = (arg) => execSync(`node "${TARGET}" ${arg}`, { encoding: 'utf8' }).trim();
 const pid = () => {
   try { return execSync('lsof -ti tcp:3535 -sTCP:LISTEN', { encoding: 'utf8' }).trim() || null; } catch { return null; }
 };
@@ -37,14 +38,11 @@ if (cmd === 'up') {
   } else {
     console.log('local server already running');
   }
-  console.log(target('local'));
 } else if (cmd === 'down') {
-  console.log(target('prod'));
   const p = pid();
   if (p) { execSync(`kill ${p}`); console.log('local server stopped'); }
 } else if (cmd === 'status') {
   console.log(`local server: ${(await healthy()) ? `running (pid ${pid()}, log ${LOG})` : 'not running'}`);
-  console.log(target('status'));
 } else {
   console.error('Usage: node scripts/dev-env.mjs up|status|down');
   process.exit(1);

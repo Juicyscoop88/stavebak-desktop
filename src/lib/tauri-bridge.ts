@@ -304,6 +304,10 @@ export const bridge = {
   getHomeDir: () =>
     invoke<string>('get_home_dir'),
 
+  /** Stavebák MCP server this build talks to (release = prod, dev = local, STAVEBAK_MCP_URL overrides). */
+  getStavebakMcp: () =>
+    invoke<{ url: string; env: 'prod' | 'local' | 'custom' }>('get_stavebak_mcp'),
+
   exportSessionMarkdown: (path: string, outputPath: string, conversationOnly = false) =>
     invoke<void>('export_session_markdown', { path, outputPath, conversationOnly }),
 
