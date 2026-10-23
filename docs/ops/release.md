@@ -18,6 +18,7 @@ Dependabot (`.github/dependabot.yml`) jednou týdně otevírá seskupené PR pro
 Workflow `Release` (`.github/workflows/release.yml`) spouští push tagu `v*`. Sestaví aplikaci a založí **draft** release s artefakty. Nic se nepublikuje samo.
 
 1. Na větvi `release/vX.Y.Z`: `./scripts/bump-version.sh X.Y.Z` (mění `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`), PR, squash merge.
+1a. **Pořadí:** nejdřív lokálně macOS (`UPDATER=1 scripts/release-macos-local.sh`) a `gh release create vX.Y.Z --draft dist-release/vX.Y.Z/*`, teprve potom tag. CI staví jen Windows (nepodepsaný, dokud není `AZURE_SIGNING_ACCOUNT`) a do existujícího `latest.json` v draftu doplní `windows-x86_64` (`scripts/merge-updater-windows.mjs`). Bez draftu s macOS vznikne `latest.json` jen s Windows.
 2. Tag na `main`: `git tag vX.Y.Z origin/main && git push origin vX.Y.Z`.
 3. Schválit job v environmentu `release`, počkat na workflow, stáhnout artefakty z draftu a vyzkoušet instalaci na čistém Macu a Windows.
 4. Publikovat draft. Teprve tím se release stane `latest` a updater v aplikacích ho uvidí (`releases/latest/download/latest.json`).
