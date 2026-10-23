@@ -25,6 +25,8 @@ Workflow `Release` (`.github/workflows/release.yml`) spouští push tagu `v*`. S
 
 Release se dělá jen na výslovný pokyn.
 
+**Číslo verze musí být vyšší než 0.12.0.** Na originu zůstaly tagy `v0.1.0` až `v0.12.0` z historie forku (TOKENICODE) a ukazují na staré commity. Nový release se stejným číslem nejde založit (tag už existuje) a vydané v0.1.0 a v0.2.0 mají kvůli tomu zdrojový odkaz na starý kód (soubory ke stažení jsou správné). První release našeho řádu je proto v0.13.0. Před bumpem ověřit `git ls-remote --tags origin vX.Y.Z`.
+
 ## Rollback
 
 Updater instaluje jen vyšší verzi, než je nainstalovaná. Z toho plyne:
