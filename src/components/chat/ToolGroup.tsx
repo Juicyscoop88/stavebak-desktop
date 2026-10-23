@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { type ChatMessage } from '../../stores/chatStore';
 import { ToolUseMsg } from './MessageBubble';
 import { useT } from '../../lib/i18n';
+import { stavebakToolTitle } from '../../lib/tool-titles';
 import { CaretRight, Check, Stack } from '@phosphor-icons/react';
 
 interface Props {
@@ -12,7 +13,7 @@ interface Props {
 function buildToolSummary(messages: ChatMessage[]): string {
   const counts: Record<string, number> = {};
   for (const m of messages) {
-    const name = m.toolName || 'Tool';
+    const name = stavebakToolTitle(m.toolName || '') ?? (m.toolName || 'Tool');
     counts[name] = (counts[name] || 0) + 1;
   }
   return Object.entries(counts)

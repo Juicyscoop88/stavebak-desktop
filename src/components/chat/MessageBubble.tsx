@@ -1,4 +1,5 @@
 import { memo, useState, useCallback, type ReactNode } from 'react';
+import { stavebakToolTitle, useToolTitles } from '../../lib/tool-titles';
 import { type ChatMessage, useActiveTab } from '../../stores/chatStore';
 import { useFileStore } from '../../stores/fileStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -509,7 +510,7 @@ function getToolLabel(name: string, t: (key: string) => string): string {
     case 'TodoWrite': return t('msg.todo');
     case 'WebFetch': case 'WebSearch': return t('msg.webFetch');
     case 'ExitPlanMode': case 'EnterPlanMode': return t('msg.planLabel');
-    default: return name;
+    default: return stavebakToolTitle(name) ?? name;
   }
 }
 
@@ -517,6 +518,7 @@ export const ToolUseMsg = memo(function ToolUseMsg({ message }: Props) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
   const toolName = message.toolName || 'Tool';
+  useToolTitles((s) => s.titles); // překreslit, až se načtou české názvy nástrojů Stavebáku
   const label = getToolLabel(toolName, t);
   const input = message.toolInput;
 
