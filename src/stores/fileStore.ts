@@ -148,7 +148,8 @@ export const useFileStore = create<FileState>()((set, get) => ({
     if (selectedFile === path) {
       set({ selectedFile: null, fileContent: null, isLoadingContent: false, editContent: null, revealTarget: null });
     } else {
-      set({ selectedFile: path, fileContent: null, isLoadingContent: true, previewMode: 'preview', editContent: null, revealTarget: path });
+      const defaultMode = 'preview' as PreviewMode;
+      set({ selectedFile: path, fileContent: null, isLoadingContent: true, previewMode: defaultMode, editContent: null, revealTarget: path });
 
       // Binary-preview files: skip text reading, render with file:// URL in FilePreview
       const ext = path.split('.').pop()?.toLowerCase() || '';
@@ -156,7 +157,14 @@ export const useFileStore = create<FileState>()((set, get) => ({
         'png','jpg','jpeg','gif','webp','bmp','ico',
         'pdf','mp4','webm','mov','avi',
         'mp3','wav','ogg','aac','m4a',
+        'dxf', // can be tens of MB; the viewer fetches the data URL itself
       ]);
+
+      // Converted for preview (DwgPreview): nothing to read here
+      if (ext === 'dwg') {
+        set({ fileContent: null, isLoadingContent: false });
+        return;
+      }
 
       if (BINARY_PREVIEW.has(ext)) {
         // Load binary files as base64 data URL for rendering in webview
@@ -206,7 +214,7 @@ export const useFileStore = create<FileState>()((set, get) => ({
 
   clearSelection: () => set({ selectedFile: null, fileContent: null, isLoadingContent: false, editContent: null }),
 
-  closePreview: () => set({ selectedFile: null, fileContent: null, isLoadingContent: false, editContent: null }),
+  closePreview: () => set({ selectedFile: null, fileContent: null, isLoadingContent: false, editContent: null, revealTarget: null }),
 
   setPreviewMode: (mode: PreviewMode) => {
     const state = get();

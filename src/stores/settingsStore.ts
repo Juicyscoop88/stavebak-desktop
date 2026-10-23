@@ -10,6 +10,8 @@ export type SecondaryPanelTab = 'files' | 'skills';
 /** Active panel IDs for the plugin panel system (ADR-0002) */
 export type PanelId = string | null;
 export type ModelId =
+  | 'opus'
+  | 'sonnet'
   | 'claude-fable-5'
   | 'claude-fable-5-1m'
   | 'claude-opus-4-8'
@@ -36,19 +38,17 @@ export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high' | 'max';
 
 // --- Model options (display mapping) ---
 
-// UI display rule: each Opus generation exposes a standard (200K) and a 1M
-// variant so users can pick the larger context window explicitly. The 1M id is
-// translated to the CLI's `[1m]` model name in api-provider.ts (CLI_MODEL_MAP).
+// CLI aliases: the CLI resolves `opus` / `sonnet` to the newest model the
+// user's subscription offers, so a retired model id never breaks the chat.
 export const MODEL_OPTIONS: { id: ModelId; label: string; short: string }[] = [
-  { id: 'claude-fable-5', label: 'Fable 5', short: 'Fable 5' },
-  { id: 'claude-fable-5-1m', label: 'Fable 5 (1M)', short: 'Fable 5 (1M)' },
-  { id: 'claude-opus-4-8', label: 'Opus 4.8', short: 'Opus 4.8' },
-  { id: 'claude-opus-4-8-1m', label: 'Opus 4.8 (1M)', short: 'Opus 4.8 (1M)' },
-  { id: 'claude-opus-4-6', label: 'Opus 4.6', short: 'Opus 4.6' },
-  { id: 'claude-opus-4-6-1m', label: 'Opus 4.6 (1M)', short: 'Opus 4.6 (1M)' },
-  { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', short: 'Sonnet 4.6' },
-  { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5', short: 'Haiku 4.5' },
+  { id: 'sonnet', label: 'Sonnet', short: 'Sonnet' },
+  { id: 'opus', label: 'Opus', short: 'Opus' },
 ];
+
+/** Map any stored model id (pinned version or alias) to a CLI alias. */
+export function toModelAlias(model: string | undefined): ModelId {
+  return model && /opus|fable/.test(model) ? 'opus' : 'sonnet';
+}
 
 // --- Store State & Actions ---
 
@@ -109,6 +109,14 @@ interface SettingsState {
   setSecondaryTab: (tab: SecondaryPanelTab) => void;
   setSecondaryPanelWidth: (width: number) => void;
   toggleSettings: () => void;
+  /** Last opened project folder — reopened on launch */
+  lastProject: string;
+  /** Stavebák's own project list, most recent first (not Claude Code's whole history) */
+  projects: string[];
+  /** Where new projects go, set only when the user picks a folder ("Změnit"); empty = ~/Documents/Stavebák */
+  projectsDir: string;
+  setProjectsDir: (dir: string) => void;
+  removeProject: (dir: string) => void;
   setWorkingDirectory: (dir: string) => void;
   setSelectedModel: (model: string) => void;
   setSessionMode: (mode: SessionMode) => void;
@@ -154,10 +162,13 @@ export const useSettingsStore = create<SettingsState>()(
       settingsOpen: false,
       agentPanelOpen: false,
       workingDirectory: '',
-      selectedModel: 'claude-sonnet-4-6',
+      lastProject: '',
+      projects: [],
+      projectsDir: '',
+      selectedModel: 'sonnet',
       sessionMode: 'bypass',
       locale: 'cs',
-      fontSize: 18,
+      fontSize: 16,
       sidebarWidth: 280,
       setupCompleted: false,
       thinkingLevel: 'medium' as ThinkingLevel,
@@ -208,14 +219,20 @@ export const useSettingsStore = create<SettingsState>()(
           ...(!state.settingsOpen && state.updateAvailable ? { updateAvailable: false } : {}),
         })),
 
+      setProjectsDir: (dir) => set({ projectsDir: dir }),
+
       setWorkingDirectory: (dir) => {
-        set(() => ({ workingDirectory: dir }));
+        set((state) => (dir
+          ? { workingDirectory: dir, lastProject: dir, projects: [dir, ...state.projects.filter((p) => p !== dir)] }
+          : { workingDirectory: dir }));
         if (dir) {
           import('@tauri-apps/api/core').then(({ invoke }) => {
             invoke('ensure_claude_md', { path: dir }).catch(() => {});
           });
         }
       },
+
+      removeProject: (dir) => set((state) => ({ projects: state.projects.filter((p) => p !== dir) })),
 
       setSelectedModel: (model) => {
         const old = get().selectedModel;
@@ -285,7 +302,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'stavebak-settings',
-      version: 9,
+      version: 11,
       migrate: (persistedState: unknown, version: number) => {
         const persisted = persistedState as Record<string, unknown>;
         if (version === 0) {
@@ -349,6 +366,15 @@ export const useSettingsStore = create<SettingsState>()(
           persisted.leftPanelId = 'files';
           persisted.rightPanelId = null;
         }
+        if (version < 10) {
+          // Root font size drives Tailwind spacing (rem). The old 18px default
+          // inflated every gap by 12.5%; reset only that untouched default.
+          if (persisted.fontSize === 18) persisted.fontSize = 16;
+        }
+        if (version < 11) {
+          // Pinned model ids (claude-sonnet-4-6…) → CLI aliases.
+          persisted.selectedModel = toModelAlias(persisted.selectedModel as string);
+        }
         return persisted;
       },
       partialize: (state) => ({
@@ -356,7 +382,10 @@ export const useSettingsStore = create<SettingsState>()(
         colorTheme: state.colorTheme,
         sidebarOpen: state.sidebarOpen,
         secondaryPanelWidth: state.secondaryPanelWidth,
-        // workingDirectory intentionally NOT persisted — app starts at WelcomeScreen
+        // workingDirectory itself isn't persisted; launch reopens lastProject via openProject()
+        lastProject: state.lastProject,
+        projects: state.projects,
+        projectsDir: state.projectsDir,
         selectedModel: state.selectedModel,
         sessionMode: state.sessionMode,
         locale: state.locale,

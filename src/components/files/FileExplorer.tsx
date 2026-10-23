@@ -22,8 +22,8 @@ function getChangeBadge(kind: FileChangeKind | undefined) {
   };
   const labels = { created: 'A', modified: 'M', removed: 'D' };
   return (
-    <span className={`ml-auto flex-shrink-0 w-4 h-4 rounded text-[9px]
-      font-bold text-text-inverse flex items-center justify-center ${colors[kind]}`}>
+    <span className={`ml-auto flex-shrink-0 w-4 h-4 rounded text-2xs
+      font-semibold text-text-inverse flex items-center justify-center ${colors[kind]}`}>
       {labels[kind]}
     </span>
   );
@@ -313,8 +313,8 @@ function TreeNode({
           onContextMenu(e, node.path, node.is_dir);
         }}
         {...(node.is_dir ? { 'data-dir-path': node.path } : {})}
-        className={`w-full flex items-center gap-2.5 py-2 px-2.5 rounded-lg
-          text-left text-xs group
+        className={`w-full flex items-center gap-2 py-1 px-2.5 rounded-md
+          text-left text-sm leading-5 group
           ${isActive
             ? 'bg-accent/10 text-accent'
             : changeKind

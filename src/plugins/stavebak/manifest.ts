@@ -7,6 +7,27 @@ export const manifest: PluginManifest = {
 
   panels: [
     {
+      id: 'stav-new-project',
+      label: 'Nový projekt',
+      slot: 'new-project',
+      priority: 100,
+      component: () => import('./NewProjectForm'),
+    },
+    {
+      id: 'stav-chat-empty',
+      label: 'Začátek projektu',
+      slot: 'chat-empty',
+      priority: 100,
+      component: () => import('./ChatEmptyState'),
+    },
+    {
+      id: 'stav-overview-card',
+      label: 'Přehled projektu',
+      slot: 'sidebar-top',
+      priority: 100,
+      component: () => import('./ProjectOverviewCard'),
+    },
+    {
       id: 'stav-documents',
       label: 'Dokumenty',
       icon: 'file-text',
@@ -38,8 +59,16 @@ export const manifest: PluginManifest = {
       icon: 'phone',
       slot: 'left',
       priority: 20,
-      requiredTools: ['get_sluzby'],
+      requiredTools: ['find_suppliers'],
       component: () => import('./panels/ServicesPanel'),
     },
+  ],
+
+  fileConverters: [
+    { from: 'dwg', to: 'dxf', convert: (path) => import('./store').then((m) => m.convertDwg(path)) },
+  ],
+
+  fileRenderers: [
+    { fileName: 'stavebak.json', component: () => import('./ProjectOverview') },
   ],
 }

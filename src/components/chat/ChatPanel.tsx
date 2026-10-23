@@ -4,20 +4,18 @@ import { create } from 'zustand';
 import { useChatStore, useActiveTab, type ChatMessage } from '../../stores/chatStore';
 import { MessageBubble } from './MessageBubble';
 import { ToolGroup } from './ToolGroup';
+import { ConversationMenu } from './ConversationMenu';
+import { PluginSlotStack } from '../layout/PluginComponents';
+import { openProject } from '../../lib/conversations';
+import { useNewProjectStore } from '../../stores/newProjectStore';
 import { UpdateButton } from '../shared/UpdateButton';
-import { useSettingsStore, mapSessionModeToPermissionMode } from '../../stores/settingsStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useFileStore } from '../../stores/fileStore';
-// bridge import removed — spawn goes through sessionLifecycle module
 import { open } from '@tauri-apps/plugin-dialog';
-import { invoke } from '@tauri-apps/api/core';
 import { useT } from '../../lib/i18n';
-import { envFingerprint, is1MModel as isOneMillionModel, resolveModelForProvider, spawnConfigHash } from '../../lib/api-provider';
-import { useProviderStore } from '../../stores/providerStore';
-import { spawnSession } from '../../lib/sessionLifecycle';
+import { is1MModel as isOneMillionModel, resolveModelForProvider } from '../../lib/api-provider';
 import { MarkdownRenderer } from '../shared/MarkdownRenderer';
-import { useSetupStore } from '../../stores/setupStore';
-import { AiAvatar } from '../shared/AiAvatar';
 import { useFindInPage } from '../../hooks/useFindInPage';
 import { FindBar } from './FindBar';
 import { formatElapsedCompact } from '../../lib/elapsed-time';
@@ -436,26 +434,34 @@ export function ChatPanel() {
       {/* Title bar spacer — 28px for macOS traffic lights */}
       <div className="h-[28px] flex-shrink-0" />
 
-      {/* Header row — project name + status */}
+      {/* Header row — conversation title aligned to the message column (px-5, max-w-2xl) */}
       <div
-        className="flex items-center h-[36px] pl-3.5 pr-5 border-b border-border-subtle
+        className="relative flex items-center h-[36px] pl-3.5 pr-5 border-b border-border-subtle
         flex-shrink-0 bg-bg-chat cursor-default">
         {(!sidebarOpen || isFilePreviewMode) && (
           <button onClick={toggleSidebar}
-            className="p-1 rounded-lg hover:bg-bg-tertiary text-text-tertiary
+            className="relative z-10 p-1 rounded-lg hover:bg-bg-tertiary text-text-tertiary
               transition-smooth mr-2" title={t('chat.showSidebar')}>
             <List size={14} weight="light" />
           </button>
         )}
-        {workingDirectory && sessionStatus !== 'idle' && (
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 transition-smooth
-            ${sessionStatus === 'running'
-              ? 'bg-success shadow-[0_0_6px_var(--color-accent-glow)] animate-pulse-soft'
-              : sessionStatus === 'error'
-                ? 'bg-error'
-                : 'bg-transparent'}`} />
-        )}
-        <div className="ml-auto flex items-center">
+        <div className="absolute inset-0 px-5 flex items-center pointer-events-none">
+          {/* When the sidebar toggle is shown, keep clear of it if the column reaches the edge */}
+          <div className={`relative flex items-center pointer-events-auto ${(!sidebarOpen || isFilePreviewMode)
+            ? 'ml-[max(24px,calc((100%-42rem)/2))] w-[min(42rem,calc(100%-max(24px,calc((100%-42rem)/2))))]'
+            : 'w-full max-w-2xl mx-auto'}`}>
+            {workingDirectory && sessionStatus !== 'idle' && (
+              <span className={`absolute -left-3 w-1.5 h-1.5 rounded-full shrink-0
+                ${sessionStatus === 'running'
+                  ? 'bg-success'
+                  : sessionStatus === 'error'
+                    ? 'bg-error'
+                    : 'bg-transparent'}`} />
+            )}
+            <ConversationMenu />
+          </div>
+        </div>
+        <div className="relative z-10 ml-auto flex items-center">
           <UpdateButton />
         </div>
       </div>
@@ -489,7 +495,7 @@ export function ChatPanel() {
         {!workingDirectory && messages.length === 0 && !isStreaming ? (
           <WelcomeScreen />
         ) : messages.length === 0 && !isStreaming ? (
-          <EmptyReadyState />
+          <PluginSlotStack slot="chat-empty" fallback={<EmptyReadyState />} />
         ) : (
           <div className="max-w-2xl mx-auto">
             {displayItems.map((item, displayIdx) => {
@@ -588,9 +594,9 @@ export function ChatPanel() {
               return (
               <div className="flex gap-3 mt-2">
                 {showStreamAvatar ? (
-                  <div className="w-8 h-8 rounded-[10px] bg-accent
+                  <div className="w-8 h-8 rounded-lg bg-accent
                     flex items-center justify-center flex-shrink-0 text-text-inverse
-                    text-xs font-bold shadow-md mt-0.5">C</div>
+                    text-xs font-semibold shadow-md mt-0.5">C</div>
                 ) : (
                   <div className="w-8 flex-shrink-0" />
                 )}
@@ -685,249 +691,58 @@ export function ChatPanel() {
   );
 }
 
-/** Start a new draft conversation for the given folder and pre-warm the CLI process */
-async function startDraftSession(folderPath: string) {
-  useSettingsStore.getState().setWorkingDirectory(folderPath);
-  const currentTab = useSessionStore.getState().selectedSessionId;
-  if (currentTab) useChatStore.getState().resetTab(currentTab);
-
-  // Reuse existing draft tab if one is already selected, otherwise create a new one
-  const currentTabId = useSessionStore.getState().selectedSessionId;
-  const currentSession = useSessionStore.getState().sessions.find(
-    (s) => s.id === currentTabId,
-  );
-  let draftId: string;
-  if (currentSession && currentSession.path === '') {
-    // Reuse the existing draft — just update its project info
-    draftId = currentSession.id;
-    useSessionStore.getState().updateDraftProject(draftId, folderPath);
-  } else {
-    // No draft selected — create a new one
-    draftId = `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    useSessionStore.getState().addDraftSession(draftId, folderPath);
-  }
-
-  // Pre-warm: spawn CLI process in background so first message is fast.
-  // Send empty prompt — Rust will skip the NDJSON send.
-  const preWarmId = `desk_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  try {
-    const settings = useSettingsStore.getState();
-    const model = resolveModelForProvider(settings.selectedModel);
-    const providerId = useProviderStore.getState().activeProviderId || '';
-    const permissionMode = mapSessionModeToPermissionMode(settings.sessionMode);
-
-    // Ensure tab exists before writing sessionMeta
-    useChatStore.getState().ensureTab(draftId);
-    useChatStore.getState().setSessionMeta(draftId, {
-      stdinReady: false,
-      pendingReadyMessage: undefined,
-    });
-
-    // Phase 2 §2.1: capture spawn-time fingerprint and config hash BEFORE
-    // the async spawn so they reflect the config actually used, not whatever
-    // the user might change while the spawn is in flight.
-    const preEnvFingerprint = envFingerprint();
-    const preSpawnConfigHash = spawnConfigHash();
-
-    // Use lifecycle module for unified spawn
-    const spawnResult = await spawnSession({
-      tabId: draftId,
-      stdinId: preWarmId,
-      cwdSnapshot: folderPath,
-      configSnapshot: {
-        model,
-        providerId,
-        thinkingLevel: settings.thinkingLevel,
-        permissionMode,
-      },
-      sessionModeSnapshot: settings.sessionMode,
-      sessionParams: {
-        prompt: '',  // empty = pre-warm, no message sent
-        cwd: folderPath,
-        model,
-        session_id: preWarmId,
-        thinking_level: settings.thinkingLevel,
-        provider_id: providerId || undefined,
-        permission_mode: permissionMode,
-      },
-      onStream: (msg: any) => {
-        // Forward to InputBar's handler via a global
-        const handler = (window as any).__claudeStreamHandler;
-        if (handler) {
-          const queue: any[] = (window as any).__claudeStreamQueue;
-          if (queue && queue.length > 0) {
-            const pending = queue.splice(0);
-            for (const queued of pending) handler(queued);
-          }
-          handler(msg);
-        } else {
-          if (!(window as any).__claudeStreamQueue) (window as any).__claudeStreamQueue = [];
-          (window as any).__claudeStreamQueue.push(msg);
-        }
-      },
-      onStderr: (line: string) => {
-        console.warn('[Stavebak] pre-warm stderr:', line);
-      },
-      setRunning: false,
-    });
-
-    // Write additional meta (uses pre-captured values to avoid race)
-    useChatStore.getState().setSessionMeta(draftId, {
-      sessionId: spawnResult.sessionInfo.cli_session_id ?? undefined,
-      envFingerprint: preEnvFingerprint,
-      spawnedModel: model,
-      stdinReady: false,
-      pendingReadyMessage: undefined,
-      // Phase 2 §2.1: lock in the pre-warm spawn config hash so the first
-      // real user submit can detect drift correctly.
-      // Uses pre-computed value captured before async spawn to avoid
-      // race with user config changes during the spawn window.
-      spawnConfigHash: preSpawnConfigHash,
-    });
-  } catch {
-    // Pre-warm failed — InputBar will spawn on first message instead
-  }
-}
-
 /** Welcome screen shown when no project folder is selected */
 function WelcomeScreen() {
   const t = useT();
-  const fetchProjects = useFileStore((s) => s.fetchRecentProjects);
-  const [newProjectMode, setNewProjectMode] = useState(false);
-  const [parentDir, setParentDir] = useState<string | null>(null);
-  const [projectName, setProjectName] = useState('');
-  const [creating, setCreating] = useState(false);
-  const nameInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    useSettingsStore.getState().setSetupCompleted(false);
-    useSetupStore.getState().reset();
-    fetchProjects();
-  }, []);
+  const projects = useSettingsStore((s) => s.projects);
 
   const handlePickFolder = useCallback(async () => {
-    const selected = await open({
-      directory: true,
-      multiple: false,
-      title: t('project.selectFolder'),
-    });
-    if (selected) {
-      startDraftSession(selected as string);
-    }
+    const selected = await open({ directory: true, multiple: false, title: t('project.selectFolder') });
+    if (selected) openProject(selected as string);
   }, [t]);
 
-  const handleNewProjectStart = useCallback(async () => {
-    const dir = await open({
-      directory: true,
-      multiple: false,
-      title: t('welcome.pickParentDir'),
-    });
-    if (dir) {
-      setParentDir(dir as string);
-      setNewProjectMode(true);
-      setProjectName('');
-      setTimeout(() => nameInputRef.current?.focus(), 50);
-    }
-  }, [t]);
-
-  const handleCreateProject = useCallback(async () => {
-    if (!parentDir || !projectName.trim()) return;
-    const sep = parentDir.endsWith('/') ? '' : '/';
-    const fullPath = `${parentDir}${sep}${projectName.trim()}`;
-    setCreating(true);
-    try {
-      await invoke('create_project_directory', { path: fullPath });
-      startDraftSession(fullPath);
-    } catch (e) {
-      console.error('Failed to create project directory:', e);
-      setCreating(false);
-    }
-  }, [parentDir, projectName]);
-
-  const handleCancelNew = useCallback(() => {
-    setNewProjectMode(false);
-    setParentDir(null);
-    setProjectName('');
-  }, []);
+  const shortPath = (p: string) => p.replace(/^\/Users\/[^/]+/, '~').replace(/\/[^/]+$/, '');
+  const recent = projects.slice(0, 6);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full text-center">
-      <AiAvatar size="w-20 h-20" rounded="rounded-3xl" className="mb-6" />
-      <h2 className="text-xl font-semibold text-text-primary mb-2">
-        {t('chat.welcome')}
-      </h2>
-      <p className="text-sm text-text-primary max-w-sm leading-relaxed mb-6">
-        {t('welcome.subtitle')}
-      </p>
+    <div className="flex items-center justify-center h-full">
+      <div className="w-full max-w-sm">
+        <h2 className="text-lg font-medium text-text-primary mb-5">Na čem dnes pracujete?</h2>
 
-      {newProjectMode ? (
-        <div className="animate-scale-in flex flex-col items-center gap-3 w-full max-w-xs">
-          <p className="text-xs text-text-muted truncate max-w-full">{parentDir}</p>
-          <div className="flex w-full gap-2">
-            <input
-              ref={nameInputRef}
-              type="text"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleCreateProject(); if (e.key === 'Escape') handleCancelNew(); }}
-              placeholder={t('welcome.projectNamePlaceholder')}
-              className="flex-1 px-3 py-2 rounded-xl text-sm
-                bg-white/10 border border-white/[0.08]
-                text-text-primary placeholder:text-text-quaternary
-                focus:border-accent/50 focus:outline-none
-                transition-all duration-200"
-              disabled={creating}
-            />
+        {recent.length > 0 && (
+          <div className="mb-4 -mx-3">
+            {recent.map((path) => (
+              <button
+                key={path}
+                onClick={() => openProject(path)}
+                className="flex items-baseline gap-3 w-full px-3 py-2 rounded-lg text-left hover:bg-bg-secondary cursor-pointer"
+              >
+                <span className="text-sm text-text-primary truncate">{path.split(/[\\/]/).pop()}</span>
+                <span className="ml-auto text-xs text-text-tertiary truncate">{shortPath(path)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className={`flex flex-col -mx-3 ${recent.length > 0 ? 'pt-3 border-t border-border-subtle' : ''}`}>
             <button
-              onClick={handleCreateProject}
-              disabled={!projectName.trim() || creating}
-              className="px-4 py-2 rounded-xl text-sm font-medium
-                bg-accent text-white
-                hover:bg-accent-hover active:scale-[0.97]
-                disabled:opacity-40 disabled:pointer-events-none
-                transition-all duration-200 ease-out"
+              onClick={handlePickFolder}
+              className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-text-muted
+                hover:bg-bg-secondary hover:text-text-primary cursor-pointer text-left"
             >
-              {creating ? '...' : t('welcome.create')}
+              <Folder size={14} weight="light" />
+              {t('sidebar.openFolder')}…
+            </button>
+            <button
+              onClick={() => useNewProjectStore.getState().show()}
+              className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-text-muted
+                hover:bg-bg-secondary hover:text-text-primary cursor-pointer text-left"
+            >
+              <Plus size={14} weight="light" />
+              {t('welcome.newProject')}…
             </button>
           </div>
-          <button
-            onClick={handleCancelNew}
-            className="text-xs text-text-quaternary hover:text-text-muted transition-colors"
-          >
-            {t('welcome.cancel')}
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-4 mb-8 animate-scale-in">
-          <button
-            onClick={handlePickFolder}
-            className="group px-5 py-2.5 rounded-xl text-sm font-medium
-              bg-white/10 backdrop-blur-md
-              border border-white/[0.08]
-              text-text-primary
-              hover:bg-white/[0.15] hover:border-white/[0.15]
-              active:scale-[0.97]
-              transition-all duration-200 ease-out
-              flex items-center gap-2"
-          >
-            <Folder size={15} weight="light" className="opacity-50 group-hover:opacity-80 transition-opacity" />
-            {t('welcome.newChat')}
-          </button>
-          <button
-            onClick={handleNewProjectStart}
-            className="group px-5 py-2.5 rounded-xl text-sm font-medium
-              text-text-muted
-              hover:text-text-primary hover:bg-white/[0.06]
-              active:scale-[0.97]
-              transition-all duration-200 ease-out
-              flex items-center gap-2"
-          >
-            <Plus size={15} weight="light" className="opacity-40 group-hover:opacity-70 transition-opacity" />
-            {t('welcome.newProject')}
-          </button>
-        </div>
-      )}
-
+      </div>
     </div>
   );
 }

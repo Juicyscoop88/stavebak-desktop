@@ -5,6 +5,8 @@ pub mod env_manager;
 mod events;
 pub mod path_access;
 mod protocol;
+#[cfg(debug_assertions)]
+mod test_harness;
 // windows_ps compiles on all platforms so its pure-logic tests run on
 // non-Windows CI; it is only *invoked* from `#[cfg(target_os = "windows")]`
 // code paths.
@@ -1603,48 +1605,104 @@ fn strip_thinking_from_value(value: &mut serde_json::Value) -> Option<usize> {
     }
 }
 
-/// Phase 4 §5.4 (S10): write a per-session MCP config scratch file so the
-/// CLI's `--strict-mcp-config` doesn't strip the user's configured servers.
+/// Which Stavebák MCP server this build talks to. The app owns this choice and never
+/// reads or writes the user's `~/.claude.json` for it (a designer may run their own
+/// Claude Code with their own config).
 ///
-/// Reads `~/.claude.json`, extracts the `mcpServers` object, and writes
-/// `{"mcpServers": {...}}` into `~/.stavebak/mcp-session-<stdin_id>.json`.
-/// Returns `None` when there are no servers to carry over (or on I/O error).
-fn build_mcp_scratch_config(_stdin_id: &str) -> Option<std::path::PathBuf> {
-    let home = dirs::home_dir()?;
-    let claude_json = home.join(".claude.json");
-    let raw = std::fs::read_to_string(&claude_json).ok()?;
-    let value: serde_json::Value = serde_json::from_str(&raw).ok()?;
+/// Order: `STAVEBAK_MCP_URL` env (any build) > debug build = local dev server >
+/// release build = production. The model and the UI panels both use this one target,
+/// so they always talk to the same server.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct StavebakMcpTarget {
+    pub url: String,
+    /// "prod", "local" or "custom" (shown as a badge in the UI when not prod)
+    pub env: &'static str,
+}
 
-    // Tolerate the double-nested mcpServers.mcpServers shape the frontend
-    // already auto-fixes; prefer the outer layer when present.
-    let mut servers = value
-        .get("mcpServers")
-        .cloned()
-        .unwrap_or(serde_json::Value::Object(Default::default()));
-    if let Some(inner) = servers.get("mcpServers").cloned() {
-        if inner.is_object() {
-            servers = inner;
+const STAVEBAK_MCP_PROD: &str = "https://stavebak.cz/mcp";
+const STAVEBAK_MCP_LOCAL: &str = "http://localhost:3535/mcp";
+
+fn stavebak_mcp_target() -> StavebakMcpTarget {
+    resolve_stavebak_mcp_target(std::env::var("STAVEBAK_MCP_URL").ok(), cfg!(debug_assertions))
+}
+
+fn resolve_stavebak_mcp_target(env_url: Option<String>, debug: bool) -> StavebakMcpTarget {
+    match env_url.map(|u| u.trim().to_string()).filter(|u| !u.is_empty()) {
+        Some(url) => {
+            let env = match url.as_str() {
+                STAVEBAK_MCP_PROD => "prod",
+                STAVEBAK_MCP_LOCAL => "local",
+                _ => "custom",
+            };
+            StavebakMcpTarget { url, env }
         }
+        None if debug => StavebakMcpTarget { url: STAVEBAK_MCP_LOCAL.to_string(), env: "local" },
+        None => StavebakMcpTarget { url: STAVEBAK_MCP_PROD.to_string(), env: "prod" },
+    }
+}
+
+#[tauri::command]
+fn get_stavebak_mcp() -> StavebakMcpTarget {
+    stavebak_mcp_target()
+}
+
+/// Phase 4 §5.4 (S10): write a per-session MCP config scratch file for
+/// `--mcp-config`. The CLI runs with `--strict-mcp-config`, so this file is the
+/// only MCP source of the session: just the Stavebák server (OPT-7, other
+/// servers would slow cold start), under the fixed name `stavebak` so tool names
+/// (`mcp__stavebak__*`) are the same against local and production.
+///
+/// Writes `~/.stavebak/mcp-session-<stdin_id>.json`. Returns `None` on I/O error.
+fn build_mcp_scratch_config(stdin_id: &str) -> Option<std::path::PathBuf> {
+    let home = dirs::home_dir()?;
+    let target = stavebak_mcp_target();
+    let dir = home.join(".stavebak");
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join(format!("mcp-session-{}.json", safe_stdin_for_path(stdin_id)));
+    std::fs::write(&path, mcp_session_config(&target).to_string()).ok()?;
+    eprintln!("[Stavebak] MCP: {} ({})", target.url, target.env);
+    Some(path)
+}
+
+fn mcp_session_config(target: &StavebakMcpTarget) -> serde_json::Value {
+    serde_json::json!({ "mcpServers": { STAVEBAK_MCP_SERVER: { "type": "http", "url": target.url } } })
+}
+
+const STAVEBAK_MCP_SERVER: &str = "stavebak";
+
+#[cfg(test)]
+mod stavebak_mcp_target_tests {
+    use super::{mcp_session_config, resolve_stavebak_mcp_target, STAVEBAK_MCP_LOCAL, STAVEBAK_MCP_PROD};
+
+    #[test]
+    fn release_build_talks_to_production() {
+        let t = resolve_stavebak_mcp_target(None, false);
+        assert_eq!((t.url.as_str(), t.env), (STAVEBAK_MCP_PROD, "prod"));
     }
 
-    // No servers → skip --mcp-config entirely (CLI starts faster).
-    let server_map = match &servers {
-        serde_json::Value::Object(m) if m.is_empty() => return None,
-        serde_json::Value::Object(m) => m.clone(),
-        _ => return None,
-    };
+    #[test]
+    fn debug_build_talks_to_local_dev_server() {
+        let t = resolve_stavebak_mcp_target(None, true);
+        assert_eq!((t.url.as_str(), t.env), (STAVEBAK_MCP_LOCAL, "local"));
+    }
 
-    // OPT-7: Don't pass ANY MCP servers in the scratch config.
-    // Even "fast" servers (HTTP, direct binaries) block system:init while
-    // the CLI waits for their handshake. With --strict-mcp-config and no
-    // --mcp-config file, the CLI starts with zero servers and emits
-    // system:init immediately. Servers from ~/.claude.json are loaded
-    // lazily via the CLI's deferred MCP mechanism when the model needs them.
-    eprintln!(
-        "[Stavebak] MCP: all {} servers deferred for instant startup",
-        server_map.len()
-    );
-    None
+    #[test]
+    fn env_overrides_both_builds() {
+        assert_eq!(resolve_stavebak_mcp_target(Some(STAVEBAK_MCP_PROD.into()), true).env, "prod");
+        assert_eq!(resolve_stavebak_mcp_target(Some(STAVEBAK_MCP_LOCAL.into()), false).env, "local");
+        let c = resolve_stavebak_mcp_target(Some(" http://10.0.0.5:3535/mcp ".into()), false);
+        assert_eq!((c.url.as_str(), c.env), ("http://10.0.0.5:3535/mcp", "custom"));
+        assert_eq!(resolve_stavebak_mcp_target(Some("  ".into()), false).env, "prod");
+    }
+
+    #[test]
+    fn session_config_has_only_stavebak_under_fixed_name() {
+        let cfg = mcp_session_config(&resolve_stavebak_mcp_target(None, false));
+        let servers = cfg["mcpServers"].as_object().unwrap();
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers["stavebak"]["url"], STAVEBAK_MCP_PROD);
+        assert_eq!(servers["stavebak"]["type"], "http");
+    }
 }
 
 fn safe_stdin_for_path(id: &str) -> String {
@@ -1716,18 +1774,17 @@ async fn start_claude_session(
         // Skip global MCP servers from ~/.claude.json to avoid slow cold start.
         // MCP servers (chrome-devtools, codex, gemini, pencil etc.) add 20-30s startup
         // overhead as each must initialize before the CLI accepts input.
-        // Phase 4 §5.4 (S10): pair with a per-session scratch config so the
-        // user's configured servers remain available (see below).
+        // Phase 4 §5.4 (S10): paired with a per-session scratch config that
+        // carries the Stavebák server (see below).
         "--strict-mcp-config".to_string(),
     ];
 
     // Phase 4 §5.4 (S10): build a per-session MCP scratch config file.
     // The CLI is spawned with --strict-mcp-config to exclude global MCP
     // servers from ~/.claude.json (they'd slow cold start by 20-30 seconds).
-    // BUT users also need their explicitly-configured MCP servers available
-    // inside the session. Solution: write the mcpServers block from
-    // ~/.claude.json into a scratch file at ~/.stavebak/mcp-session-<id>.json
-    // and pass it via --mcp-config. Cleaned up on process exit.
+    // The session gets only the Stavebák server, from the app's own target
+    // (see stavebak_mcp_target), in ~/.stavebak/mcp-session-<id>.json via
+    // --mcp-config. Cleaned up on process exit.
     perf!("args_built");
     let mcp_scratch_path = build_mcp_scratch_config(&session_id);
     perf!("mcp_scratch");
@@ -2918,7 +2975,8 @@ async fn delete_session(session_id: String, session_path: String) -> Result<(), 
                     canonical
                 ));
             }
-            std::fs::remove_file(&canonical)
+            // To the system Trash like project folders, so a deleted conversation is recoverable
+            trash::delete(&canonical)
                 .map_err(|e| format!("Failed to delete session file: {}", e))?;
         }
     }
@@ -3881,6 +3939,146 @@ async fn read_file_content(
     std::fs::read_to_string(&p).map_err(|e| format!("Cannot read file: {}", e))
 }
 
+/// PUT a project file's bytes to a presigned upload URL (e.g. the one a Stavebák MCP tool returns).
+/// The URL is trusted only as far as scheme: https, or localhost for local development.
+#[tauri::command]
+async fn put_file_to_url(
+    path_access: State<'_, PathAccessManager>,
+    url: String,
+    path: String,
+    headers: std::collections::HashMap<String, String>,
+) -> Result<(), String> {
+    if !url.starts_with("https://") && !url.starts_with("http://localhost") && !url.starts_with("http://127.0.0.1") {
+        return Err("Nahrávací adresa musí být https".to_string());
+    }
+    let p = path_access
+        .validate(std::path::Path::new(&path), None, PathCapability::Read)
+        .await?;
+    let bytes = std::fs::read(&p).map_err(|e| format!("Cannot read file: {}", e))?;
+    let client = build_smart_http_client(
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_secs(300),
+    )
+    .await;
+    let mut req = client.put(&url);
+    for (k, v) in &headers {
+        req = req.header(k.as_str(), v.as_str());
+    }
+    let resp = req
+        .body(bytes)
+        .send()
+        .await
+        .map_err(|e| format!("Nahrání selhalo: {}", e))?;
+    if !resp.status().is_success() {
+        return Err(format!("Nahrání selhalo (HTTP {})", resp.status()));
+    }
+    Ok(())
+}
+
+/// GET a download URL and return the body as a data URL (for previews the webview can't fetch itself).
+/// Limit: 100MB.
+#[tauri::command]
+async fn get_url_as_data_url(url: String, mime: String) -> Result<String, String> {
+    use base64::Engine as _;
+    if !url.starts_with("https://") && !url.starts_with("http://localhost") && !url.starts_with("http://127.0.0.1") {
+        return Err("Adresa ke stažení musí být https".to_string());
+    }
+    let client = build_smart_http_client(
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_secs(120),
+    )
+    .await;
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Stažení selhalo: {}", e))?;
+    if !resp.status().is_success() {
+        return Err(format!("Stažení selhalo (HTTP {})", resp.status()));
+    }
+    let body = resp.bytes().await.map_err(|e| e.to_string())?;
+    if body.len() > 100_000_000 {
+        return Err("Soubor je příliš velký (>100MB)".to_string());
+    }
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&body);
+    Ok(format!("data:{};base64,{}", mime, b64))
+}
+
+/// Call one tool of a configured streamable-HTTP MCP server over plain JSON-RPC, for plugin
+/// panels that need data without a model turn. Stateless servers only (no session handshake).
+/// Runs in Rust so the webview isn't subject to CORS. Returns the tool's structured result.
+#[tauri::command]
+async fn mcp_call_tool(
+    url: String,
+    tool: String,
+    args: serde_json::Value,
+    timeout_secs: Option<u64>,
+) -> Result<serde_json::Value, String> {
+    let result = mcp_rpc(&url, "tools/call", serde_json::json!({ "name": tool, "arguments": args }), timeout_secs).await?;
+    let structured = result.get("structuredContent").cloned().unwrap_or(serde_json::Value::Null);
+    if let Some(msg) = structured.get("error").and_then(|e| e.as_str()) {
+        return Err(msg.to_string());
+    }
+    Ok(structured)
+}
+
+/// Read one resource of a configured streamable-HTTP MCP server (MCP `resources/read`), the same
+/// data the model reads. JSON resources come back parsed, anything else as a string.
+#[tauri::command]
+async fn mcp_read_resource(url: String, uri: String) -> Result<serde_json::Value, String> {
+    let result = mcp_rpc(&url, "resources/read", serde_json::json!({ "uri": uri }), None).await?;
+    let content = result
+        .get("contents")
+        .and_then(|c| c.get(0))
+        .ok_or("Prázdný resource")?;
+    let text = content.get("text").and_then(|t| t.as_str()).ok_or("Resource nemá text")?;
+    let is_json = content.get("mimeType").and_then(|m| m.as_str()) == Some("application/json");
+    Ok(if is_json {
+        serde_json::from_str(text).map_err(|e| e.to_string())?
+    } else {
+        serde_json::Value::String(text.to_string())
+    })
+}
+
+/// One stateless JSON-RPC request to a streamable-HTTP MCP server; returns its `result`.
+async fn mcp_rpc(
+    url: &str,
+    method: &str,
+    params: serde_json::Value,
+    timeout_secs: Option<u64>,
+) -> Result<serde_json::Value, String> {
+    if !url.starts_with("https://") && !url.starts_with("http://localhost") && !url.starts_with("http://127.0.0.1") {
+        return Err("MCP URL musí být https".to_string());
+    }
+    let client = build_smart_http_client(
+        std::time::Duration::from_secs(5),
+        std::time::Duration::from_secs(timeout_secs.unwrap_or(20)),
+    )
+    .await;
+    let body = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params });
+    let text = client
+        .post(url)
+        .header("Accept", "application/json, text/event-stream")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("MCP server není dostupný: {}", e))?
+        .text()
+        .await
+        .map_err(|e| e.to_string())?;
+    // Streamable HTTP may answer as SSE ("data: {...}") or as plain JSON
+    let payload = text
+        .lines()
+        .find_map(|l| l.strip_prefix("data:"))
+        .unwrap_or(&text)
+        .trim();
+    let rpc: serde_json::Value = serde_json::from_str(payload).map_err(|e| e.to_string())?;
+    if let Some(err) = rpc.get("error") {
+        return Err(err.get("message").and_then(|m| m.as_str()).unwrap_or("MCP error").to_string());
+    }
+    rpc.get("result").cloned().ok_or_else(|| "Prázdná odpověď".to_string())
+}
+
 #[tauri::command]
 fn get_home_dir() -> Result<String, String> {
     dirs::home_dir()
@@ -4055,8 +4253,49 @@ async fn create_directory(
 }
 
 #[tauri::command]
-async fn create_project_directory(path: String) -> Result<(), String> {
-    std::fs::create_dir_all(&path).map_err(|e| format!("Cannot create directory: {}", e))
+async fn create_project_directory(
+    path_access: State<'_, PathAccessManager>,
+    parent: String,
+    name: String,
+) -> Result<String, String> {
+    let parent = std::path::Path::new(&parent);
+    std::fs::create_dir_all(parent).map_err(|e| format!("Cannot create directory: {}", e))?;
+    let dir = create_unique_dir(parent, &name)?;
+    // The user just created it as a project: it's part of the workspace (same as an opened one),
+    // so the new-project flow can write its first files before the project is opened
+    path_access.register_cwd(&dir).await;
+    Ok(dir.to_string_lossy().into_owned())
+}
+
+/// `parent/name`, or `parent/name 2`, `name 3`… when taken. Never reuses an existing folder,
+/// so a new project can't overwrite another project's files.
+fn create_unique_dir(parent: &std::path::Path, name: &str) -> Result<std::path::PathBuf, String> {
+    for n in 1..1000 {
+        let candidate = parent.join(if n == 1 { name.to_string() } else { format!("{} {}", name, n) });
+        match std::fs::create_dir(&candidate) {
+            Ok(()) => return Ok(candidate),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("Cannot create directory: {}", e)),
+        }
+    }
+    Err("Cannot find a free folder name".to_string())
+}
+
+#[cfg(test)]
+mod create_unique_dir_tests {
+    use super::create_unique_dir;
+
+    #[test]
+    fn existing_folder_gets_a_number_instead_of_being_reused() {
+        let parent = std::env::temp_dir().join(format!("stavebak-unique-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&parent);
+        std::fs::create_dir_all(&parent).unwrap();
+        let first = create_unique_dir(&parent, "RD Tuchoměřice").unwrap();
+        let second = create_unique_dir(&parent, "RD Tuchoměřice").unwrap();
+        assert_eq!(first, parent.join("RD Tuchoměřice"));
+        assert_eq!(second, parent.join("RD Tuchoměřice 2"));
+        std::fs::remove_dir_all(&parent).unwrap();
+    }
 }
 
 #[tauri::command]
@@ -7300,9 +7539,16 @@ struct AuthStatus {
     authenticated: bool,
     unknown: bool,
     account: Option<String>,
+    /// claude.ai plan ("pro", "max"…), None when signed in with an API key.
+    subscription: Option<String>,
 }
 
-/// Check whether the Claude CLI is authenticated by running a lightweight check.
+/// Check whether the Claude CLI is authenticated.
+///
+/// `claude auth status` prints JSON (`loggedIn`, `authMethod`, `email`,
+/// `subscriptionType`). Credentials live in the macOS Keychain, so file checks
+/// can't tell a signed-out user from a signed-in one. Older CLIs without the
+/// subcommand fall back to `claude doctor`.
 #[tauri::command]
 async fn check_claude_auth() -> Result<AuthStatus, String> {
     let claude_bin = find_claude_binary().unwrap_or_else(|| {
@@ -7317,46 +7563,44 @@ async fn check_claude_auth() -> Result<AuthStatus, String> {
     });
     let enriched_path = build_enriched_path();
 
-    // First try a quick credential file check (instant, no subprocess)
-    if let Some(home) = dirs::home_dir() {
-        let cred_path = home.join(".claude").join("credentials.json");
-        if cred_path.exists() {
-            // Parse JSON and check for actual token fields
-            if let Ok(content) = std::fs::read_to_string(&cred_path) {
-                if let Ok(json) = serde_json::from_str::<Value>(&content) {
-                    let has_token = ["claudeAiOAuthToken", "accessToken", "token", "apiKey"]
-                        .iter()
-                        .any(|key| {
-                            json.get(key)
-                                .and_then(|v| v.as_str())
-                                .map(|s| !s.is_empty())
-                                .unwrap_or(false)
-                        });
-                    if has_token {
-                        let account = json.get("email")
-                            .or_else(|| json.get("account"))
-                            .and_then(|v| v.as_str())
-                            .filter(|s| !s.is_empty())
-                            .map(|s| s.to_string());
-                        return Ok(AuthStatus {
-                            authenticated: true,
-                            unknown: false,
-                            account,
-                        });
-                    }
-                }
-                // JSON invalid or no token found — fall through to claude doctor
-            }
-        }
-        // Also check .claude.json (older format)
-        let alt_path = std::path::Path::new(&home).join(".claude.json");
-        if alt_path.exists() {
+    #[cfg(target_os = "windows")]
+    let mut status_cmd = if claude_needs_cmd_wrapper(&claude_bin) {
+        let mut c = Command::new("cmd");
+        c.args(["/C", &claude_bin, "auth", "status"]);
+        c
+    } else {
+        let mut c = Command::new(&claude_bin);
+        c.args(["auth", "status"]);
+        c
+    };
+    #[cfg(not(target_os = "windows"))]
+    let mut status_cmd = {
+        let mut c = Command::new(&claude_bin);
+        c.args(["auth", "status"]);
+        c
+    };
+    status_cmd.env("PATH", &enriched_path).env_remove("CLAUDECODE");
+    #[cfg(target_os = "windows")]
+    status_cmd.creation_flags(0x08000000);
+    if let Ok(Ok(output)) =
+        tokio::time::timeout(std::time::Duration::from_secs(8), status_cmd.output()).await
+    {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if let Ok(json) = serde_json::from_str::<Value>(stdout.trim()) {
+            let text = |key: &str| {
+                json.get(key)
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+            };
             return Ok(AuthStatus {
-                authenticated: true,
+                authenticated: json.get("loggedIn").and_then(|v| v.as_bool()).unwrap_or(false),
                 unknown: false,
-                account: None,
+                account: text("email"),
+                subscription: text("subscriptionType"),
             });
         }
+        // Not JSON → CLI without `auth status`, fall through to doctor.
     }
 
     // Fallback: run `claude doctor` with a shorter timeout
@@ -7397,6 +7641,7 @@ async fn check_claude_auth() -> Result<AuthStatus, String> {
                 authenticated: output.status.success() && !has_auth_issue,
                 unknown: false,
                 account: None,
+                subscription: None,
             })
         }
         Ok(Err(e)) => Err(format!("Failed to run auth check: {}", e)),
@@ -7406,6 +7651,7 @@ async fn check_claude_auth() -> Result<AuthStatus, String> {
                 authenticated: false,
                 unknown: true,
                 account: None,
+                subscription: None,
             })
         }
     }
@@ -7551,7 +7797,7 @@ async fn generate_session_title(
     let asst_msg = safe_truncate(&assistant_message, 500);
 
     let prompt = format!(
-        "Generate a very short title (5-10 words, in the same language as the conversation) for this conversation. Reply with ONLY the title text, no quotes, no extra text, no explanation.\n\nUser: {}\n\nAssistant: {}",
+        "Name the topic of this conversation in 2-6 words, in the same language as the conversation, the way a site engineer would label a folder (e.g. \"Stav rekonstrukce\", \"Poptávka elektrikáře\", \"Radon a IGP posudek\"). No greeting, no quotes, no trailing punctuation. Reply with ONLY the title.\n\nUser: {}\n\nAssistant: {}",
         user_msg, asst_msg
     );
 
@@ -7582,7 +7828,7 @@ async fn generate_session_title(
         (
             HashMap::new(),
             vec![],
-            "claude-haiku-4-5-20251001".to_string(),
+            "haiku".to_string(),
         )
     };
 
@@ -7875,6 +8121,10 @@ pub fn run() {
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
 
+            // GUI test harness for scripts/stavebak-cli.mjs (debug builds only)
+            #[cfg(debug_assertions)]
+            test_harness::start(app.handle());
+
             #[cfg(not(desktop))]
             let _ = app;
 
@@ -7896,6 +8146,10 @@ pub fn run() {
             decode_project_dir,
             read_file_tree,
             read_file_content,
+            mcp_call_tool,
+            mcp_read_resource,
+            put_file_to_url,
+            get_url_as_data_url,
             write_file_content,
             copy_file,
             rename_file,
@@ -7916,6 +8170,7 @@ pub fn run() {
             get_file_size,
             check_file_access,
             get_home_dir,
+            get_stavebak_mcp,
             read_file_base64,
             list_slash_commands,
             list_skills,

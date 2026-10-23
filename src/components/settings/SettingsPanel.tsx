@@ -1,35 +1,24 @@
-import { useEffect, useState, useCallback } from 'react';
-import { GearSix, Lock, Terminal, HardDrives, X } from '@phosphor-icons/react';
-import { useSettingsStore } from '../../stores/settingsStore';
+import { useEffect, useState, useCallback, type ReactNode } from 'react';
+import { X, CaretRight } from '@phosphor-icons/react';
+import { useSettingsStore, type Locale } from '../../stores/settingsStore';
+import { useMcpStore } from '../../stores/mcpStore';
 import { useT } from '../../lib/i18n';
 import { APP_NAME } from '../../lib/edition';
+import { bridge } from '../../lib/tauri-bridge';
+import { getModelDisplayOptions, getSelectedModelOptionId } from '../../lib/api-provider';
 import { ChangelogModal } from '../shared/ChangelogModal';
 import { isPermissionError, isNetworkError } from './settingsUtils';
-import { GeneralTab } from './GeneralTab';
-import { ProviderTab } from './ProviderTab';
-import { CliTab } from './CliTab';
-import { McpTab } from './McpTab';
 
-type SettingsTab = 'general' | 'provider' | 'cli' | 'mcp';
-
-const TAB_ICONS: Record<SettingsTab, React.ReactNode> = {
-  general: <GearSix size={14} weight="light" />,
-  provider: <Lock size={14} weight="light" />,
-  cli: <Terminal size={14} weight="light" />,
-  mcp: <HardDrives size={14} weight="light" />,
-};
-
-const TAB_ITEMS: { id: SettingsTab; labelKey: string }[] = [
-  { id: 'general', labelKey: 'settings.tab.general' },
-  { id: 'provider', labelKey: 'settings.tab.provider' },
-  { id: 'cli', labelKey: 'settings.tab.cli' },
-  { id: 'mcp', labelKey: 'settings.tab.mcp' },
+const LANGUAGE_OPTIONS: { id: Locale; label: string }[] = [
+  { id: 'cs', label: 'Čeština' },
+  { id: 'sk', label: 'Slovenčina' },
+  { id: 'en', label: 'English' },
+  { id: 'de', label: 'Deutsch' },
 ];
 
 export function SettingsPanel() {
   const t = useT();
   const toggleSettings = useSettingsStore((s) => s.toggleSettings);
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
 
   // Close on Escape
   useEffect(() => {
@@ -46,67 +35,274 @@ export function SettingsPanel() {
       onMouseDown={(e) => { if (e.target === e.currentTarget) toggleSettings(); }}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/20" />
 
       {/* Panel */}
-      <div className="relative w-[min(90vw,960px)] max-h-[85vh] min-h-[500px]
-        rounded-2xl bg-bg-card border border-border-subtle shadow-2xl
-        overflow-hidden animate-fade-in flex flex-col"
+      <div className="relative w-[min(92vw,600px)] max-h-[85vh]
+        rounded-xl bg-bg-card border border-border shadow-lg
+        overflow-hidden flex flex-col"
         {...(import.meta.env.DEV && { 'data-testid': 'settings-panel' })}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4
+        <div className="flex items-center justify-between h-12 pl-6 pr-3
           border-b border-border-subtle flex-shrink-0">
-          <h2 className="text-lg font-semibold text-text-primary">
+          <h2 className="text-sm font-semibold text-text-primary">
             {t('settings.title')}
           </h2>
           <button onClick={toggleSettings}
             {...(import.meta.env.DEV && { 'data-testid': 'settings-close-button' })}
-            className="p-1.5 rounded-lg hover:bg-bg-tertiary
-              text-text-tertiary transition-smooth">
-            <X size={16} weight="light" />
+            className="p-1.5 rounded-md hover:bg-bg-tertiary text-text-tertiary">
+            <X size={14} />
           </button>
         </div>
 
-        {/* Body: sidebar + content */}
-        <div className="flex flex-1 min-h-0">
-          {/* Tab sidebar */}
-          <nav className="w-[160px] border-r border-border-subtle px-2 py-4 space-y-1 flex-shrink-0">
-            {TAB_ITEMS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                {...(import.meta.env.DEV && { 'data-testid': `settings-tab-${tab.id}` })}
-                className={`w-full flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm
-                  font-medium transition-smooth text-left whitespace-nowrap
-                  ${activeTab === tab.id
-                    ? 'bg-accent/10 text-accent'
-                    : 'text-text-muted hover:bg-bg-secondary hover:text-text-primary'
-                  }`}
-              >
-                <span className="flex-shrink-0 opacity-70">{TAB_ICONS[tab.id]}</span>
-                {t(tab.labelKey)}
-                {tab.id === 'cli' && useSettingsStore.getState().cliUpdateAvailable && (
-                  <span className="ml-auto w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
-                )}
-              </button>
-            ))}
-          </nav>
-
-          {/* Content area */}
-          <div className="flex-1 overflow-y-auto px-8 py-6">
-            {activeTab === 'general' && <GeneralTab />}
-            {activeTab === 'provider' && <ProviderTab />}
-            {activeTab === 'cli' && <CliTab />}
-            {activeTab === 'mcp' && <McpTab />}
-
-          </div>
+        <div className="flex-1 overflow-y-auto px-6 py-2">
+          <AccountsSection />
+          <AppearanceSection />
+          <FilesSection />
+          <AdvancedSection />
         </div>
 
         {/* Footer: version + update */}
         <SettingsFooter />
       </div>
     </div>
+  );
+}
+
+/* ================================================================
+   Layout primitives — one label column, one control column
+   ================================================================ */
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="py-4 border-b border-border-subtle last:border-b-0">
+      <h3 className="text-xs font-medium text-text-tertiary mb-1">{title}</h3>
+      <div className="divide-y divide-border-subtle">{children}</div>
+    </section>
+  );
+}
+
+function Row({ label, description, children }: { label: string; description?: string; children?: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-6 py-2.5">
+      <div className="min-w-0">
+        <div className="text-sm text-text-primary">{label}</div>
+        {description && (
+          <div className="text-xs text-text-tertiary mt-0.5 leading-snug">{description}</div>
+        )}
+      </div>
+      {children && <div className="flex-shrink-0 flex items-center gap-2">{children}</div>}
+    </div>
+  );
+}
+
+function Segmented<T extends string>({ value, options, onChange }: {
+  value: T;
+  options: { id: T; label: string }[];
+  onChange: (id: T) => void;
+}) {
+  return (
+    <div className="inline-flex rounded-md border border-border p-0.5 gap-0.5">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          onClick={() => onChange(o.id)}
+          className={`px-2.5 py-1 rounded text-xs whitespace-nowrap
+            ${value === o.id
+              ? 'bg-bg-tertiary text-text-primary font-medium'
+              : 'text-text-muted hover:text-text-primary'}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative w-8 h-[18px] rounded-full flex-shrink-0
+        ${checked ? 'bg-[#0F766E]' : 'bg-bg-tertiary border border-border'}`}
+    >
+      <span className={`absolute top-[2px] w-3.5 h-3.5 rounded-full bg-white shadow-sm
+        ${checked ? 'left-[16px]' : 'left-[2px]'}`} />
+    </button>
+  );
+}
+
+const linkButton = `px-2.5 py-1 rounded-md text-xs border border-border
+  text-text-secondary hover:text-text-primary hover:bg-bg-secondary`;
+
+/* ================================================================
+   Sections
+   ================================================================ */
+
+function AccountsSection() {
+  const t = useT();
+  const [account, setAccount] = useState<{ authenticated: boolean; email: string | null } | null>(null);
+
+  useEffect(() => {
+    bridge.checkClaudeAuth()
+      .then((a) => {
+        const plan = a.subscription ? a.subscription.charAt(0).toUpperCase() + a.subscription.slice(1) : null;
+        const label = [a.account, plan].filter(Boolean).join(' · ') || null;
+        setAccount({ authenticated: a.authenticated, email: label });
+      })
+      .catch(() => setAccount({ authenticated: false, email: null }));
+  }, []);
+
+  const openUrl = (url: string) => {
+    import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url)).catch(() => {});
+  };
+
+  return (
+    <Section title={t('settings.accounts')}>
+      <Row
+        label={t('settings.claudeAccount')}
+        description={account?.authenticated
+          ? (account.email ?? t('settings.claudeAccountDesc'))
+          : account ? t('settings.notSignedIn') : t('settings.claudeAccountDesc')}
+      >
+        {account?.authenticated ? (
+          <button className={linkButton} onClick={() => openUrl('https://claude.ai/settings/billing')}>
+            {t('settings.manage')}
+          </button>
+        ) : account ? (
+          <button className={linkButton} onClick={() => { bridge.startClaudeLogin().catch(() => {}); }}>
+            {t('settings.signIn')}
+          </button>
+        ) : null}
+      </Row>
+      <Row label={t('settings.stavebakAccount')} description={t('settings.stavebakAccountDesc')} />
+    </Section>
+  );
+}
+
+function AppearanceSection() {
+  const t = useT();
+  const theme = useSettingsStore((s) => s.theme);
+  const setTheme = useSettingsStore((s) => s.setTheme);
+  const locale = useSettingsStore((s) => s.locale);
+  const setLocale = useSettingsStore((s) => s.setLocale);
+
+  return (
+    <Section title={t('settings.appearance')}>
+      <Row label={t('settings.colorMode')}>
+        <Segmented
+          value={theme}
+          onChange={setTheme}
+          options={(['light', 'dark', 'system'] as const).map((m) => ({ id: m, label: t(`settings.${m}`) }))}
+        />
+      </Row>
+      <Row label={t('settings.language')}>
+        <select
+          value={locale}
+          onChange={(e) => setLocale(e.target.value as Locale)}
+          className="text-xs bg-transparent border border-border rounded-md px-2 py-1
+            text-text-primary cursor-pointer"
+        >
+          {LANGUAGE_OPTIONS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+        </select>
+      </Row>
+    </Section>
+  );
+}
+
+function FilesSection() {
+  const t = useT();
+  const sessionMode = useSettingsStore((s) => s.sessionMode);
+  const setSessionMode = useSettingsStore((s) => s.setSessionMode);
+
+  return (
+    <Section title={t('settings.files')}>
+      <Row label={t('settings.askBeforeEdit')} description={t('settings.askBeforeEditDesc')}>
+        <Toggle
+          checked={sessionMode === 'ask'}
+          onChange={(on) => setSessionMode(on ? 'ask' : 'bypass')}
+        />
+      </Row>
+    </Section>
+  );
+}
+
+function AdvancedSection() {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const selectedModel = useSettingsStore((s) => s.selectedModel);
+  const setSelectedModel = useSettingsStore((s) => s.setSelectedModel);
+  const mcpHealth = useMcpStore((s) => s.healthStatus);
+  const [cli, setCli] = useState<{ version: string | null; path: string | null } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const modelOptions = getModelDisplayOptions(null);
+  const selectedModelOptionId = getSelectedModelOptionId(selectedModel, modelOptions);
+
+  useEffect(() => {
+    if (!open) return;
+    bridge.checkClaudeCli()
+      .then((s) => setCli({ version: s.version, path: s.path }))
+      .catch(() => setCli({ version: null, path: null }));
+    useMcpStore.getState().checkHealth();
+  }, [open]);
+
+  const mcpLabel = mcpHealth === 'ok' ? t('settings.diagOk')
+    : mcpHealth === 'error' ? t('settings.diagError')
+    : t('settings.diagUnknown');
+
+  const copyDiagnostics = useCallback(() => {
+    const lines = [
+      `${APP_NAME} ${navigator.userAgent.includes('Mac') ? 'macOS' : navigator.platform}`,
+      `Claude Code: ${cli?.version ?? 'n/a'} (${cli?.path ?? 'n/a'})`,
+      `Stavebák server: ${mcpHealth}`,
+      `Model: ${selectedModel}`,
+    ];
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  }, [cli, mcpHealth, selectedModel]);
+
+  return (
+    <section className="py-4">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1 text-xs font-medium text-text-tertiary hover:text-text-primary"
+      >
+        <CaretRight size={10} className={open ? 'rotate-90' : ''} />
+        {t('settings.advanced')}
+      </button>
+      {open && (
+        <div className="mt-1 divide-y divide-border-subtle">
+          <Row label={t('settings.defaultModel')}>
+            <select
+              value={selectedModelOptionId}
+              onChange={(e) => setSelectedModel(e.target.value as typeof selectedModel)}
+              className="text-xs bg-transparent border border-border rounded-md px-2 py-1
+                text-text-primary cursor-pointer"
+            >
+              {modelOptions.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </Row>
+          <Row
+            label={t('settings.diagClaude')}
+            description={cli ? (cli.version ? `${cli.version} · ${cli.path ?? ''}` : t('settings.diagMissing')) : '…'}
+          />
+          <Row label={t('settings.diagStavebak')} description={mcpLabel}>
+            <span className={`w-1.5 h-1.5 rounded-full ${mcpHealth === 'ok' ? 'bg-success' : mcpHealth === 'error' ? 'bg-error' : 'bg-text-tertiary'}`} />
+          </Row>
+          <Row label={t('settings.diagnostics')}>
+            <button className={linkButton} onClick={copyDiagnostics}>
+              {copied ? t('settings.copied') : t('settings.copyDiagnostics')}
+            </button>
+          </Row>
+        </div>
+      )}
+    </section>
   );
 }
 

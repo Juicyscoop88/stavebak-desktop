@@ -24,6 +24,7 @@ import {
   MagnifyingGlass,
   PencilSimple,
   PlusCircle,
+  Play,
   Square,
   Terminal,
   WarningCircle,
@@ -91,10 +92,9 @@ function renderCodeSegment(inner: string, key: number): ReactNode {
           useFileStore.getState().revealPath(resolved);
         }}
         className="inline-flex items-center gap-1 px-2 py-0.5 mx-0.5
-          bg-white/15 border border-white/40 rounded-full
+          bg-bg-chat/70 border border-border rounded-full
           text-xs font-medium cursor-pointer
-          hover:bg-white/25 hover:border-white/60
-          transition-all duration-150 select-none
+          hover:bg-bg-chat select-none
           align-baseline leading-normal whitespace-nowrap inline-block"
         title={resolved}
       >
@@ -105,7 +105,7 @@ function renderCodeSegment(inner: string, key: number): ReactNode {
   }
   return (
     <code key={key} className="px-1.5 py-0.5 mx-0.5 rounded-md text-sm
-      bg-white/15 border border-white/20 font-mono">
+      bg-bg-chat/70 border border-border-subtle font-mono">
       {inner}
     </code>
   );
@@ -134,6 +134,9 @@ function renderUserContent(text: string): ReactNode {
   });
 }
 
+/** User turns sent by an action button start with this marker (kept in the transcript, so it survives reload). */
+export const ACTION_PREFIX = '▶ ';
+
 function UserMsg({ message }: Props) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
@@ -153,6 +156,16 @@ function UserMsg({ message }: Props) {
     });
   }, [content]);
 
+  // Action from a button (e.g. "▶ Další krok: …"), not something the user typed
+  if (content.startsWith(ACTION_PREFIX)) {
+    return (
+      <div className="flex items-center gap-1.5 text-sm text-text-muted">
+        <Play size={11} weight="fill" className="text-text-tertiary flex-shrink-0" />
+        <span>{content.slice(ACTION_PREFIX.length)}</span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex justify-end group/user relative">
       {/* Copy button — visible on hover */}
@@ -167,18 +180,16 @@ function UserMsg({ message }: Props) {
       >
         {copied ? <Check size={13} weight="bold" /> : <Copy size={13} weight="regular" />}
       </button>
-      <div className="max-w-[75%] px-5 py-3 rounded-full
-        user-bubble text-text-inverse border border-white/[0.08]
-        text-sm leading-normal whitespace-pre-wrap">
+      <div className="max-w-[75%] px-4 py-2.5 rounded-[var(--radius-message)]
+        user-bubble text-base leading-normal whitespace-pre-wrap">
         {renderUserContent(displayContent)}
         {!expanded && isLong && (
-          <span className="text-white/60">…</span>
+          <span className="text-text-tertiary">…</span>
         )}
         {isLong && (
           <button
             onClick={() => setExpanded(!expanded)}
-            className="block mt-1.5 text-xs text-white/60 hover:text-white/90
-              transition-smooth"
+            className="block mt-1.5 text-xs text-text-tertiary hover:text-text-primary"
           >
             {expanded ? '▲ Collapse' : '▼ Expand all'}
           </button>
@@ -196,14 +207,14 @@ function UserMsg({ message }: Props) {
                   }
                 }}
                 className="inline-flex items-center gap-2 px-2.5 py-1.5
-                  bg-white/10 hover:bg-white/20 rounded-lg border border-white/15
-                  transition-smooth cursor-pointer text-left"
+                  bg-bg-chat/70 hover:bg-bg-chat rounded-lg border border-border-subtle
+                  cursor-pointer text-left"
               >
                 {att.isImage && att.preview ? (
                   <img src={att.preview} alt="" className="w-8 h-8 rounded object-cover" />
                 ) : (
                   <span className="flex items-center justify-center w-8 h-8 rounded
-                    bg-white/10 text-xs font-mono font-semibold uppercase opacity-80">
+                    bg-bg-tertiary text-xs font-mono font-semibold uppercase opacity-80">
                     {getFileExt(att.name) || (
                       <File size={14} weight="light" />
                     )}
@@ -870,11 +881,15 @@ function ThinkingMsg({ message }: Props) {
     if (idx < 0) return undefined;
     const next = tab.messages[idx + 1];
     if (!next) return undefined;
-    return Math.max(1, Math.round((next.timestamp - message.timestamp) / 1000));
+    // Messages replayed from disk carry no timestamps — duration is unknown, not running
+    const ms = next.timestamp - message.timestamp;
+    return Number.isFinite(ms) ? Math.max(1, Math.round(ms / 1000)) : null;
   });
-  const label = durationSec != null
-    ? t('msg.thoughtFor').replace('{seconds}', String(durationSec))
-    : t('msg.thinking');
+  const label = durationSec === undefined
+    ? t('msg.thinking')
+    : durationSec === null
+      ? t('msg.thought')
+      : t('msg.thoughtFor').replace('{seconds}', String(durationSec));
   return (
     <div className="mr-0">
       <details className="group">
@@ -958,7 +973,7 @@ function TodoMsg({ message }: Props) {
         <CaretRight size={10} weight="light"
           className={`flex-shrink-0 text-text-tertiary transition-transform
             duration-150 ${expanded ? 'rotate-90' : ''}`} />
-        <span className="text-xs font-bold text-text-primary">{t('msg.todo')}</span>
+        <span className="text-xs font-semibold text-text-primary">{t('msg.todo')}</span>
         <span className="text-xs text-text-tertiary">
           {completedCount}/{items.length}
         </span>

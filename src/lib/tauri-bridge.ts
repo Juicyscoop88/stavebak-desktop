@@ -127,6 +127,8 @@ export interface AuthStatus {
   authenticated: boolean;
   unknown?: boolean;
   account?: string | null;
+  /** claude.ai plan ("pro", "max"…), null when signed in with an API key */
+  subscription?: string | null;
 }
 
 export interface StepResult {
@@ -227,6 +229,22 @@ export const bridge = {
   deleteSession: (sessionId: string, sessionPath: string) =>
     invoke<void>('delete_session', { sessionId, sessionPath }),
 
+  /** PUT a project file to a presigned upload URL (returned by an MCP tool). */
+  putFileToUrl: (url: string, path: string, headers: Record<string, string>) =>
+    invoke<void>('put_file_to_url', { url, path, headers }),
+
+  /** GET a download URL; returns the body as a data URL. */
+  getUrlAsDataUrl: (url: string, mime: string) =>
+    invoke<string>('get_url_as_data_url', { url, mime }),
+
+  /** One tool call on a configured streamable-HTTP MCP server; returns its structuredContent. */
+  callMcpTool: <T = unknown>(url: string, tool: string, args: Record<string, unknown>, timeoutSecs?: number) =>
+    invoke<T>('mcp_call_tool', { url, tool, args, timeoutSecs: timeoutSecs ?? null }),
+
+  /** Read one resource of a configured streamable-HTTP MCP server; JSON resources come back parsed. */
+  readMcpResource: <T = unknown>(url: string, uri: string) =>
+    invoke<T>('mcp_read_resource', { url, uri }),
+
   listSessions: () =>
     invoke<SessionListItem[]>('list_sessions'),
 
@@ -285,6 +303,10 @@ export const bridge = {
 
   getHomeDir: () =>
     invoke<string>('get_home_dir'),
+
+  /** Stavebák MCP server this build talks to (release = prod, dev = local, STAVEBAK_MCP_URL overrides). */
+  getStavebakMcp: () =>
+    invoke<{ url: string; env: 'prod' | 'local' | 'custom' }>('get_stavebak_mcp'),
 
   exportSessionMarkdown: (path: string, outputPath: string, conversationOnly = false) =>
     invoke<void>('export_session_markdown', { path, outputPath, conversationOnly }),

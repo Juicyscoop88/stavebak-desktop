@@ -2,17 +2,24 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useFileStore } from '../../stores/fileStore';
 import { GearSix } from '@phosphor-icons/react';
 import { InputBar } from '../chat/InputBar';
+import { useUiStore } from '../../stores/uiStore';
+import { useMcpStore } from '../../stores/mcpStore';
+
+// Not shown for production: users of the release build never see it
+const TARGET_LABEL = { local: 'lokální server', custom: 'vlastní server' } as const;
 
 export function BottomBar() {
   const toggleSettings = useSettingsStore((s) => s.toggleSettings);
   const updateAvailable = useSettingsStore((s) => s.updateAvailable);
-  const cliUpdateAvailable = useSettingsStore((s) => s.cliUpdateAvailable);
   const sidebarOpen = useSettingsStore((s) => s.sidebarOpen);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
   const directoryMissing = useFileStore((s) => s.directoryMissing);
+  const mcpTarget = useMcpStore((s) => s.target);
 
   const showInput = workingDirectory && !directoryMissing;
+  // Hidden, not unmounted: InputBar owns the stream handler and action listeners
+  const composerHidden = useUiStore((s) => s.composerHidden);
 
   return (
     <div className="flex items-end">
@@ -31,11 +38,17 @@ export function BottomBar() {
               text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary
               rounded-full transition-smooth">
             <GearSix size={16} weight="light" />
-            {(updateAvailable || cliUpdateAvailable) && (
-              <span className={`absolute top-0.5 right-0.5 w-2 h-2 rounded-full
-                border-[1.5px] border-bg-chat ${cliUpdateAvailable ? 'bg-red-500' : 'bg-green-500'}`} />
+            {updateAvailable && (
+              <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full
+                border-[1.5px] border-bg-chat bg-green-500" />
             )}
           </button>
+          {mcpTarget && mcpTarget.env !== 'prod' && (
+            <span title={mcpTarget.url}
+              className="ml-2 px-2 py-0.5 rounded-full text-xs text-text-tertiary bg-bg-tertiary truncate">
+              {TARGET_LABEL[mcpTarget.env]}
+            </span>
+          )}
         </div>
       </div>
 
@@ -45,7 +58,7 @@ export function BottomBar() {
       )}
 
       {/* Chat input area */}
-      <div className="flex-1 min-w-0">
+      <div className={`flex-1 min-w-0 ${composerHidden ? 'invisible' : ''}`}>
         {showInput && <InputBar />}
       </div>
     </div>

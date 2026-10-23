@@ -48,6 +48,7 @@ function hasResumableConversationEvidence(messages: ChatMessage[]): boolean {
 }
 
 
+
 /* PlanApprovalBar removed — PlanReviewCard (triggered by ExitPlanMode detection)
    is the proper plan approval UI. The fallback bar was too broad: it appeared on
    every completed session in plan/bypass mode, even without a real plan. */
@@ -234,6 +235,30 @@ export function InputBar() {
     };
     window.addEventListener('stavebak:tree-file-inline', onTreeFileInline);
     return () => window.removeEventListener('stavebak:tree-file-inline', onTreeFileInline);
+  }, []);
+
+  // Explicit action from a plugin panel (e.g. "Založit projekt")
+  useEffect(() => {
+    // An explicit action ("Založit projekt") sends right away, as if typed and submitted
+    const onSend = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail;
+      if (!text || !textareaRef.current) return;
+      textareaRef.current.setText(text);
+      handleSubmitRef.current();
+    };
+    // A suggestion fills the input for the user to finish (e.g. add the region), never sends
+    const onPrefill = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail;
+      if (!text || !textareaRef.current) return;
+      textareaRef.current.setText(text);
+      textareaRef.current.focus();
+    };
+    window.addEventListener('stavebak:send', onSend);
+    window.addEventListener('stavebak:prefill', onPrefill);
+    return () => {
+      window.removeEventListener('stavebak:send', onSend);
+      window.removeEventListener('stavebak:prefill', onPrefill);
+    };
   }, []);
 
   // Slash command state
@@ -1380,7 +1405,7 @@ export function InputBar() {
             className={`flex items-center gap-2 bg-bg-secondary/50 border px-5 py-3
               focus-within:border-border-focus/40 focus-within:bg-bg-input focus-within:shadow-md
               transition-all duration-200 group/input
-              ${input.includes('\n') || input.length > 80 ? 'rounded-2xl' : 'rounded-full'}
+              ${input.includes('\n') || input.length > 80 ? 'rounded-[var(--radius-message)]' : 'rounded-full'}
               ${isDragging
                 ? 'border-accent/40 bg-accent/5'
                 : 'border-border'

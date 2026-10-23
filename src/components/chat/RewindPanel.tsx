@@ -325,7 +325,7 @@ export function RewindPanel({ onClose }: RewindPanelProps) {
               <div className="flex items-center gap-2 min-w-0">
                 {/* Turn number badge */}
                 <span className={`flex-shrink-0 w-5 h-5 rounded-full
-                  text-xs font-bold flex items-center justify-center
+                  text-xs font-semibold flex items-center justify-center
                   ${isActive
                     ? 'bg-accent/10 text-accent'
                     : 'bg-bg-secondary text-text-tertiary'

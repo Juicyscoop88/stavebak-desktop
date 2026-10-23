@@ -393,8 +393,8 @@ function SkillCard({
         }`}>
           {skill.name}
         </span>
-        <span className={`flex-shrink-0 w-3.5 h-3.5 rounded text-[8px]
-          font-bold flex items-center justify-center
+        <span className={`flex-shrink-0 w-3.5 h-3.5 rounded text-2xs
+          font-semibold flex items-center justify-center
           ${skill.scope === 'global' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}`}>
           {skill.scope === 'global' ? 'G' : 'P'}
         </span>
@@ -433,7 +433,7 @@ function SkillCard({
           {skill.allowed_tools.map((tool) => (
             <span
               key={tool}
-              className="px-1.5 py-0.5 text-[9px] rounded-md
+              className="px-1.5 py-0.5 text-2xs rounded-md
                 bg-accent/10 text-accent font-medium"
             >
               {tool}
@@ -444,7 +444,7 @@ function SkillCard({
 
       {/* Row 4: Metadata (model, context, version) */}
       {(skill.model || skill.context || skill.version) && (
-        <div className="flex items-center gap-2 mt-1 pl-5 text-[9px] text-text-tertiary">
+        <div className="flex items-center gap-2 mt-1 pl-5 text-2xs text-text-tertiary">
           {skill.model && (
             <span>{t('skills.model')}: {skill.model}</span>
           )}

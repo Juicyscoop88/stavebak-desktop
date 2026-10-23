@@ -141,12 +141,12 @@ function McpServerCard({
           {server.name}
         </span>
         {isBuiltin && (
-          <span className="shrink-0 px-1.5 py-0.5 text-[9px] rounded-md
+          <span className="shrink-0 px-1.5 py-0.5 text-2xs rounded-md
             bg-accent/15 text-accent font-medium">
             {t('mcp.builtin')}
           </span>
         )}
-        <span className="shrink-0 px-1.5 py-0.5 text-[9px] rounded-md
+        <span className="shrink-0 px-1.5 py-0.5 text-2xs rounded-md
           bg-blue-500/15 text-blue-400 font-medium">
           {server.config.type}
         </span>

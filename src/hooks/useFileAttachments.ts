@@ -67,6 +67,18 @@ function isPosOverFileTree(pos: { x: number; y: number }): boolean {
   return false;
 }
 
+/** A `[data-drop-import="<subfolder>"]` element under the drop position: dropped files are copied
+ *  into that project subfolder (a plugin's drop zone), instead of being attached to the prompt. */
+function dropImportTargetAt(pos: { x: number; y: number }): string | null {
+  const lp = toLogicalPos(pos);
+  for (const el of Array.from(document.querySelectorAll<HTMLElement>('[data-drop-import]'))) {
+    const r = el.getBoundingClientRect();
+    const inside = (p: { x: number; y: number }) => p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom;
+    if (inside(lp) || inside(pos)) return el.dataset.dropImport ?? '';
+  }
+  return null;
+}
+
 /** Generate a small base64 thumbnail for an image file */
 async function generateThumbnail(file: File): Promise<string | undefined> {
   if (!isImageMime(file.type)) return undefined;
@@ -273,6 +285,8 @@ export function useFileAttachments() {
       if (type === 'drop') {
         const wasOverTree = useFileStore.getState().isDragOverTree;
         useFileStore.getState().setDragOverTree(false);
+        const dropPos = (event.payload as any).position;
+        const importSubfolder = dropPos ? dropImportTargetAt(dropPos) : null;
 
         // Skip if this is an internal file tree drag
         if (isTreeDragActive()) return;
@@ -295,7 +309,25 @@ export function useFileAttachments() {
             await Promise.all(paths.map((p) => bridge.addPathGrant(ownerTabId, p).catch(() => { /* best-effort */ })));
           }
 
-          if (wasOverTree) {
+          if (importSubfolder !== null) {
+            // Drop onto a plugin drop zone → copy into the project subfolder, announce what landed
+            const rootPath = useSettingsStore.getState().workingDirectory;
+            if (!rootPath) return;
+            const dir = importSubfolder ? `${rootPath}/${importSubfolder}` : rootPath;
+            if (importSubfolder) await bridge.createDirectory(dir).catch(() => {});
+            const imported: string[] = [];
+            for (const srcPath of paths) {
+              const dest = `${dir}/${srcPath.split(/[\\/]/).pop() || srcPath}`;
+              try {
+                await bridge.copyFile(srcPath, dest, ownerTabId ?? undefined);
+                imported.push(dest);
+              } catch (err) {
+                console.error('Failed to import file:', srcPath, err);
+              }
+            }
+            useFileStore.getState().refreshTree(rootPath);
+            if (imported.length) window.dispatchEvent(new CustomEvent('stavebak:files-imported', { detail: imported }));
+          } else if (wasOverTree) {
             // Drop onto file tree → copy files into project
             const rootPath = useSettingsStore.getState().workingDirectory
               || useFileStore.getState().rootPath;

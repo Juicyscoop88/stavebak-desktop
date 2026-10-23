@@ -6,6 +6,7 @@ import { SecondaryPanel } from './components/layout/SecondaryPanel';
 import { BottomBar } from './components/layout/BottomBar';
 import { CommandPalette } from './components/commands/CommandPalette';
 import { SettingsPanel } from './components/settings/SettingsPanel';
+import { NewProjectDialog } from './components/layout/NewProjectDialog';
 import { ImageLightbox } from './components/shared/ImageLightbox';
 import { ChangelogModal } from './components/shared/ChangelogModal';
 import { Toast } from './components/shared/Toast';
@@ -14,6 +15,7 @@ import { useSettingsStore } from './stores/settingsStore';
 import { useProviderStore } from './stores/providerStore';
 import type { ColorTheme, Theme } from './stores/settingsStore';
 import { useFileStore } from './stores/fileStore';
+import { useSetupStore, type SetupStep } from './stores/setupStore';
 import { useChatStore } from './stores/chatStore';
 import { useSessionStore } from './stores/sessionStore';
 import { APP_NAME, IS_ALPHA } from './lib/edition';
@@ -26,6 +28,7 @@ import { useT } from './lib/i18n';
 import { Warning } from '@phosphor-icons/react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { panelRegistry } from './lib/panel-registry';
+import { openProject } from './lib/conversations';
 import { registerPlugins } from './plugins/registry';
 import './App.css';
 
@@ -134,24 +137,25 @@ function App() {
   const markFileChanged = useFileStore((s) => s.markFileChanged);
   const prevDirRef = useRef<string | null>(null);
 
-  const [onboardingDismissing, setOnboardingDismissing] = useState(false);
   const wasInSetup = useRef(!setupCompleted);
 
   const t = useT();
 
-  // When setup completes, fade out overlay then reveal sidebar
+  // On launch, reopen the last project where its latest conversation left off
+  useEffect(() => {
+    const { lastProject, setupCompleted } = useSettingsStore.getState();
+    if (!setupCompleted || !lastProject || useSettingsStore.getState().workingDirectory) return;
+    bridge.readFileTree(lastProject, 1)
+      .then(() => openProject(lastProject))
+      .catch(() => {}); // folder moved or deleted — stay on the welcome screen
+  }, []);
+
+  // When setup completes, drop the overlay and reveal the sidebar (instant)
   useEffect(() => {
     if (setupCompleted && wasInSetup.current) {
       wasInSetup.current = false;
-      setOnboardingDismissing(true);
-      // Fade out the overlay, then open sidebar
-      const t1 = setTimeout(() => {
-        setOnboardingDismissing(false);
-        // Open sidebar with animation
-        const s = useSettingsStore.getState();
-        if (!s.sidebarOpen) s.toggleSidebar();
-      }, 600);
-      return () => clearTimeout(t1);
+      const s = useSettingsStore.getState();
+      if (!s.sidebarOpen) s.toggleSidebar();
     }
   }, [setupCompleted]);
 
@@ -179,7 +183,25 @@ function App() {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
 
-(window as any).__stavebak_test = {
+    // Answer `execute_js` requests from src-tauri/src/test_harness.rs
+    // (StrictMode mounts effects twice — unlisten even if cleanup beats listen())
+    let unlistenEval: (() => void) | undefined;
+    let disposed = false;
+    import('@tauri-apps/api/event').then(({ listen, emit }) => {
+      listen<{ reqId: string; code: string }>('harness://eval', async ({ payload }) => {
+        try {
+          const value = await (0, eval)(payload.code);
+          emit('harness://reply', { reqId: payload.reqId, result: value === undefined ? null : String(value) });
+        } catch (err) {
+          emit('harness://reply', { reqId: payload.reqId, error: String(err) });
+        }
+      }).then((fn) => {
+        if (disposed) fn();
+        else unlistenEval = fn;
+      });
+    });
+
+    (window as any).__stavebak_test = {
       getMessages(optsOrTabId?: string | { tabId?: string; last?: number; summary?: boolean }) {
         const opts = typeof optsOrTabId === 'string' ? { tabId: optsOrTabId } : (optsOrTabId || {});
         const id = opts.tabId || useSessionStore.getState().selectedSessionId;
@@ -376,6 +398,41 @@ function App() {
         useSettingsStore.getState().setSelectedModel(modelId);
         return { model: modelId };
       },
+      openFile(path: string) {
+        useFileStore.getState().selectFile(path);
+        return { opened: path };
+      },
+      closePreview() {
+        useFileStore.getState().closePreview();
+        return { closed: true };
+      },
+      toggleFolder(path: string) {
+        useFileStore.getState().toggleFolder(path);
+        return { expanded: [...useFileStore.getState().expandedFolders] };
+      },
+      fileState() {
+        const s = useFileStore.getState();
+        return {
+          rootPath: s.rootPath,
+          selectedFile: s.selectedFile,
+          expandedFolders: [...s.expandedFolders],
+          treeSize: s.tree.length,
+        };
+      },
+      previewOnboarding(step: string) {
+        (window as any).__onboardingPreview = step;
+        const setup = useSetupStore.getState();
+        setup.reset();
+        setup.setCli('ready');
+        setup.setStep(step as SetupStep);
+        useSettingsStore.getState().setSetupCompleted(false);
+        return { preview: step };
+      },
+      setSetupCompleted(completed: boolean) {
+        delete (window as any).__onboardingPreview;
+        useSettingsStore.getState().setSetupCompleted(completed);
+        return { setupCompleted: completed };
+      },
       switchProvider(providerId: string | null) {
         useProviderStore.getState().setActive(providerId);
         return { provider: providerId };
@@ -428,6 +485,8 @@ function App() {
     };
 
     return () => {
+      disposed = true;
+      unlistenEval?.();
       delete (window as any).__stavebak_test;
     };
   }, []);
@@ -537,10 +596,10 @@ function App() {
     }).catch(() => {});
   }, []);
 
-  // Load custom session names and provider config on startup
+  // Load custom session names on startup. Provider config is intentionally
+  // not loaded: Stavebak always runs on the official Anthropic login.
   useEffect(() => {
     useSessionStore.getState().loadCustomPreviewsFromDisk();
-    useProviderStore.getState().load();
     // Notification permission is requested lazily on first need (see useStreamProcessor.ts)
   }, []);
 
@@ -750,20 +809,17 @@ function App() {
         main={<ChatPanel key={selectedSessionId || 'new'} />}
         secondary={<SecondaryPanel />}
         bottomBar={<BottomBar />}
-        forceCollapseSidebar={!setupCompleted || onboardingDismissing}
+        forceCollapseSidebar={!setupCompleted}
       />
       {/* Onboarding overlay — centered, covers entire app */}
-      {(!setupCompleted || onboardingDismissing) && (
-        <div
-          className={`fixed inset-0 z-100 flex items-center justify-center bg-bg-chat
-            transition-opacity duration-500 ease-out
-            ${onboardingDismissing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-        >
+      {!setupCompleted && (
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-bg-chat">
           <SetupWizard />
         </div>
       )}
       <CommandPalette />
       {settingsOpen && <SettingsPanel />}
+      <NewProjectDialog />
       <ImageLightbox />
       {showChangelog && currentAppVersion && (
         <ChangelogModal
@@ -789,7 +845,7 @@ function App() {
               </div>
             </div>
             {/* Path hint */}
-            <div className="mx-6 px-3 py-2 rounded-lg bg-bg-secondary text-[11px] text-text-tertiary font-mono">
+            <div className="mx-6 px-3 py-2 rounded-lg bg-bg-secondary text-2xs text-text-tertiary font-mono">
               {t('perm.path')}
             </div>
             {/* Actions */}
