@@ -79,6 +79,8 @@ if [ -n "${UPDATER:-}" ]; then
   OUT="dist-release/v$VERSION"
   rm -rf "$OUT" && mkdir -p "$OUT"
   cp "$DMG" "$OUT/Stavebak_${VERSION}_universal.dmg"
+  # Stálé jméno: web odkazuje na releases/latest/download/Stavebak.dmg (bez GitHub API)
+  cp "$DMG" "$OUT/Stavebak.dmg"
   cp "$BUNDLE/macos/$(basename "$APP").tar.gz" "$OUT/Stavebak_universal.app.tar.gz"
   SIG=$(cat "$BUNDLE/macos/$(basename "$APP").tar.gz.sig")
   URL="https://github.com/Juicyscoop88/stavebak-desktop/releases/download/v$VERSION/Stavebak_universal.app.tar.gz"
