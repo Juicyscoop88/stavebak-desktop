@@ -1,8 +1,9 @@
 import { useEffect, useCallback, useRef, useState, type ReactNode } from 'react';
-import { CheckCircle, Circle, SpinnerGap, ArrowSquareOut, GoogleLogo, EnvelopeSimple } from '@phosphor-icons/react';
+import { CheckCircle, Circle, SpinnerGap, ArrowSquareOut, GoogleLogo } from '@phosphor-icons/react';
 import { useSetupStore } from '../../stores/setupStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useMcpStore } from '../../stores/mcpStore';
+import { useAccountStore } from '../../stores/accountStore';
 import { useT } from '../../lib/i18n';
 import { stripAnsi } from '../../lib/strip-ansi';
 import { AiAvatar } from '../shared/AiAvatar';
@@ -35,6 +36,8 @@ export function SetupWizard() {
   const [waitingForLogin, setWaitingForLogin] = useState(false);
   const [subscribeClicked, setSubscribeClicked] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const accountBusy = useAccountStore((s) => s.busy);
+  const accountError = useAccountStore((s) => s.error);
 
   const finish = useCallback(async () => {
     try {
@@ -88,6 +91,7 @@ export function SetupWizard() {
     }
     (async () => {
       const s = useSetupStore.getState();
+      bridge.stavebakAuthStatus().then((ok) => useSetupStore.getState().setStavebakDone(ok)).catch(() => {});
       let installed = false;
       try {
         const status = await bridge.checkClaudeCli();
@@ -132,9 +136,11 @@ export function SetupWizard() {
     useSetupStore.getState().setStep(authStatus === 'ok' ? 'stavebak' : 'claude');
   };
 
-  const completeStavebak = () => {
-    useSetupStore.getState().setStavebakDone(true);
-    useSetupStore.getState().setStep('done');
+  const loginStavebak = async () => {
+    if (await useAccountStore.getState().login()) {
+      useSetupStore.getState().setStavebakDone(true);
+      useSetupStore.getState().setStep('done');
+    }
   };
 
   if (step === 'checking') return null;
@@ -199,16 +205,15 @@ export function SetupWizard() {
         <>
           <StepLabel n={2} />
           <Heading title={t('onb.stavebak.title')} subtitle={t('onb.stavebak.desc')} />
-          {/* UX mock — no Stavebák OAuth backend yet; both buttons just continue. */}
           <div className="space-y-2">
-            <SecondaryButton onClick={completeStavebak}>
+            <SecondaryButton onClick={loginStavebak} disabled={accountBusy}>
               <GoogleLogo size={14} weight="bold" />
               {t('onb.stavebak.google')}
             </SecondaryButton>
-            <SecondaryButton onClick={completeStavebak}>
-              <EnvelopeSimple size={14} />
-              {t('onb.stavebak.email')}
-            </SecondaryButton>
+            <div className="min-h-5 pt-1 text-center text-xs text-text-tertiary">
+              {accountBusy ? <Status>{t('onb.stavebak.waiting')}</Status>
+                : accountError ? <span className="text-text-primary">{t('onb.stavebak.failed')}</span> : null}
+            </div>
             <button onClick={() => useSetupStore.getState().setStep('done')}
               className="block mx-auto pt-2 text-xs text-text-tertiary hover:text-text-primary">
               {t('onb.skip')}
@@ -299,12 +304,14 @@ function PrimaryButton({ onClick, disabled, children }: { onClick: () => void; d
   );
 }
 
-function SecondaryButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+function SecondaryButton({ onClick, disabled, children }: { onClick: () => void; disabled?: boolean; children: ReactNode }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className="w-full h-9 rounded-lg text-sm text-text-primary border border-border
-        hover:bg-bg-secondary flex items-center justify-center gap-2 cursor-pointer"
+        hover:bg-bg-secondary flex items-center justify-center gap-2 cursor-pointer
+        disabled:opacity-40 disabled:cursor-default"
     >
       {children}
     </button>
