@@ -98,3 +98,24 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }} ${{ steps.winsign.outputs.args }}
+
+      # Windows: instalátor pod stálým jménem (web odkazuje na releases/latest/download/Stavebak-setup.exe,
+      # stejný vzor jako Stavebak.dmg) a kontrola podpisu, pokud je podepisování zapnuté.
+      - name: Windows installer, stálé jméno a kontrola podpisu
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIGNING: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+        run: |
+          $setup = Get-ChildItem -Path src-tauri/target/release/bundle/nsis -Filter '*-setup.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'NSIS installer nenalezen' }
+          if ($SIGNING) {
+            $sig = Get-AuthenticodeSignature $setup.FullName
+            if ($sig.Status -ne 'Valid') { throw "Installer není podepsaný (stav: $($sig.Status))" }
+            Write-Host "Podpis OK: $($sig.SignerCertificate.Subject)"
+          } else {
+            Write-Warning 'Installer je NEPODEPSANÝ (chybí AZURE_SIGNING_ACCOUNT). Nepublikovat mimo testery.'
+          }
+          Copy-Item $setup.FullName 'Stavebak-setup.exe'
+          gh release upload '${{ github.ref_name }}' 'Stavebak-setup.exe' --clobber
