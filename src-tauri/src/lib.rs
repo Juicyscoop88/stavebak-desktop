@@ -4063,6 +4063,17 @@ async fn mcp_call_tool(
     Ok(structured)
 }
 
+/// Seznam nástrojů MCP serveru (jméno a zobrazovaný název), aby chat ukázal české názvy ze serveru.
+#[tauri::command]
+async fn mcp_list_tools(url: String) -> Result<Vec<serde_json::Value>, String> {
+    let result = mcp_rpc(&url, "tools/list", serde_json::json!({}), None).await?;
+    let tools = result.get("tools").and_then(|t| t.as_array()).cloned().unwrap_or_default();
+    Ok(tools
+        .into_iter()
+        .map(|t| serde_json::json!({ "name": t.get("name"), "title": t.get("title") }))
+        .collect())
+}
+
 /// Read one resource of a configured streamable-HTTP MCP server (MCP `resources/read`), the same
 /// data the model reads. JSON resources come back parsed, anything else as a string.
 #[tauri::command]
@@ -8176,6 +8187,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             start_claude_session,
             stavebak_login,
+            mcp_list_tools,
             stavebak_logout,
             stavebak_auth_status,
             send_stdin,

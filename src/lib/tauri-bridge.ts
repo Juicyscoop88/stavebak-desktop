@@ -241,6 +241,10 @@ export const bridge = {
   callMcpTool: <T = unknown>(url: string, tool: string, args: Record<string, unknown>, timeoutSecs?: number) =>
     invoke<T>('mcp_call_tool', { url, tool, args, timeoutSecs: timeoutSecs ?? null }),
 
+  /** Jména a české názvy nástrojů MCP serveru (tools/list). */
+  listMcpTools: (url: string) =>
+    invoke<{ name: string; title?: string }[]>('mcp_list_tools', { url }),
+
   /** Read one resource of a configured streamable-HTTP MCP server; JSON resources come back parsed. */
   readMcpResource: <T = unknown>(url: string, uri: string) =>
     invoke<T>('mcp_read_resource', { url, uri }),

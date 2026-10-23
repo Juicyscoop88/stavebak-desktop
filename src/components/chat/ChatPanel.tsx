@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { useChatStore, useActiveTab, type ChatMessage } from '../../stores/chatStore';
 import { MessageBubble } from './MessageBubble';
 import { ToolGroup } from './ToolGroup';
+import { isHiddenTool } from '../../lib/tool-titles';
 import { ConversationMenu } from './ConversationMenu';
 import { PluginSlotStack } from '../layout/PluginComponents';
 import { openProject } from '../../lib/conversations';
@@ -350,20 +351,24 @@ export function ChatPanel() {
 
   const displayItems = useMemo<DisplayItem[]>(() => {
     const items: DisplayItem[] = [];
+    // Vnitřní kroky Clauda (načítání nástrojů) projektant nevidí; indexy zůstávají původní
+    const visible = messages
+      .map((msg, idx) => ({ msg, idx }))
+      .filter(({ msg }) => !(msg.type === 'tool_use' && isHiddenTool(msg.toolName)));
     let i = 0;
-    while (i < messages.length) {
+    while (i < visible.length) {
       // Detect runs of consecutive tool_use messages
-      if (messages[i].type === 'tool_use') {
+      if (visible[i].msg.type === 'tool_use') {
         let j = i;
-        while (j < messages.length && messages[j].type === 'tool_use') j++;
+        while (j < visible.length && visible[j].msg.type === 'tool_use') j++;
         const runLength = j - i;
         if (runLength >= 3) {
-          items.push({ kind: 'tool_group', msgs: messages.slice(i, j), startIdx: i });
+          items.push({ kind: 'tool_group', msgs: visible.slice(i, j).map((v) => v.msg), startIdx: visible[i].idx });
           i = j;
           continue;
         }
       }
-      items.push({ kind: 'message', msg: messages[i], idx: i });
+      items.push({ kind: 'message', msg: visible[i].msg, idx: visible[i].idx });
       i++;
     }
     return items;

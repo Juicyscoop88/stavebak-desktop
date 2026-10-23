@@ -13,6 +13,7 @@ import { Toast } from './components/shared/Toast';
 import { SetupWizard } from './components/setup/SetupWizard';
 import { AccountGate, TrialBanner, useAccountRefresh } from './components/account/AccountGate';
 import { useAccountStore } from './stores/accountStore';
+import { loadToolTitles } from './lib/tool-titles';
 import { useSettingsStore } from './stores/settingsStore';
 import { useProviderStore } from './stores/providerStore';
 import type { ColorTheme, Theme } from './stores/settingsStore';
@@ -131,6 +132,7 @@ function App() {
   const settingsOpen = useSettingsStore((s) => s.settingsOpen);
   const setupCompleted = useSettingsStore((s) => s.setupCompleted);
   useAccountRefresh();
+  useEffect(() => { loadToolTitles(); }, []);
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
   const lastSeenVersion = useSettingsStore((s) => s.lastSeenVersion);
   const setLastSeenVersion = useSettingsStore((s) => s.setLastSeenVersion);
@@ -430,6 +432,31 @@ function App() {
         setup.setStep(step as SetupStep);
         useSettingsStore.getState().setSetupCompleted(false);
         return { preview: step };
+      },
+      /** Skutečné přihlášení ke Stavebáku (proti lokálnímu serveru s OAUTH_DEV_LOGIN projde samo, bez člověka). */
+      stavebakLogin() {
+        useAccountStore.getState().login();
+        return { started: true };
+      },
+      stavebakLogout() {
+        useAccountStore.getState().logout();
+        return { ok: true };
+      },
+      accountRefresh() {
+        useAccountStore.getState().refresh();
+        return { ok: true };
+      },
+      accountSnapshot() {
+        const a = useAccountStore.getState();
+        return { signedIn: a.signedIn, plan: a.status?.plan ?? null, trialEndsAt: a.status?.trialEndsAt ?? null, busy: a.busy, error: a.error };
+      },
+      /** Klik na první viditelné tlačítko s textem (onboarding, brána účtu, nastavení). */
+      clickText(text: string) {
+        const el = [...document.querySelectorAll('button, a')].find((b) =>
+          (b as HTMLElement).innerText?.trim().includes(text) && b.getBoundingClientRect().x < innerWidth && b.getBoundingClientRect().width > 0);
+        if (!el) return { clicked: false };
+        (el as HTMLElement).click();
+        return { clicked: true };
       },
       /** Stav účtu Stavebák pro screenshoty bez serveru: { signedIn, plan, daysLeft }. */
       account(state: { signedIn: boolean; plan?: 'trial' | 'free' | 'pro'; daysLeft?: number }) {
