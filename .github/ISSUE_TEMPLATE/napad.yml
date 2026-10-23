@@ -1,0 +1,27 @@
+name: Nápad
+description: Návrh na zlepšení nebo novou funkci.
+labels: [nápad]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problém
+      description: Co vám dnes vadí nebo chybí. Při jaké práci.
+    validations:
+      required: true
+  - type: textarea
+    id: cil
+    attributes:
+      label: Cíl
+      description: Jak by to mělo vypadat, až to bude hotové.
+    validations:
+      required: true
+  - type: textarea
+    id: navrh
+    attributes:
+      label: Návrh řešení
+  - type: textarea
+    id: hotovo
+    attributes:
+      label: Hotovo když
+      description: Podle čeho poznáme, že je to splněné.

@@ -1,12 +1,24 @@
 name: Release
 
+# Tag v* sestaví aplikaci pro macOS (universal, podepsaná a notarizovaná) a Windows (NSIS)
+# a založí draft release s artefakty a latest.json pro updater. Nic se nepublikuje samo.
+# Postup a tajemství: docs/ops/release.md
 on:
   push:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
+    # Tajemství podpisu jsou jen v prostředí release, job na něj čeká podle jeho pravidel.
+    environment: release
     permissions:
       contents: write
     strategy:
@@ -14,11 +26,7 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            args: '--target aarch64-apple-darwin'
-          - platform: macos-latest
-            args: '--target x86_64-apple-darwin'
-          - platform: ubuntu-22.04
-            args: ''
+            args: '--target universal-apple-darwin'
           - platform: windows-latest
             args: ''
 
@@ -28,29 +36,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Detect edition
-        id: edition
-        shell: bash
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          if [[ "$TAG" == *"-alpha"* ]]; then
-            echo "edition=alpha" >> $GITHUB_OUTPUT
-            echo "prerelease=true" >> $GITHUB_OUTPUT
-            echo "release_name=TCAlpha $TAG" >> $GITHUB_OUTPUT
-            echo "extra_args=--config editions/alpha/tauri.alpha.conf.json" >> $GITHUB_OUTPUT
-          else
-            echo "edition=stable" >> $GITHUB_OUTPUT
-            echo "prerelease=false" >> $GITHUB_OUTPUT
-            echo "release_name=TOKENICODE $TAG" >> $GITHUB_OUTPUT
-            echo "extra_args=" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Install dependencies (Ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -59,7 +44,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -72,13 +57,29 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: Install frontend dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      # Podpis Windows přes Azure Artifact Signing. Bez proměnné AZURE_SIGNING_ACCOUNT se
+      # installer sestaví nepodepsaný (SmartScreen varuje), viz docs/ops/release.md.
+      - name: Windows signing config
+        id: winsign
+        if: matrix.platform == 'windows-latest' && vars.AZURE_SIGNING_ACCOUNT != ''
+        shell: bash
+        env:
+          ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+        run: |
+          cargo install trusted-signing-cli --locked
+          CONF="$RUNNER_TEMP/sign.conf.json"
+          printf '{"bundle":{"windows":{"signCommand":"trusted-signing-cli -e %s -a %s -c %s -d Stavebak %%1"}}}' \
+            "$ENDPOINT" "$ACCOUNT" "$PROFILE" > "$CONF"
+          echo "args=--config $CONF" >> "$GITHUB_OUTPUT"
 
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EDITION: ${{ steps.edition.outputs.edition }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -87,10 +88,13 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: ${{ steps.edition.outputs.release_name }}
-          releaseBody: 'See the assets to download and install this version.'
+          releaseName: 'Stavebák ${{ github.ref_name }}'
+          releaseBody: 'Instalační soubory jsou v sekci Assets.'
           releaseDraft: true
-          prerelease: ${{ steps.edition.outputs.prerelease == 'true' }}
-          args: ${{ matrix.args }} ${{ steps.edition.outputs.extra_args }}
+          prerelease: false
+          args: ${{ matrix.args }} ${{ steps.winsign.outputs.args }}

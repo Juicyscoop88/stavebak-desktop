@@ -1,0 +1,37 @@
+name: Chyba
+description: Něco nefunguje, jak má.
+labels: [chyba]
+body:
+  - type: textarea
+    id: co
+    attributes:
+      label: Co se stalo
+      description: Popis chyby. Co jste viděli.
+    validations:
+      required: true
+  - type: textarea
+    id: kroky
+    attributes:
+      label: Jak chybu zopakovat
+      placeholder: |
+        1. Otevřít projekt …
+        2. Napsat …
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: ocekavani
+    attributes:
+      label: Co jste čekali
+  - type: input
+    id: verze
+    attributes:
+      label: Verze aplikace a systému
+      placeholder: např. 0.11.0, macOS 15.5
+    validations:
+      required: true
+  - type: textarea
+    id: prilohy
+    attributes:
+      label: Snímky obrazovky, log
+      description: Nevkládejte hesla, API klíče ani citlivé údaje z projektů.

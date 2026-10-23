@@ -79,3 +79,4 @@ screenshots/slash-commands.png
 
 # Local UI snapshots (contain local paths and project names)
 docs/snapshots/
+dist-release/
