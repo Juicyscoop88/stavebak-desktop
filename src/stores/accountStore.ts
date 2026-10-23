@@ -1,18 +1,20 @@
 import { create } from 'zustand';
 import { bridge } from '../lib/tauri-bridge';
+import type { Plan } from '../lib/onboarding';
 
 /**
  * Účet Stavebák: přihlášení (OAuth v Rustu, token v klíčence) a tarif. Tarif a platbu vrací stejné
  * MCP tooly, které používá model (account_status, upgrade), UI nic nepočítá samo.
  */
 
-export type Plan = 'trial' | 'free' | 'pro';
+export type { Plan };
 
 export interface AccountStatus {
   plan: Plan;
   planLabel: string;
   fullAccess: boolean;
   trialEndsAt: string;
+  daysLeft?: number;
   currentPeriodEnd?: string;
   manageUrl?: string;
 }

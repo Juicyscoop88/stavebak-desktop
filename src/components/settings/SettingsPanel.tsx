@@ -189,12 +189,6 @@ function StavebakAccountRow({ linkButton }: { linkButton: string }) {
   const t = useT();
   const { signedIn, status, busy, error, refresh, login, logout, openBilling } = useAccountStore();
   useEffect(() => { refresh(); }, [refresh]);
-  // Po návratu z platby v prohlížeči se tarif změní; okno znovu získá fokus
-  useEffect(() => {
-    const onFocus = () => { if (useAccountStore.getState().signedIn) refresh(); };
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [refresh]);
 
   const date = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('cs-CZ') : '');
   const description = !signedIn

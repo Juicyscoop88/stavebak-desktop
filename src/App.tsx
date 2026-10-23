@@ -11,6 +11,8 @@ import { ImageLightbox } from './components/shared/ImageLightbox';
 import { ChangelogModal } from './components/shared/ChangelogModal';
 import { Toast } from './components/shared/Toast';
 import { SetupWizard } from './components/setup/SetupWizard';
+import { AccountGate, TrialBanner, useAccountRefresh } from './components/account/AccountGate';
+import { useAccountStore } from './stores/accountStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { useProviderStore } from './stores/providerStore';
 import type { ColorTheme, Theme } from './stores/settingsStore';
@@ -128,6 +130,7 @@ function App() {
   const fontSize = useSettingsStore((s) => s.fontSize);
   const settingsOpen = useSettingsStore((s) => s.settingsOpen);
   const setupCompleted = useSettingsStore((s) => s.setupCompleted);
+  useAccountRefresh();
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
   const lastSeenVersion = useSettingsStore((s) => s.lastSeenVersion);
   const setLastSeenVersion = useSettingsStore((s) => s.setLastSeenVersion);
@@ -427,6 +430,18 @@ function App() {
         setup.setStep(step as SetupStep);
         useSettingsStore.getState().setSetupCompleted(false);
         return { preview: step };
+      },
+      /** Stav účtu Stavebák pro screenshoty bez serveru: { signedIn, plan, daysLeft }. */
+      account(state: { signedIn: boolean; plan?: 'trial' | 'free' | 'pro'; daysLeft?: number }) {
+        const trialEndsAt = new Date(Date.now() + (state.daysLeft ?? 20) * 86_400_000 - 60_000).toISOString();
+        useAccountStore.setState({
+          signedIn: state.signedIn,
+          status: state.signedIn && state.plan
+            ? { plan: state.plan, planLabel: state.plan, fullAccess: state.plan !== 'free', trialEndsAt, daysLeft: state.daysLeft }
+            : null,
+          error: null,
+        });
+        return useAccountStore.getState().status;
       },
       setSetupCompleted(completed: boolean) {
         delete (window as any).__onboardingPreview;
@@ -806,11 +821,12 @@ function App() {
     <>
       <AppShell
         sidebar={<Sidebar />}
-        main={<ChatPanel key={selectedSessionId || 'new'} />}
+        main={<div className="flex flex-col h-full min-h-0"><TrialBanner /><div className="flex-1 min-h-0"><ChatPanel key={selectedSessionId || 'new'} /></div></div>}
         secondary={<SecondaryPanel />}
         bottomBar={<BottomBar />}
         forceCollapseSidebar={!setupCompleted}
       />
+      <AccountGate />
       {/* Onboarding overlay — centered, covers entire app */}
       {!setupCompleted && (
         <div className="fixed inset-0 z-100 flex items-center justify-center bg-bg-chat">

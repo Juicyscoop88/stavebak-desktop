@@ -8,6 +8,7 @@ import { useT } from '../../lib/i18n';
 import { stripAnsi } from '../../lib/strip-ansi';
 import { AiAvatar } from '../shared/AiAvatar';
 import { bridge, onDownloadProgress } from '../../lib/tauri-bridge';
+import { startStep, nextStep } from '../../lib/onboarding';
 
 const AUTH_POLL_MS = 2000;
 const CLAUDE_UPGRADE_URL = 'https://claude.ai/upgrade';
@@ -38,6 +39,7 @@ export function SetupWizard() {
   const [showDetails, setShowDetails] = useState(false);
   const accountBusy = useAccountStore((s) => s.busy);
   const accountError = useAccountStore((s) => s.error);
+  const accountStatus = useAccountStore((s) => s.status);
 
   const finish = useCallback(async () => {
     try {
@@ -91,7 +93,8 @@ export function SetupWizard() {
     }
     (async () => {
       const s = useSetupStore.getState();
-      bridge.stavebakAuthStatus().then((ok) => useSetupStore.getState().setStavebakDone(ok)).catch(() => {});
+      const stavebakOk = await bridge.stavebakAuthStatus().catch(() => false);
+      s.setStavebakDone(stavebakOk);
       let installed = false;
       try {
         const status = await bridge.checkClaudeCli();
@@ -100,16 +103,20 @@ export function SetupWizard() {
       } catch { /* treated as not installed */ }
       if (cancelled) return;
 
+      let claudeOk = false;
       if (installed) {
         s.setCli('ready');
-        if (await checkAuth()) {
-          if (!cancelled) await finish();
-          return;
-        }
+        claudeOk = await checkAuth();
       } else {
         install();
       }
-      if (!cancelled) s.setStep('welcome');
+      if (cancelled) return;
+      const first = startStep({ claudeOk, stavebakOk });
+      if (first === null) {
+        await finish();
+        return;
+      }
+      s.setStep(first);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -121,7 +128,7 @@ export function SetupWizard() {
     pollRef.current = setInterval(async () => {
       if (await checkAuth()) {
         setWaitingForLogin(false);
-        useSetupStore.getState().setStep(useSetupStore.getState().stavebakDone ? 'done' : 'stavebak');
+        useSetupStore.getState().setStep(nextStep({ claudeOk: true, stavebakOk: useSetupStore.getState().stavebakDone }));
       }
     }, AUTH_POLL_MS);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -133,7 +140,7 @@ export function SetupWizard() {
   }, []);
 
   const goNextFromWelcome = () => {
-    useSetupStore.getState().setStep(authStatus === 'ok' ? 'stavebak' : 'claude');
+    useSetupStore.getState().setStep(nextStep({ claudeOk: authStatus === 'ok', stavebakOk: stavebakDone }));
   };
 
   const loginStavebak = async () => {
@@ -156,6 +163,7 @@ export function SetupWizard() {
           <Heading title={t('onb.welcome.title')} subtitle={t('onb.welcome.subtitle')} />
           <p className="text-xs text-text-tertiary mb-2">{t('onb.need')}</p>
           <Checklist claudeDone={authStatus === 'ok'} stavebakDone={stavebakDone} />
+          <p className="text-xs text-text-tertiary leading-snug -mt-3 mb-6">{t('onb.how')}</p>
           <PrimaryButton onClick={goNextFromWelcome}>{t('onb.start')}</PrimaryButton>
         </>
       )}
@@ -164,6 +172,7 @@ export function SetupWizard() {
         <>
           <StepLabel n={1} />
           <Heading title={t('onb.claude.title')} subtitle={t('onb.claude.desc')} />
+          <p className="text-xs text-text-tertiary leading-snug mb-4 text-center">{t('onb.claude.why')}</p>
 
           {cli === 'failed' ? (
             <div className="space-y-3">
@@ -205,6 +214,10 @@ export function SetupWizard() {
         <>
           <StepLabel n={2} />
           <Heading title={t('onb.stavebak.title')} subtitle={t('onb.stavebak.desc')} />
+          <div className="rounded-lg border border-border px-4 py-3 mb-4 text-xs text-text-tertiary leading-snug">
+            <div className="text-sm text-text-primary mb-0.5">{t('onb.stavebak.trialTitle')}</div>
+            {t('onb.stavebak.trialDesc')}
+          </div>
           <div className="space-y-2">
             <SecondaryButton onClick={loginStavebak} disabled={accountBusy}>
               <GoogleLogo size={14} weight="bold" />
@@ -214,10 +227,6 @@ export function SetupWizard() {
               {accountBusy ? <Status>{t('onb.stavebak.waiting')}</Status>
                 : accountError ? <span className="text-text-primary">{t('onb.stavebak.failed')}</span> : null}
             </div>
-            <button onClick={() => useSetupStore.getState().setStep('done')}
-              className="block mx-auto pt-2 text-xs text-text-tertiary hover:text-text-primary">
-              {t('onb.skip')}
-            </button>
           </div>
         </>
       )}
@@ -229,6 +238,9 @@ export function SetupWizard() {
             claudeDone={authStatus === 'ok'}
             stavebakDone={stavebakDone}
             claudeNote={accountName ? t('onb.signedInAs').replace('{account}', accountName) : undefined}
+            stavebakNote={accountStatus?.plan === 'trial'
+              ? t('onb.stavebak.trialUntil').replace('{date}', new Date(accountStatus.trialEndsAt).toLocaleDateString('cs-CZ'))
+              : undefined}
           />
           <PrimaryButton onClick={finish}>{t('onb.done.cta')}</PrimaryButton>
         </>
@@ -254,16 +266,17 @@ function StepLabel({ n }: { n: number }) {
   return <p className="text-center text-xs text-text-tertiary mb-2 tabular-nums">{n} / 2</p>;
 }
 
-function Checklist({ claudeDone, stavebakDone, claudeNote }: {
+function Checklist({ claudeDone, stavebakDone, claudeNote, stavebakNote }: {
   claudeDone: boolean;
   stavebakDone: boolean;
   claudeNote?: string;
+  stavebakNote?: string;
 }) {
   const t = useT();
   return (
     <div className="rounded-lg border border-border divide-y divide-border-subtle mb-6">
       <ChecklistItem done={claudeDone} title={t('onb.claude.item')} desc={claudeNote ?? t('onb.claude.itemDesc')} />
-      <ChecklistItem done={stavebakDone} title={t('onb.stavebak.item')} desc={t('onb.stavebak.itemDesc')} />
+      <ChecklistItem done={stavebakDone} title={t('onb.stavebak.item')} desc={stavebakNote ?? t('onb.stavebak.itemDesc')} />
     </div>
   );
 }
