@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, type ReactNode } from 'react';
 import { X, CaretRight } from '@phosphor-icons/react';
 import { useSettingsStore, type Locale } from '../../stores/settingsStore';
+import { useAccountStore } from '../../stores/accountStore';
 import { useMcpStore } from '../../stores/mcpStore';
 import { useT } from '../../lib/i18n';
 import { APP_NAME } from '../../lib/edition';
@@ -178,8 +179,45 @@ function AccountsSection() {
           </button>
         ) : null}
       </Row>
-      <Row label={t('settings.stavebakAccount')} description={t('settings.stavebakAccountDesc')} />
+      <StavebakAccountRow linkButton={linkButton} />
     </Section>
+  );
+}
+
+/** Účet Stavebák: přihlášení a tarif z account_status, platba přes upgrade (stejné tooly jako model). */
+function StavebakAccountRow({ linkButton }: { linkButton: string }) {
+  const t = useT();
+  const { signedIn, status, busy, error, refresh, login, logout, openBilling } = useAccountStore();
+  useEffect(() => { refresh(); }, [refresh]);
+  // Po návratu z platby v prohlížeči se tarif změní; okno znovu získá fokus
+  useEffect(() => {
+    const onFocus = () => { if (useAccountStore.getState().signedIn) refresh(); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refresh]);
+
+  const date = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('cs-CZ') : '');
+  const description = !signedIn
+    ? (signedIn === false ? t('settings.stavebakSignedOut') : '…')
+    : !status ? (error ? t('settings.stavebakError') : '…')
+    : status.plan === 'trial' ? t('settings.stavebakTrial').replace('{date}', date(status.trialEndsAt))
+    : status.plan === 'pro' ? t('settings.stavebakPro').replace('{date}', date(status.currentPeriodEnd))
+    : t('settings.stavebakFree');
+
+  return (
+    <Row label={t('settings.stavebakAccount')} description={description}>
+      {signedIn === false && (
+        <button className={linkButton} disabled={busy} onClick={() => { login(); }}>{t('settings.signIn')}</button>
+      )}
+      {signedIn && status && (
+        <button className={linkButton} disabled={busy} onClick={() => { openBilling(); }}>
+          {status.plan === 'pro' ? t('settings.manage') : t('settings.stavebakBuy')}
+        </button>
+      )}
+      {signedIn && (
+        <button className={linkButton} onClick={() => { logout(); }}>{t('settings.signOut')}</button>
+      )}
+    </Row>
   );
 }
 

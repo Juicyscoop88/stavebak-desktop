@@ -5,6 +5,7 @@ pub mod env_manager;
 mod events;
 pub mod path_access;
 mod protocol;
+mod stavebak_auth;
 #[cfg(debug_assertions)]
 mod test_harness;
 // windows_ps compiles on all platforms so its pure-logic tests run on
@@ -1653,19 +1654,50 @@ fn get_stavebak_mcp() -> StavebakMcpTarget {
 /// (`mcp__stavebak__*`) are the same against local and production.
 ///
 /// Writes `~/.stavebak/mcp-session-<stdin_id>.json`. Returns `None` on I/O error.
-fn build_mcp_scratch_config(stdin_id: &str) -> Option<std::path::PathBuf> {
+fn build_mcp_scratch_config(stdin_id: &str, token: Option<&str>) -> Option<std::path::PathBuf> {
     let home = dirs::home_dir()?;
     let target = stavebak_mcp_target();
     let dir = home.join(".stavebak");
     std::fs::create_dir_all(&dir).ok()?;
     let path = dir.join(format!("mcp-session-{}.json", safe_stdin_for_path(stdin_id)));
-    std::fs::write(&path, mcp_session_config(&target).to_string()).ok()?;
+    std::fs::write(&path, mcp_session_config(&target, token).to_string()).ok()?;
+    // Soubor může nést přístupový token: číst ho smí jen uživatel
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
     eprintln!("[Stavebak] MCP: {} ({})", target.url, target.env);
     Some(path)
 }
 
-fn mcp_session_config(target: &StavebakMcpTarget) -> serde_json::Value {
-    serde_json::json!({ "mcpServers": { STAVEBAK_MCP_SERVER: { "type": "http", "url": target.url } } })
+/// S přihlášením (stavebak_auth) nese session token v hlavičce, takže model jde pod stejným účtem jako panely.
+fn mcp_session_config(target: &StavebakMcpTarget, token: Option<&str>) -> serde_json::Value {
+    let mut server = serde_json::json!({ "type": "http", "url": target.url });
+    if let Some(token) = token {
+        server["headers"] = serde_json::json!({ "Authorization": format!("Bearer {}", token) });
+    }
+    serde_json::json!({ "mcpServers": { STAVEBAK_MCP_SERVER: server } })
+}
+
+#[tauri::command]
+async fn stavebak_login(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let url = stavebak_mcp_target().url;
+    stavebak_auth::login(&url, |auth_url| {
+        app.opener().open_url(auth_url, None::<&str>).map_err(|e| format!("Nepodařilo se otevřít prohlížeč: {}", e))
+    })
+    .await
+}
+
+#[tauri::command]
+fn stavebak_logout() -> Result<(), String> {
+    stavebak_auth::logout(&stavebak_mcp_target().url)
+}
+
+#[tauri::command]
+fn stavebak_auth_status() -> bool {
+    stavebak_auth::is_signed_in(&stavebak_mcp_target().url)
 }
 
 const STAVEBAK_MCP_SERVER: &str = "stavebak";
@@ -1697,11 +1729,18 @@ mod stavebak_mcp_target_tests {
 
     #[test]
     fn session_config_has_only_stavebak_under_fixed_name() {
-        let cfg = mcp_session_config(&resolve_stavebak_mcp_target(None, false));
+        let cfg = mcp_session_config(&resolve_stavebak_mcp_target(None, false), None);
         let servers = cfg["mcpServers"].as_object().unwrap();
         assert_eq!(servers.len(), 1);
         assert_eq!(servers["stavebak"]["url"], STAVEBAK_MCP_PROD);
         assert_eq!(servers["stavebak"]["type"], "http");
+        assert!(servers["stavebak"].get("headers").is_none());
+    }
+
+    #[test]
+    fn signed_in_session_carries_bearer_token() {
+        let cfg = mcp_session_config(&resolve_stavebak_mcp_target(None, false), Some("tok"));
+        assert_eq!(cfg["mcpServers"]["stavebak"]["headers"]["Authorization"], "Bearer tok");
     }
 }
 
@@ -1786,7 +1825,9 @@ async fn start_claude_session(
     // (see stavebak_mcp_target), in ~/.stavebak/mcp-session-<id>.json via
     // --mcp-config. Cleaned up on process exit.
     perf!("args_built");
-    let mcp_scratch_path = build_mcp_scratch_config(&session_id);
+    // Čerstvý token (obnoví se, pokud brzy vyprší); bez přihlášení session běží anonymně
+    let stavebak_token = stavebak_auth::access_token(&stavebak_mcp_target().url).await;
+    let mcp_scratch_path = build_mcp_scratch_config(&session_id, stavebak_token.as_deref());
     perf!("mcp_scratch");
     if let Some(ref scratch) = mcp_scratch_path {
         args.push("--mcp-config".to_string());
@@ -4056,10 +4097,12 @@ async fn mcp_rpc(
     )
     .await;
     let body = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params });
-    let text = client
-        .post(url)
-        .header("Accept", "application/json, text/event-stream")
-        .json(&body)
+    let mut req = client.post(url).header("Accept", "application/json, text/event-stream").json(&body);
+    // Panely jdou pod stejným účtem jako model
+    if let Some(token) = stavebak_auth::access_token(url).await {
+        req = req.bearer_auth(token);
+    }
+    let text = req
         .send()
         .await
         .map_err(|e| format!("MCP server není dostupný: {}", e))?
@@ -8132,6 +8175,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             start_claude_session,
+            stavebak_login,
+            stavebak_logout,
+            stavebak_auth_status,
             send_stdin,
             send_raw_stdin,
             kill_session,

@@ -305,6 +305,11 @@ export const bridge = {
     invoke<string>('get_home_dir'),
 
   /** Stavebák MCP server this build talks to (release = prod, dev = local, STAVEBAK_MCP_URL overrides). */
+  /** Přihlášení ke Stavebáku přes prohlížeč (OAuth); vrátí se po návratu z prohlížeče. */
+  stavebakLogin: () => invoke<void>('stavebak_login'),
+  stavebakLogout: () => invoke<void>('stavebak_logout'),
+  stavebakAuthStatus: () => invoke<boolean>('stavebak_auth_status'),
+
   getStavebakMcp: () =>
     invoke<{ url: string; env: 'prod' | 'local' | 'custom' }>('get_stavebak_mcp'),
 
