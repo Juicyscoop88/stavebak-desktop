@@ -18,8 +18,8 @@ Dependabot (`.github/dependabot.yml`) jednou týdně otevírá seskupené PR pro
 Workflow `Release` (`.github/workflows/release.yml`) spouští push tagu `v*`. Sestaví aplikaci a založí **draft** release s artefakty. Nic se nepublikuje samo.
 
 1. Na větvi `release/vX.Y.Z`: `./scripts/bump-version.sh X.Y.Z` (mění `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`), PR, squash merge.
-2. Tag na `main`: `git tag vX.Y.Z origin/main && git push origin vX.Y.Z`. Tag s `-alpha` sestaví edici Alpha (`editions/alpha`) jako prerelease.
-3. Počkat na workflow, stáhnout artefakty z draftu a vyzkoušet instalaci.
+2. Tag na `main`: `git tag vX.Y.Z origin/main && git push origin vX.Y.Z`.
+3. Schválit job v environmentu `release`, počkat na workflow, stáhnout artefakty z draftu a vyzkoušet instalaci na čistém Macu a Windows.
 4. Publikovat draft. Teprve tím se release stane `latest` a updater v aplikacích ho uvidí (`releases/latest/download/latest.json`).
 
 Release se dělá jen na výslovný pokyn.
@@ -34,25 +34,26 @@ Updater instaluje jen vyšší verzi, než je nainstalovaná. Z toho plyne:
 
 ## Tajemství
 
-Žádný klíč, certifikát ani heslo nesmí být v repu ani ve výpisu workflow. Patří do GitHub Secrets, záloha soukromých klíčů do správce hesel.
+Žádný klíč, certifikát ani heslo nesmí být v repu ani ve výpisu workflow. Tajemství podpisu jsou jen v GitHub environment `release` (ne na úrovni repa), záloha soukromých klíčů ve správci hesel.
 
-| Secret | K čemu | Stav |
+| Secret / proměnná | K čemu | Stav |
 |---|---|---|
-| `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | podpis aktualizací pro updater | chybí, viz rozhodnutí 1 |
-| `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | podpis macOS (Developer ID Application) | chybí, viz rozhodnutí 2 |
-| `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | notarizace macOS (heslo pro aplikaci, ne heslo k účtu) | chybí, viz rozhodnutí 2 |
+| `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | podpis aktualizací pro updater | klíč vygenerován 2026-10-23 (`~/.tauri/stavebak-updater.key`, heslo v klíčence „Stavebak updater key“), do environmentu zatím nenahrán |
+| `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | podpis macOS (Developer ID Application, export .p12 v base64) | certifikát existuje v klíčence, export chybí |
+| `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | notarizace macOS (heslo pro aplikaci, ne heslo k účtu) | chybí |
+| `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` + proměnné `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE` | podpis Windows (Azure Artifact Signing) | čeká na ověření organizace |
 
 `GITHUB_TOKEN` dává GitHub sám, workflow má jen `contents: write` pro založení releasu.
 
-## Otevřená rozhodnutí (stav 2026-10-22)
+## Rozhodnutí (2026-10-23, spec 097 v repu serveru)
 
-Release v současném stavu neprojde: konfigurace má `createUpdaterArtifacts: true` a veřejný klíč updateru, ale v repu není secret se soukromým klíčem, takže podpis aktualizací selže.
-
-1. **Klíč updateru.** Veřejný klíč v `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`) pochází z původního projektu, soukromý klíč k němu nemáme. Návrh: vygenerovat nový pár (`pnpm tauri signer generate`), veřejný klíč do konfigurace, soukromý do secrets a správce hesel. Bez toho updater nefunguje. Ztráta soukromého klíče znamená, že stávající instalace už žádnou aktualizaci nepřijmou.
-2. **Podpis a notarizace macOS.** Vyžaduje Apple Developer Program a certifikát Developer ID Application. Bez nich macOS stažené aplikaci nedůvěřuje a uživatel ji musí povolit ručně. Pro pilot s projektanty to je bariéra.
-3. **Platformy.** Workflow staví macOS (arm64 a x64), Linux a Windows. Produkt je nejdřív pro macOS. Návrh: dočasně jen macOS, nebo Windows ponechat bez podpisu (SmartScreen varování). Linux nikdo nepoužívá.
-4. **Schvalovací brána.** Návrh: GitHub environment `release` s povinným schvalovatelem, secrets podpisu jen v něm (ne na úrovni repa). Release job pak čeká na ruční schválení a k secrets se nedostane jiný workflow.
-5. **Edice Alpha.** Updater Alpha čte `latest-alpha.json` z větve `dev` (`editions/alpha/tauri.alpha.conf.json`), který workflow nevytváří. Buď zrušit, nebo dodělat.
+1. **Klíč updateru je nový.** Veřejný klíč v `src-tauri/tauri.conf.json` je náš, původní z TOKENICODE je pryč. Instalace se starým klíčem (jen vývojové) aktualizaci nepřijmou, nainstalují se znovu. Ztráta soukromého klíče znamená, že stávající instalace už žádnou aktualizaci nepřijmou: záloha do správce hesel je povinná.
+2. **macOS: jeden universal build**, podpis Developer ID, notarizace. Minimální verze macOS 13. Lokální ověření bez CI: `scripts/release-macos-local.sh` (identita a profil notarytool z klíčenky, nic nenahrává).
+3. **Platformy: macOS a Windows od začátku**, Linux ne. Cílovka pracuje v BricsCADu a AutoCADu, převážně na Windows.
+4. **Podpis Windows přes Azure Artifact Signing**, vydavatel Typico Games s.r.o. (pro jednotlivce v EU služba není). Dokud není nastavená proměnná `AZURE_SIGNING_ACCOUNT`, workflow sestaví installer nepodepsaný a SmartScreen varuje. Takový release nepublikovat mimo testery. Reputace SmartScreen se u nového vydavatele buduje s počtem stažení.
+5. **Schvalovací brána:** job `release` běží v environmentu `release`. V nastavení repa mu přidat povinného schvalovatele, tajemství podpisu jen tam.
+6. **Edice Alpha zrušena** (`editions/`, tagy `-alpha`). Kód `src/lib/edition.ts` zůstává, výchozí edice je stabilní.
+7. **Název produktu `Stavebak`** (bez diakritiky kvůli názvům souborů installeru a updateru). Zobrazovaný název s diakritikou (`APP_NAME` v `vite.config.ts`, titulek okna) je samostatná změna.
 
 ## Známý dluh
 
