@@ -33,11 +33,22 @@ unset APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID APPLE_API_KEY APPLE_API_ISSUER
 export APPLE_SIGNING_IDENTITY="$IDENTITY"
 
 echo "==> Build $TARGET, podpis: $IDENTITY"
-pnpm exec tauri build --target "$TARGET" --bundles app,dmg "${EXTRA[@]}"
+pnpm exec tauri build --target "$TARGET" --bundles app,dmg ${EXTRA[@]+"${EXTRA[@]}"}
 
 BUNDLE="src-tauri/target/$TARGET/release/bundle"
 APP=$(ls -d "$BUNDLE"/macos/*.app | head -1)
 DMG=$(ls "$BUNDLE"/dmg/*.dmg | head -1)
+
+notarize() {
+  local out id
+  out=$(xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait 2>&1) || true
+  echo "$out"
+  if ! grep -q "status: Accepted" <<<"$out"; then
+    id=$(awk '/^  id:/{print $2; exit}' <<<"$out")
+    xcrun notarytool log "$id" --keychain-profile "$NOTARY_PROFILE" >&2 || true
+    exit 1
+  fi
+}
 
 echo "==> Ověření podpisu"
 codesign --verify --deep --strict --verbose=2 "$APP"
@@ -45,16 +56,39 @@ codesign -dvv "$APP" 2>&1 | grep -E "Authority=Developer ID|TeamIdentifier|flags
 
 if [ -z "${SKIP_NOTARIZE:-}" ]; then
   echo "==> Notarizace DMG (profil $NOTARY_PROFILE)"
-  OUT=$(xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait 2>&1) || true
-  echo "$OUT"
-  if ! grep -q "status: Accepted" <<<"$OUT"; then
-    ID=$(awk '/^  id:/{print $2; exit}' <<<"$OUT")
-    xcrun notarytool log "$ID" --keychain-profile "$NOTARY_PROFILE" >&2 || true
-    exit 1
-  fi
+  notarize "$DMG"
   xcrun stapler staple "$DMG"
   xcrun stapler validate "$DMG"
   spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
+fi
+
+if [ -n "${UPDATER:-}" ]; then
+  # Balíček pro updater obsahuje aplikaci: notarizovat a sešít ji, pak znovu zabalit a podepsat.
+  if [ -z "${SKIP_NOTARIZE:-}" ]; then
+    echo "==> Notarizace aplikace pro updater"
+    ZIP="$BUNDLE/macos/notarize.zip"
+    ditto -c -k --keepParent "$APP" "$ZIP"
+    notarize "$ZIP"
+    rm "$ZIP"
+    xcrun stapler staple "$APP"
+    (cd "$BUNDLE/macos" && rm -f *.app.tar.gz* && COPYFILE_DISABLE=1 tar -czf "$(basename "$APP").tar.gz" "$(basename "$APP")")
+    pnpm exec tauri signer sign "$BUNDLE/macos/$(basename "$APP").tar.gz" >/dev/null
+  fi
+
+  VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+  OUT="dist-release/v$VERSION"
+  rm -rf "$OUT" && mkdir -p "$OUT"
+  cp "$DMG" "$OUT/Stavebak_${VERSION}_universal.dmg"
+  cp "$BUNDLE/macos/$(basename "$APP").tar.gz" "$OUT/Stavebak_universal.app.tar.gz"
+  SIG=$(cat "$BUNDLE/macos/$(basename "$APP").tar.gz.sig")
+  URL="https://github.com/Juicyscoop88/stavebak-desktop/releases/download/v$VERSION/Stavebak_universal.app.tar.gz"
+  node -e '
+    const [version, sig, url] = process.argv.slice(1);
+    const p = { signature: sig, url };
+    console.log(JSON.stringify({ version, notes: process.env.NOTES || "", pub_date: new Date().toISOString(),
+      platforms: { "darwin-aarch64": p, "darwin-x86_64": p } }, null, 2));
+  ' "$VERSION" "$SIG" "$URL" > "$OUT/latest.json"
+  echo "==> Release soubory: $OUT (nahrát do draftu: gh release create v$VERSION --draft $OUT/*)"
 fi
 
 echo "==> Hotovo: $DMG"
