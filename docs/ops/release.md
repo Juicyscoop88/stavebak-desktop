@@ -38,7 +38,7 @@ Updater instaluje jen vyšší verzi, než je nainstalovaná. Z toho plyne:
 
 | Secret / proměnná | K čemu | Stav |
 |---|---|---|
-| `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | podpis aktualizací pro updater | klíč vygenerován 2026-10-23 (`~/.tauri/stavebak-updater.key`, heslo v klíčence „Stavebak updater key“), do environmentu zatím nenahrán |
+| `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | podpis aktualizací pro updater | v environmentu `release` od 2026-10-23. Lokálně `~/.tauri/stavebak-updater.key`, heslo v klíčence „Stavebak updater key“, záloha v iCloud Drive a v aplikaci Hesla |
 | `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | podpis macOS (Developer ID Application, export .p12 v base64) | certifikát existuje v klíčence, export chybí |
 | `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | notarizace macOS (heslo pro aplikaci, ne heslo k účtu) | chybí |
 | `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` + proměnné `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE` | podpis Windows (Azure Artifact Signing) | čeká na ověření organizace |
@@ -51,7 +51,7 @@ Updater instaluje jen vyšší verzi, než je nainstalovaná. Z toho plyne:
 2. **macOS: jeden universal build**, podpis Developer ID, notarizace. Minimální verze macOS 13. **Release pro macOS se zatím dělá lokálně:** `UPDATER=1 scripts/release-macos-local.sh` (identita a profil notarytool z klíčenky) připraví v `dist-release/vX.Y.Z/` DMG, balíček updateru a `latest.json`. Nahrání do draftu: `gh release create vX.Y.Z --draft dist-release/vX.Y.Z/*`, publikace na pokyn. Apple tajemství do CI přijdou spolu s Windows.
 3. **Platformy: macOS, hned po prvním e2e Windows**, Linux ne. Cílovka pracuje v BricsCADu a AutoCADu, převážně na Windows.
 4. **Podpis Windows přes Azure Artifact Signing**, vydavatel Typico Games s.r.o. (pro jednotlivce v EU služba není). Dokud není nastavená proměnná `AZURE_SIGNING_ACCOUNT`, workflow sestaví installer nepodepsaný a SmartScreen varuje. Takový release nepublikovat mimo testery. Reputace SmartScreen se u nového vydavatele buduje s počtem stažení.
-5. **Schvalovací brána:** job `release` běží v environmentu `release`. V nastavení repa mu přidat povinného schvalovatele, tajemství podpisu jen tam.
+5. **Schvalovací brána:** job `release` běží v environmentu `release` (povinný schvalovatel vlastník repa, spustí ho jen tag `v*`). Tajemství podpisu jsou jen tam.
 6. **Edice Alpha zrušena** (`editions/`, tagy `-alpha`). Kód `src/lib/edition.ts` zůstává, výchozí edice je stabilní.
 7. **Název produktu `Stavebak`** (bez diakritiky kvůli názvům souborů installeru a updateru). Zobrazovaný název s diakritikou (`APP_NAME` v `vite.config.ts`, titulek okna) je samostatná změna.
 
