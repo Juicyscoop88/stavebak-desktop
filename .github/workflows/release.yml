@@ -1,0 +1,118 @@
+name: Release
+
+# Tag v* sestaví Windows (NSIS) a nahraje ho do draftu releasu. macOS se dělá lokálně
+# (scripts/release-macos-local.sh) a nahrává se do draftu PŘED tagem. Windows pak jen doplní
+# svou položku do latest.json. Nic se nepublikuje samo.
+# Postup a tajemství: docs/ops/release.md
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # Tajemství podpisu jsou jen v prostředí release, job na něj čeká podle jeho pravidel.
+    environment: release
+    permissions:
+      contents: write
+    # Jen Windows. macOS se staví lokálně (scripts/release-macos-local.sh), Linux nenabízíme.
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Tag odpovídá verzi aplikace
+        run: node scripts/check-version.mjs '${{ github.ref_name }}'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Podpis Windows přes Azure Artifact Signing. Bez proměnné AZURE_SIGNING_ACCOUNT se
+      # installer sestaví nepodepsaný (SmartScreen varuje), viz docs/ops/release.md.
+      - name: Windows signing config
+        id: winsign
+        if: vars.AZURE_SIGNING_ACCOUNT != ''
+        shell: bash
+        env:
+          ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+        run: |
+          cargo install trusted-signing-cli --locked
+          CONF="$RUNNER_TEMP/sign.conf.json"
+          printf '{"bundle":{"windows":{"signCommand":"trusted-signing-cli -e %s -a %s -c %s -d Stavebak %%1"}}}' \
+            "$ENDPOINT" "$ACCOUNT" "$PROFILE" > "$CONF"
+          echo "args=--config $CONF" >> "$GITHUB_OUTPUT"
+
+      - name: Build the app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Stavebák ${{ github.ref_name }}'
+          releaseBody: 'Instalační soubory jsou v sekci Assets.'
+          releaseDraft: true
+          # latest.json skládáme sami (macOS je lokální), jinak by CI přepsal macOS položku
+          includeUpdaterJson: false
+          prerelease: false
+          args: ${{ steps.winsign.outputs.args }}
+
+      # Windows: instalátor pod stálým jménem (web odkazuje na releases/latest/download/Stavebak-setup.exe,
+      # stejný vzor jako Stavebak.dmg) a kontrola podpisu, pokud je podepisování zapnuté.
+      - name: Windows installer, stálé jméno a kontrola podpisu
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SIGNING: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+        run: |
+          $setup = Get-ChildItem -Path src-tauri/target/release/bundle/nsis -Filter '*-setup.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'NSIS installer nenalezen' }
+          if ($SIGNING) {
+            $sig = Get-AuthenticodeSignature $setup.FullName
+            if ($sig.Status -ne 'Valid') { throw "Installer není podepsaný (stav: $($sig.Status))" }
+            Write-Host "Podpis OK: $($sig.SignerCertificate.Subject)"
+          } else {
+            Write-Warning 'Installer je NEPODEPSANÝ (chybí AZURE_SIGNING_ACCOUNT). Nepublikovat mimo testery.'
+          }
+          Copy-Item $setup.FullName 'Stavebak-setup.exe'
+          $sigFile = "$($setup.FullName).sig"
+          if (-not (Test-Path $sigFile)) { throw 'Chybí .sig pro updater (TAURI_SIGNING_PRIVATE_KEY)' }
+          node scripts/merge-updater-windows.mjs '${{ github.ref_name }}' $setup.FullName $sigFile "$env:RUNNER_TEMP/latest.json"
+          Copy-Item "$env:RUNNER_TEMP/latest.json" latest.json
+          gh release upload '${{ github.ref_name }}' latest.json --clobber
+          gh release upload '${{ github.ref_name }}' 'Stavebak-setup.exe' --clobber

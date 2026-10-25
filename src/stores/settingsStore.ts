@@ -1,0 +1,475 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { settingsEvents } from '../lib/settingsEvents';
+
+// --- Types ---
+
+export type Theme = 'light' | 'dark' | 'system';
+export type ColorTheme = 'black' | 'blue' | 'purple' | 'green';
+export type SecondaryPanelTab = 'files' | 'skills';
+/** Active panel IDs for the plugin panel system (ADR-0002) */
+export type PanelId = string | null;
+export type ModelId =
+  | 'opus'
+  | 'sonnet'
+  | 'claude-fable-5'
+  | 'claude-fable-5-1m'
+  | 'claude-opus-4-8'
+  | 'claude-opus-4-8-1m'
+  | 'claude-opus-4-6'
+  | 'claude-opus-4-6-1m'
+  | 'claude-sonnet-4-6'
+  | 'claude-haiku-4-5-20251001';
+export type SessionMode = 'code' | 'ask' | 'plan' | 'bypass';
+/** CLI permission mode for the SDK control protocol */
+export type CliPermissionMode = 'acceptEdits' | 'default' | 'plan' | 'bypassPermissions';
+export type Locale = 'cs' | 'en' | 'sk' | 'de';
+
+/** Map frontend session mode to CLI permission mode */
+export function mapSessionModeToPermissionMode(mode: SessionMode): CliPermissionMode {
+  switch (mode) {
+    case 'code': return 'acceptEdits';
+    case 'ask': return 'default';
+    case 'plan': return 'plan';
+    case 'bypass': return 'bypassPermissions';
+  }
+}
+export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high' | 'max';
+
+// --- Model options (display mapping) ---
+
+// CLI aliases: the CLI resolves `opus` / `sonnet` to the newest model the
+// user's subscription offers, so a retired model id never breaks the chat.
+export const MODEL_OPTIONS: { id: ModelId; label: string; short: string }[] = [
+  { id: 'sonnet', label: 'Sonnet', short: 'Sonnet' },
+  { id: 'opus', label: 'Opus', short: 'Opus' },
+];
+
+/** Map any stored model id (pinned version or alias) to a CLI alias. */
+export function toModelAlias(model: string | undefined): ModelId {
+  return model && /opus|fable/.test(model) ? 'opus' : 'sonnet';
+}
+
+// --- Store State & Actions ---
+
+interface SettingsState {
+  theme: Theme;
+  colorTheme: ColorTheme;
+  sidebarOpen: boolean;
+  secondaryPanelOpen: boolean;
+  secondaryPanelTab: SecondaryPanelTab;
+  secondaryPanelWidth: number;
+  settingsOpen: boolean;
+  workingDirectory: string;
+  selectedModel: string;
+  sessionMode: SessionMode;
+  locale: Locale;
+  /** Global UI font size in px (default 18) */
+  fontSize: number;
+  /** Sidebar width in px (default 280) */
+  sidebarWidth: number;
+  /** Whether the CLI setup wizard has been completed or skipped */
+  setupCompleted: boolean;
+  /** Thinking effort level: off disables, low/medium/high/max set effort */
+  thinkingLevel: ThinkingLevel;
+  /** Whether a newer version is available (set by auto-check on startup) */
+  updateAvailable: boolean;
+  /** Whether a newer CLI version is available */
+  cliUpdateAvailable: boolean;
+  /** Latest CLI version string (for display) */
+  cliLatestVersion: string;
+  /** Version string of the available update */
+  updateVersion: string;
+  /** Whether the update has been downloaded and is ready for restart (transient, not persisted) */
+  updateDownloaded: boolean;
+  /** Last app version the user has seen the changelog for */
+  lastSeenVersion: string;
+  /** Custom AI avatar image (data URL or empty string for default </> icon) */
+  aiAvatarUrl: string;
+  /** Custom user avatar image (data URL or empty string for default initials) */
+  userAvatarUrl: string;
+  /** User display name shown next to messages */
+  userDisplayName: string;
+  /** Whether to show dotfiles (hidden files) in the file tree */
+  showHiddenFiles: boolean;
+  /** Active panel ID for the left PanelSlot (ADR-0002) */
+  leftPanelId: PanelId;
+  /** Active panel ID for the right PanelSlot (ADR-0002) */
+  rightPanelId: PanelId;
+
+  toggleTheme: () => void;
+  setTheme: (theme: Theme) => void;
+  setColorTheme: (colorTheme: ColorTheme) => void;
+  /** Whether the floating agent panel is open */
+  agentPanelOpen: boolean;
+
+  toggleSidebar: () => void;
+  toggleSecondaryPanel: () => void;
+  toggleAgentPanel: () => void;
+  setSecondaryTab: (tab: SecondaryPanelTab) => void;
+  setSecondaryPanelWidth: (width: number) => void;
+  toggleSettings: () => void;
+  /** Last opened project folder — reopened on launch */
+  lastProject: string;
+  /** Stavebák's own project list, most recent first (not Claude Code's whole history) */
+  projects: string[];
+  /** Where new projects go, set only when the user picks a folder ("Změnit"); empty = ~/Documents/Stavebák */
+  projectsDir: string;
+  setProjectsDir: (dir: string) => void;
+  removeProject: (dir: string) => void;
+  setWorkingDirectory: (dir: string) => void;
+  setSelectedModel: (model: string) => void;
+  setSessionMode: (mode: SessionMode) => void;
+  setLocale: (locale: Locale) => void;
+  toggleLocale: () => void;
+  setFontSize: (size: number) => void;
+  increaseFontSize: () => void;
+  decreaseFontSize: () => void;
+  setSidebarWidth: (width: number) => void;
+  setSetupCompleted: (completed: boolean) => void;
+  setThinkingLevel: (level: ThinkingLevel) => void;
+  setUpdateAvailable: (available: boolean, version?: string) => void;
+  setUpdateDownloaded: (downloaded: boolean) => void;
+  setLastSeenVersion: (version: string) => void;
+  setAiAvatarUrl: (url: string) => void;
+  setUserAvatarUrl: (url: string) => void;
+  setUserDisplayName: (name: string) => void;
+  toggleHiddenFiles: () => void;
+  setLeftPanel: (id: PanelId) => void;
+  setRightPanel: (id: PanelId) => void;
+}
+
+// --- Theme cycle order ---
+
+const themeCycle: Theme[] = ['light', 'dark', 'system'];
+
+function nextTheme(current: Theme): Theme {
+  const idx = themeCycle.indexOf(current);
+  return themeCycle[(idx + 1) % themeCycle.length];
+}
+
+// --- Store ---
+
+export const useSettingsStore = create<SettingsState>()(
+  persist(
+    (set, get) => ({
+      theme: 'system',
+      colorTheme: 'black',
+      sidebarOpen: true,
+      secondaryPanelOpen: false,
+      secondaryPanelTab: 'files',
+      secondaryPanelWidth: 300,
+      settingsOpen: false,
+      agentPanelOpen: false,
+      workingDirectory: '',
+      lastProject: '',
+      projects: [],
+      projectsDir: '',
+      selectedModel: 'sonnet',
+      sessionMode: 'bypass',
+      locale: 'cs',
+      fontSize: 16,
+      sidebarWidth: 280,
+      setupCompleted: false,
+      thinkingLevel: 'medium' as ThinkingLevel,
+      updateAvailable: false,
+      updateVersion: '',
+      cliUpdateAvailable: false,
+      cliLatestVersion: '',
+      updateDownloaded: false,
+      lastSeenVersion: '',
+      aiAvatarUrl: '',
+      userAvatarUrl: '',
+      userDisplayName: '',
+      showHiddenFiles: false,
+      leftPanelId: 'files',
+      rightPanelId: null,
+
+      toggleTheme: () =>
+        set((state) => ({ theme: nextTheme(state.theme) })),
+
+      setTheme: (theme) => set(() => ({ theme })),
+
+      setColorTheme: (colorTheme) => set(() => ({ colorTheme })),
+
+      toggleSidebar: () =>
+        set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+
+      toggleSecondaryPanel: () =>
+        set((state) => ({
+          secondaryPanelOpen: !state.secondaryPanelOpen,
+        })),
+
+      toggleAgentPanel: () =>
+        set((state) => ({ agentPanelOpen: !state.agentPanelOpen })),
+
+      setSecondaryTab: (tab) =>
+        set(() => ({
+          secondaryPanelTab: tab,
+          secondaryPanelOpen: true,
+        })),
+
+      setSecondaryPanelWidth: (width) =>
+        set(() => ({ secondaryPanelWidth: width })),
+
+      toggleSettings: () =>
+        set((state) => ({
+          settingsOpen: !state.settingsOpen,
+          // Clear update badge when opening settings
+          ...(!state.settingsOpen && state.updateAvailable ? { updateAvailable: false } : {}),
+        })),
+
+      setProjectsDir: (dir) => set({ projectsDir: dir }),
+
+      setWorkingDirectory: (dir) => {
+        set((state) => (dir
+          ? { workingDirectory: dir, lastProject: dir, projects: [dir, ...state.projects.filter((p) => p !== dir)] }
+          : { workingDirectory: dir }));
+        if (dir) {
+          import('@tauri-apps/api/core').then(({ invoke }) => {
+            invoke('ensure_claude_md', { path: dir }).catch(() => {});
+          });
+        }
+      },
+
+      removeProject: (dir) => set((state) => ({ projects: state.projects.filter((p) => p !== dir) })),
+
+      setSelectedModel: (model) => {
+        const old = get().selectedModel;
+        set(() => ({ selectedModel: model }));
+        if (old !== model) settingsEvents.emit('model-changed', { old, next: model });
+      },
+
+      setSessionMode: (mode) => {
+        const old = get().sessionMode;
+        set(() => ({ sessionMode: mode }));
+        if (old !== mode) settingsEvents.emit('session-mode-changed', { old, next: mode });
+      },
+
+      setLocale: (locale) =>
+        set(() => ({ locale })),
+
+      toggleLocale: () => {
+        // No-op: use setLocale instead
+      },
+
+      setFontSize: (size) =>
+        set(() => ({ fontSize: Math.max(10, Math.min(36, size)) })),
+
+      increaseFontSize: () =>
+        set((state) => ({ fontSize: Math.min(36, state.fontSize + 1) })),
+
+      decreaseFontSize: () =>
+        set((state) => ({ fontSize: Math.max(10, state.fontSize - 1) })),
+
+      setSidebarWidth: (width) =>
+        set(() => ({ sidebarWidth: Math.max(180, Math.min(450, width)) })),
+
+      setSetupCompleted: (completed) =>
+        set(() => ({ setupCompleted: completed })),
+
+      setThinkingLevel: (level) => {
+        const old = get().thinkingLevel;
+        set(() => ({ thinkingLevel: level }));
+        if (old !== level) settingsEvents.emit('thinking-changed', { old, next: level });
+      },
+
+      setUpdateAvailable: (available, version) =>
+        set(() => ({
+          updateAvailable: available,
+          ...(version !== undefined ? { updateVersion: version } : {}),
+          ...(!available ? { updateVersion: '', updateDownloaded: false } : {}),
+        })),
+
+      setUpdateDownloaded: (downloaded) =>
+        set(() => ({ updateDownloaded: downloaded })),
+
+      setLastSeenVersion: (version) =>
+        set(() => ({ lastSeenVersion: version })),
+
+      setAiAvatarUrl: (url) =>
+        set(() => ({ aiAvatarUrl: url })),
+
+      setUserAvatarUrl: (url) =>
+        set(() => ({ userAvatarUrl: url })),
+
+      setUserDisplayName: (name) =>
+        set(() => ({ userDisplayName: name.slice(0, 20) })),
+      toggleHiddenFiles: () =>
+        set((state) => ({ showHiddenFiles: !state.showHiddenFiles })),
+      setLeftPanel: (id) => set(() => ({ leftPanelId: id })),
+      setRightPanel: (id) => set(() => ({ rightPanelId: id })),
+    }),
+    {
+      name: 'stavebak-settings',
+      version: 12,
+      migrate: (persistedState: unknown, version: number) => {
+        const persisted = persistedState as Record<string, unknown>;
+        if (version === 0) {
+          // Migrate legacy model IDs to current ones
+          const legacyMap: Record<string, ModelId> = {
+            'claude-opus-4-0': 'claude-opus-4-8',
+            'claude-sonnet-4-0': 'claude-sonnet-4-6',
+            'claude-haiku-3-5': 'claude-haiku-4-5-20251001',
+          };
+          const old = persisted.selectedModel as string;
+          if (old && legacyMap[old]) {
+            persisted.selectedModel = legacyMap[old];
+          }
+        }
+        if (version < 2) {
+          persisted.updateAvailable = false;
+          persisted.updateVersion = '';
+          persisted.lastSeenVersion = '';
+        }
+        if (version < 4) {
+          // Migrate boolean thinkingEnabled → ThinkingLevel
+          const oldThinking = persisted.thinkingEnabled;
+          persisted.thinkingLevel = oldThinking === false ? 'off' : 'high';
+          delete persisted.thinkingEnabled;
+        }
+        if (version < 5) {
+          // Force default mode to bypass — old versions may have persisted 'code'/'ask'
+          persisted.sessionMode = 'bypass';
+        }
+        if (version < 6) {
+          // Fix Haiku model ID: claude-haiku-4-5 → claude-haiku-4-5-20251001
+          if (persisted.selectedModel === 'claude-haiku-4-5') {
+            persisted.selectedModel = 'claude-haiku-4-5-20251001';
+          }
+        }
+        // v7 migration removed (Phase 2 §2.5 / §5.1): users are free to pick
+        // 4.6 / 4.6-1m / 4.7 / 4.7-1m. The earlier migration forcibly rewrote
+        // 4.6 selections to 4.7, which silently broke old-CLI users.
+        if (version < 8) {
+          // 4.7 is retired in favor of 4.8. Only remap the two existing 4.7
+          // selections to their 4.8 equivalents — never force-rewrite any other
+          // model (4.8 is a CLI-supported model, so this is a same-tier upgrade,
+          // not the v7-style unconditional rewrite that broke old-CLI users).
+          const opusUpgradeMap: Record<string, ModelId> = {
+            'claude-opus-4-7': 'claude-opus-4-8',
+            'claude-opus-4-7-1m': 'claude-opus-4-8-1m',
+          };
+          const current = persisted.selectedModel as string;
+          if (current && opusUpgradeMap[current]) {
+            persisted.selectedModel = opusUpgradeMap[current];
+          }
+        }
+        if (version < 9) {
+          persisted.leftPanelId = 'files';
+          persisted.rightPanelId = null;
+        }
+        if (version < 10) {
+          // Root font size drives Tailwind spacing (rem). The old 18px default
+          // inflated every gap by 12.5%; reset only that untouched default.
+          if (persisted.fontSize === 18) persisted.fontSize = 16;
+        }
+        if (version < 11) {
+          // Pinned model ids (claude-sonnet-4-6…) → CLI aliases.
+          persisted.selectedModel = toModelAlias(persisted.selectedModel as string);
+        }
+        if (version < 12) {
+          // Third-party API provider settings are gone: the app only runs
+          // Claude Code with the user's own sign-in. Drop any stored values.
+          for (const key of ['apiProviderMode', 'customProviderName', 'customProviderBaseUrl',
+            'customProviderModelMappings', 'customProviderApiFormat', 'customProviderApiKey']) {
+            delete persisted[key];
+          }
+        }
+        return persisted;
+      },
+      partialize: (state) => ({
+        theme: state.theme,
+        colorTheme: state.colorTheme,
+        sidebarOpen: state.sidebarOpen,
+        secondaryPanelWidth: state.secondaryPanelWidth,
+        // workingDirectory itself isn't persisted; launch reopens lastProject via openProject()
+        lastProject: state.lastProject,
+        projects: state.projects,
+        projectsDir: state.projectsDir,
+        selectedModel: state.selectedModel,
+        sessionMode: state.sessionMode,
+        locale: state.locale,
+        fontSize: state.fontSize,
+        sidebarWidth: state.sidebarWidth,
+        setupCompleted: state.setupCompleted,
+        thinkingLevel: state.thinkingLevel,
+        updateAvailable: state.updateAvailable,
+        updateVersion: state.updateVersion,
+        lastSeenVersion: state.lastSeenVersion,
+        aiAvatarUrl: state.aiAvatarUrl,
+        userAvatarUrl: state.userAvatarUrl,
+        userDisplayName: state.userDisplayName,
+        showHiddenFiles: state.showHiddenFiles,
+        leftPanelId: state.leftPanelId,
+        rightPanelId: state.rightPanelId,
+      }),
+    },
+  ),
+);
+
+// --- Per-session effective value helpers (Phase 4) ---
+// These read the snapshotted value from SessionMeta, falling back to the global store.
+// Import SessionMeta lazily to avoid circular dependency.
+
+/** Get the effective session mode for a given session's meta snapshot */
+export function getEffectiveMode(meta: { snapshotMode?: SessionMode } | undefined): SessionMode {
+  return meta?.snapshotMode ?? useSettingsStore.getState().sessionMode;
+}
+
+/** Get the effective model for a given session's meta snapshot */
+export function getEffectiveModel(meta: { snapshotModel?: string } | undefined): string {
+  return meta?.snapshotModel ?? useSettingsStore.getState().selectedModel;
+}
+
+/** Get the effective thinking level for a given session's meta snapshot */
+export function getEffectiveThinking(meta: { snapshotThinking?: ThinkingLevel } | undefined): ThinkingLevel {
+  return meta?.snapshotThinking ?? useSettingsStore.getState().thinkingLevel;
+}
+
+// --- Runtime mode switching via SDK control protocol ---
+// When sessionMode changes and there's an active CLI session, send set_permission_mode.
+
+let _skipNextModeSync = false;
+
+/** Update frontend sessionMode WITHOUT sending set_permission_mode to CLI.
+ *  Use when CLI already switched modes internally (e.g. after ExitPlanMode allow). */
+export function setSessionModeLocal(mode: SessionMode): void {
+  _skipNextModeSync = true;
+  useSettingsStore.getState().setSessionMode(mode);
+}
+
+// Phase 2 §2.3 runtime sync policy:
+//
+// - sessionMode change → SDK control protocol `set_permission_mode` on the
+//   live session (no kill). Handled here.
+// - selectedModel / thinkingLevel change → DO NOT kill.
+//   InputBar.handleSubmit detects the spawnConfigHash mismatch on the next
+//   user send and handles teardown + resume spawn. Killing here would drop
+//   in-flight turns and cross-tab races between the sidebar and pre-warm.
+useSettingsStore.subscribe((state, prevState) => {
+  if (state.sessionMode === prevState.sessionMode) return;
+
+  if (_skipNextModeSync) {
+    _skipNextModeSync = false;
+    return;
+  }
+
+  const cliMode = mapSessionModeToPermissionMode(state.sessionMode);
+
+  // bypass uses --dangerously-skip-permissions at startup; can't switch TO bypass at runtime
+  if (cliMode === 'bypassPermissions') return;
+
+  // Dynamically import to avoid circular deps
+  Promise.all([
+    import('../lib/tauri-bridge'),
+    import('./chatStore'),
+  ]).then(([{ bridge }, { getActiveTabState }]) => {
+    const stdinId = getActiveTabState().sessionMeta.stdinId;
+    if (!stdinId) return; // No active session
+
+    bridge.setPermissionMode(stdinId, cliMode).catch((err: unknown) => {
+      console.error('[Stavebak] Failed to set permission mode:', err);
+    });
+  });
+});

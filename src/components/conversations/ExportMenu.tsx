@@ -1,0 +1,132 @@
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { bridge } from '../../lib/tauri-bridge';
+import { save } from '@tauri-apps/plugin-dialog';
+import { useT } from '../../lib/i18n';
+import { DownloadSimple, FileText, FileDoc, FileCode } from '@phosphor-icons/react';
+
+interface Props {
+  sessionPath?: string;
+}
+
+export function ExportMenu({ sessionPath }: Props) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+
+  const updateMenuPos = useCallback(() => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setMenuPos({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    updateMenuPos();
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)
+          && buttonRef.current && !buttonRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open, updateMenuPos]);
+
+  const handleExport = async (format: 'markdown' | 'markdown-conversation' | 'json') => {
+    if (!sessionPath) return;
+    setOpen(false);
+
+    const isMarkdown = format === 'markdown' || format === 'markdown-conversation';
+    const ext = isMarkdown ? 'md' : 'json';
+    const filterName = isMarkdown ? 'Markdown' : 'JSON';
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const suffix = format === 'markdown-conversation' ? '_conversation' : '';
+    const defaultName = `${(sessionPath.split(/[\\/]/).pop() || 'export').replace('.jsonl', '')}${suffix}_${timestamp}.${ext}`;
+
+    const outputPath = await save({
+      defaultPath: defaultName,
+      filters: [{ name: filterName, extensions: [ext] }],
+    });
+    if (!outputPath) return;
+
+    try {
+      if (isMarkdown) {
+        await bridge.exportSessionMarkdown(sessionPath, outputPath, format === 'markdown-conversation');
+      } else {
+        await bridge.exportSessionJson(sessionPath, outputPath);
+      }
+      setStatus(`${t('export.success')} ${outputPath.split(/[\\/]/).pop()}`);
+      setTimeout(() => setStatus(null), 3000);
+    } catch (err) {
+      setStatus(`Error: ${err}`);
+      setTimeout(() => setStatus(null), 3000);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        ref={buttonRef}
+        onClick={() => setOpen(!open)}
+        disabled={!sessionPath}
+        className="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-tertiary
+          transition-smooth disabled:opacity-30 disabled:cursor-not-allowed"
+        title={t('export.title')}
+      >
+        <DownloadSimple size={16} weight="light" />
+      </button>
+
+      {open && (
+        <div ref={menuRef}
+          className="fixed w-48 py-1
+          bg-bg-primary border border-border-subtle rounded-xl shadow-lg
+          z-[9999] animate-fade-in"
+          style={{ top: menuPos.top, right: menuPos.right }}>
+          <button
+            onClick={() => handleExport('markdown')}
+            className="w-full flex items-center gap-2.5 px-3 py-2
+              text-sm text-text-primary hover:bg-bg-secondary
+              transition-smooth text-left"
+          >
+            <FileText size={14} weight="light" className="flex-shrink-0 text-text-tertiary" />
+            {t('export.markdown')}
+          </button>
+          <button
+            onClick={() => handleExport('markdown-conversation')}
+            className="w-full flex items-center gap-2.5 px-3 py-2
+              text-sm text-text-primary hover:bg-bg-secondary
+              transition-smooth text-left"
+          >
+            <FileDoc size={14} weight="light" className="flex-shrink-0 text-text-tertiary" />
+            {t('export.markdownConversation')}
+          </button>
+          <button
+            onClick={() => handleExport('json')}
+            className="w-full flex items-center gap-2.5 px-3 py-2
+              text-sm text-text-primary hover:bg-bg-secondary
+              transition-smooth text-left"
+          >
+            <FileCode size={14} weight="light" className="flex-shrink-0 text-text-tertiary" />
+            {t('export.json')}
+          </button>
+        </div>
+      )}
+
+      {status && (
+        <div className="fixed px-3 py-2
+          bg-bg-primary border border-border-subtle rounded-xl shadow-lg
+          text-xs text-text-muted whitespace-nowrap z-[9999]"
+          style={{ top: menuPos.top, right: menuPos.right }}>
+          {status}
+        </div>
+      )}
+    </div>
+  );
+}
