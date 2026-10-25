@@ -2,7 +2,7 @@
 
 Důležité změny Stavebák Desktop.
 
-## [Nevydáno]
+## [0.14.0] - 2026-10-25
 
 ### Změněno
 - Claude Code běží jen s přihlášením uživatele: `claude login` (účet Claude) nebo jeho vlastní API klíč. Nastavení vlastních API poskytovatelů je pryč.

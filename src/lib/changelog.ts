@@ -21,4 +21,15 @@ export function getChangelog(version: string): ChangelogEntry | undefined {
   return CHANGELOG.find((entry) => entry.version === version);
 }
 
-export const CHANGELOG: ChangelogEntry[] = [];
+export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.14.0',
+    date: '2026-10-25',
+    highlights: {
+      cs: ['Claude Code se přihlašuje jen vlastním přihlášením (účet Claude nebo vlastní API klíč), aplikace do přihlášení nezasahuje', 'Přihlašovací údaje Claude aplikace nikdy nečte'],
+      en: ['Claude Code signs in only with your own sign-in (Claude account or your own API key); the app never interferes with it', 'The app never reads Claude credentials'],
+      sk: ['Claude Code sa prihlasuje iba vlastným prihlásením (účet Claude alebo vlastný API kľúč), aplikácia do prihlásenia nezasahuje', 'Prihlasovacie údaje Claude aplikácia nikdy nečíta'],
+      de: ['Claude Code meldet sich nur mit Ihrer eigenen Anmeldung an (Claude-Konto oder eigener API-Schlüssel), die App greift nicht ein', 'Die App liest nie Claude-Anmeldedaten'],
+    },
+  },
+];
