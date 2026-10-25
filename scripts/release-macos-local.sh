@@ -12,6 +12,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Release (UPDATER=1) se staví jen z čistého origin/main s verzí, která ještě nemá tag.
+# Ověřovací build bez UPDATER smí stavět cokoli.
+if [ -n "${UPDATER:-}" ] && [ -z "${SKIP_RELEASE_CHECKS:-}" ]; then
+  fail() { echo "Release: $1 (nouzově přeskočit: SKIP_RELEASE_CHECKS=1)" >&2; exit 1; }
+  [ -z "$(git status --porcelain)" ] || fail "pracovní složka není čistá"
+  git fetch -q origin main
+  [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || fail "HEAD není origin/main"
+  node scripts/check-version.mjs >/dev/null || fail "verze v package.json, tauri.conf.json a Cargo.toml nesedí"
+  VERSION=$(node -p "require('./package.json').version")
+  [ -z "$(git ls-remote --tags origin "v$VERSION")" ] || fail "tag v$VERSION už existuje, zvyš verzi"
+fi
+
 NOTARY_PROFILE="${NOTARY_PROFILE:-f2p-notary}"
 IDENTITY="${APPLE_SIGNING_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -1)}"
 [ -n "$IDENTITY" ] || { echo "Chybí identita Developer ID Application v klíčence." >&2; exit 1; }
