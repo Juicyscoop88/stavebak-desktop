@@ -71,18 +71,18 @@
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
   /* Typography scale: 11 tags · 12 meta · 13 UI · 15 reading · 17 · 20. No ad-hoc pixel sizes. */
-  --text-2xs: 11px;
-  --text-2xs--line-height: 16px;
-  --text-xs: 12px;
-  --text-xs--line-height: 16px;
-  --text-sm: 13px;
-  --text-sm--line-height: 20px;
-  --text-base: 15px;
-  --text-base--line-height: 24px;
-  --text-lg: 17px;
-  --text-lg--line-height: 24px;
-  --text-xl: 20px;
-  --text-xl--line-height: 28px;
+  --text-2xs: 9px;
+  --text-2xs--line-height: 14px;
+  --text-xs: 10px;
+  --text-xs--line-height: 14px;
+  --text-sm: 11px;
+  --text-sm--line-height: 16px;
+  --text-base: 13px;
+  --text-base--line-height: 20px;
+  --text-lg: 15px;
+  --text-lg--line-height: 21px;
+  --text-xl: 17px;
+  --text-xl--line-height: 24px;
   --text-2xl: 24px;
   --text-3xl: 32px;
 

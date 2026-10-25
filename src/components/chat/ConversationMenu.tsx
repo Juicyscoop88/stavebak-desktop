@@ -59,7 +59,7 @@ export function ConversationMenu() {
             hover:bg-bg-tertiary disabled:hover:bg-transparent cursor-pointer disabled:cursor-default"
           title="Historie konverzací v tomto projektu"
         >
-          <span className="text-xs text-text-primary font-medium truncate">{title}</span>
+          <span className="text-base text-text-primary font-medium truncate">{title}</span>
           {history.length > 0 && <CaretDown size={10} weight="bold" className="text-text-tertiary flex-shrink-0" />}
         </button>
 

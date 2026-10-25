@@ -1366,7 +1366,7 @@ export function InputBar() {
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               placeholder={inputPlaceholder}
-              className="flex-1 bg-transparent text-sm text-text-primary
+              className="flex-1 bg-transparent text-base text-text-primary
                 placeholder:text-text-tertiary resize-none outline-none
                 leading-normal overflow-y-auto min-w-0 py-0.5"
             />
