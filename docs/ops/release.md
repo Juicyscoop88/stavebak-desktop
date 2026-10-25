@@ -41,7 +41,7 @@ Updater instaluje jen vyšší verzi, než je nainstalovaná. Z toho plyne:
 
 | Secret / proměnná | K čemu | Stav |
 |---|---|---|
-| `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | podpis aktualizací pro updater | v environmentu `release` od 2026-10-23. Lokálně `~/.tauri/stavebak-updater.key`, heslo v klíčence „Stavebak updater key“, záloha v iCloud Drive a v aplikaci Hesla |
+| `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | podpis aktualizací pro updater | v environmentu `release` od 2026-10-25 (repo s čistou historií, nastaveno znovu z lokálního klíče). Lokálně `~/.tauri/stavebak-updater.key`, heslo v klíčence „Stavebak updater key“, záloha v iCloud Drive a v aplikaci Hesla |
 | `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | podpis macOS (Developer ID Application, export .p12 v base64) | macOS se podepisuje lokálně z klíčenky. Do CI (a do `release.yml`) až s přesunem macOS buildu do CI |
 | `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | notarizace macOS (heslo pro aplikaci, ne heslo k účtu) | lokálně profil notarytool v klíčence. Do CI spolu s certifikátem |
 | `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` + proměnné `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE` | podpis Windows (Azure Artifact Signing) | čeká na ověření organizace |
