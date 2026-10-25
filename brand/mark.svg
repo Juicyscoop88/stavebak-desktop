@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 18 64 64" fill="currentColor">
+  <path d="M18 46H46V18Z"/>
+  <path d="M54 18V46H82Z"/>
+  <path d="M18 54H46V82H18Z"/>
+  <path d="M54 54H82V82H54Z"/>
+</svg>

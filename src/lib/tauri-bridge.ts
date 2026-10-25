@@ -354,10 +354,6 @@ export const bridge = {
       invoke<string>('rewind_files', { sessionId, checkpointUuid: userMessageId, cwd }),
     ),
 
-  // Set macOS dock icon from base64-encoded PNG
-  setDockIcon: (pngBase64: string) =>
-    invoke<void>('set_dock_icon', { pngBase64 }),
-
   // Run a Claude CLI subcommand as a one-shot process (e.g. `claude doctor`)
   runClaudeCommand: (subcommand: string, cwd?: string) =>
     invoke<string>('run_claude_command', { subcommand, cwd }),
