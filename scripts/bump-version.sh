@@ -53,6 +53,10 @@ echo "  tauri.conf.json ✓"
 sed -i '' "s/^version = \"$OLD_VERSION\"/version = \"$NEW_VERSION\"/" "$PROJECT_DIR/src-tauri/Cargo.toml"
 echo "  Cargo.toml ✓"
 
+# 4. Cargo.lock nese verzi balíčku, CI běží s --locked
+(cd "$PROJECT_DIR/src-tauri" && cargo update -p stavebak --offline >/dev/null 2>&1)
+echo "  Cargo.lock ✓"
+
 echo ""
 echo "Done! Version bumped to $NEW_VERSION across all files."
 echo "Don't forget to update CHANGELOG.md with the new version header."
