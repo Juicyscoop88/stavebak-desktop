@@ -2,6 +2,11 @@
 
 Důležité změny Stavebák Desktop.
 
+## [0.14.1] - 2026-10-25
+
+### Opraveno
+- Jednotné logo Stavebáku v Docku, v aplikaci i ve všech ikonách. Dock na macOS už nepřepisuje původní logo TOKENICODE.
+
 ## [0.14.0] - 2026-10-25
 
 ### Změněno
