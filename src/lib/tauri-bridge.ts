@@ -303,6 +303,9 @@ export const bridge = {
   stavebakLogout: () => invoke<void>('stavebak_logout'),
   stavebakAuthStatus: () => invoke<boolean>('stavebak_auth_status'),
   codexStatus: () => invoke<CodexStatus>('codex_status'),
+  installCodex: () => invoke<CodexStatus>('install_codex'),
+  onCodexInstallProgress: (cb: (percent: number) => void) =>
+    listen<{ percent: number }>('codex:install:progress', (e) => cb(e.payload.percent)),
   openaiAuthStatus: () => invoke<OpenAiAuthStatus>('openai_auth_status'),
   openaiLoginChatgpt: () => invoke<OpenAiAuthStatus>('openai_login_chatgpt'),
   openaiLogoutChatgpt: () => invoke<void>('openai_logout_chatgpt'),

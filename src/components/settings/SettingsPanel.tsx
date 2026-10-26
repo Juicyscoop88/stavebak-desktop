@@ -192,7 +192,7 @@ const MANAGE_USAGE_URL = 'https://chatgpt.com/settings/usage';
 /** ChatGPT přes Codex: plán ChatGPT (Sign in with ChatGPT), nebo API klíč OpenAI. */
 function ChatGptAccountRows({ linkButton }: { linkButton: string }) {
   const t = useT();
-  const { status, codex, busy, error, refresh, loginChatgpt, logoutChatgpt, setApiKey, clearApiKey } = useOpenAiStore();
+  const { status, codex, busy, error, refresh, loginChatgpt, logoutChatgpt, setApiKey, clearApiKey, installPercent, installCodex } = useOpenAiStore();
   const [keyDraft, setKeyDraft] = useState('');
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -246,9 +246,11 @@ function ChatGptAccountRows({ linkButton }: { linkButton: string }) {
         )}
       </Row>
       {codex && !codex.installed && (
-        <p className="pb-2 text-xs text-text-tertiary leading-snug">
-          {t('settings.codexMissing').replace('{version}', codex.version)}
-        </p>
+        <Row label="Codex" description={t('settings.codexMissing').replace('{version}', codex.version)}>
+          <button className={linkButton} disabled={installPercent !== null} onClick={() => { installCodex(); }}>
+            {installPercent !== null ? `${installPercent} %` : t('settings.codexInstall')}
+          </button>
+        </Row>
       )}
       {error && <p className="pb-2 text-xs text-text-primary leading-snug">{error}</p>}
     </>

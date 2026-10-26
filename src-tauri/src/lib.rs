@@ -2096,6 +2096,17 @@ fn codex_status() -> CodexStatus {
     }
 }
 
+/// Stáhne připnutý `codex-app-server` (průběh na `codex:install:progress`).
+#[tauri::command]
+async fn install_codex(app: tauri::AppHandle) -> Result<CodexStatus, String> {
+    let app2 = app.clone();
+    codex_bridge::install_binary(move |pct| {
+        let _ = emit_to_frontend(&app2, "codex:install:progress", serde_json::json!({ "percent": pct }));
+    })
+    .await?;
+    Ok(codex_status())
+}
+
 #[tauri::command]
 fn openai_auth_status() -> openai_auth::OpenAiAuthStatus {
     openai_auth::status()
@@ -7511,6 +7522,7 @@ pub fn run() {
             start_claude_session,
             stavebak_login,
             codex_status,
+            install_codex,
             openai_auth_status,
             openai_login_chatgpt,
             openai_logout_chatgpt,

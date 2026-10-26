@@ -18,6 +18,9 @@ interface OpenAiState {
   logoutChatgpt: () => Promise<void>;
   setApiKey: (key: string) => Promise<boolean>;
   clearApiKey: () => Promise<void>;
+  /** Průběh stahování Codexu v %, null = nestahuje se */
+  installPercent: number | null;
+  installCodex: () => Promise<void>;
   dismissWelcome: () => void;
 }
 
@@ -27,6 +30,7 @@ export const useOpenAiStore = create<OpenAiState>((set, get) => ({
   busy: false,
   error: null,
   showWelcome: false,
+  installPercent: null,
 
   refresh: async () => {
     const [status, codex] = await Promise.all([
@@ -75,6 +79,20 @@ export const useOpenAiStore = create<OpenAiState>((set, get) => ({
   clearApiKey: async () => {
     await bridge.openaiClearApiKey().catch(() => {});
     await get().refresh();
+  },
+
+  installCodex: async () => {
+    set({ installPercent: 0, error: null });
+    const unlisten = await bridge.onCodexInstallProgress((installPercent) => set({ installPercent }));
+    try {
+      const codex = await bridge.installCodex();
+      set({ codex });
+    } catch (e) {
+      set({ error: String(e) });
+    } finally {
+      unlisten();
+      set({ installPercent: null });
+    }
   },
 
   dismissWelcome: () => {

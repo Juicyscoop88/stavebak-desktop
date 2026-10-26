@@ -989,6 +989,105 @@ pub async fn spawn_session(
     })
 }
 
+// ── Instalace binárky ───────────────────────────────────────────────────────
+
+/// Asset `codex-app-server` pro tuto platformu: (název v release, SHA-256).
+/// Součty z GitHub release `rust-v0.164.0` (pole `digest`); změna verze = změna v PR.
+fn release_asset() -> Option<(&'static str, &'static str)> {
+    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        Some(("codex-app-server-aarch64-apple-darwin.tar.gz", "2eb75238651acb7d5c7cbb088b56433c71bbb680189c3bbd50318589858d57b1"))
+    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+        Some(("codex-app-server-x86_64-apple-darwin.tar.gz", "8bcb46d2eb100ddccd81446339496e35c4f9640639339691d19dda551bb67a3f"))
+    } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+        Some(("codex-app-server-x86_64-pc-windows-msvc.exe.zip", "35b93235a1d502352c840ebf960be6194aa9f3bec724fee478d2c7c86492fb27"))
+    } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
+        Some(("codex-app-server-aarch64-pc-windows-msvc.exe.zip", "3054bab7cdb1110d53a6ea79f25e2acb21a56b4d3aecc88f64e4dfe75f3adbb8"))
+    } else {
+        None
+    }
+}
+
+fn sha256_hex(data: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(data).iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+/// Vytáhne z archivu jediný spustitelný soubor `codex-app-server*`.
+fn extract_binary(archive: &[u8], asset: &str) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let mut out = Vec::new();
+    if asset.ends_with(".zip") {
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(archive)).map_err(|e| e.to_string())?;
+        for i in 0..zip.len() {
+            let mut f = zip.by_index(i).map_err(|e| e.to_string())?;
+            let name = f.name().rsplit('/').next().unwrap_or_default().to_string();
+            if f.is_file() && name.starts_with("codex-app-server") {
+                f.read_to_end(&mut out).map_err(|e| e.to_string())?;
+                return Ok(out);
+            }
+        }
+    } else {
+        let gz = flate2::read::GzDecoder::new(archive);
+        let mut tar = tar::Archive::new(gz);
+        for entry in tar.entries().map_err(|e| e.to_string())? {
+            let mut e = entry.map_err(|e| e.to_string())?;
+            let path = e.path().map_err(|e| e.to_string())?.to_path_buf();
+            let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            if e.header().entry_type().is_file() && name.starts_with("codex-app-server") {
+                e.read_to_end(&mut out).map_err(|e| e.to_string())?;
+                return Ok(out);
+            }
+        }
+    }
+    Err("V archivu Codexu chybí codex-app-server".into())
+}
+
+/// Stáhne připnutou verzi z GitHub release OpenAI, ověří SHA-256 a uloží do `~/.stavebak/bin/`.
+/// Binárka se nijak neupravuje.
+pub async fn install_binary(progress: impl Fn(u8)) -> Result<PathBuf, String> {
+    use futures_util::StreamExt;
+    let (asset, sha) = release_asset().ok_or("Codex pro tuto platformu zatím nepodporujeme.")?;
+    let url = format!("https://github.com/openai/codex/releases/download/rust-v{CODEX_VERSION}/{asset}");
+    let res = reqwest::Client::new()
+        .get(&url)
+        .send()
+        .await
+        .and_then(|r| r.error_for_status())
+        .map_err(|e| format!("Stažení Codexu selhalo: {}", e))?;
+    let total = res.content_length().unwrap_or(0);
+    let mut data = Vec::with_capacity(total as usize);
+    let mut stream = res.bytes_stream();
+    let mut last = 0u8;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Stažení Codexu selhalo: {}", e))?;
+        data.extend_from_slice(&chunk);
+        if total > 0 {
+            let pct = ((data.len() as u64 * 100) / total).min(100) as u8;
+            if pct != last {
+                last = pct;
+                progress(pct);
+            }
+        }
+    }
+    if sha256_hex(&data) != sha {
+        return Err("Stažený Codex neodpovídá kontrolnímu součtu, instalace zrušena.".into());
+    }
+    let bin = extract_binary(&data, asset)?;
+    let dir = dirs::home_dir().ok_or("Chybí domovská složka")?.join(".stavebak").join("bin");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let name = if cfg!(windows) { "codex-app-server.exe" } else { "codex-app-server" };
+    let target = dir.join(name);
+    let tmp = dir.join(format!("{name}.download"));
+    std::fs::write(&tmp, &bin).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+    }
+    std::fs::rename(&tmp, &target).map_err(|e| e.to_string())?;
+    Ok(target)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1215,6 +1314,25 @@ mod tests {
         assert_eq!(codex_model(Some("o4-mini")), Some("o4-mini".into()));
         assert_eq!(codex_effort(Some("max")), Some("xhigh"));
         assert_eq!(codex_effort(Some("off")), None);
+    }
+
+    #[test]
+    fn rozbali_binarku_z_tar_gz() {
+        let mut tar_bytes = Vec::new();
+        {
+            let gz = flate2::write::GzEncoder::new(&mut tar_bytes, flate2::Compression::fast());
+            let mut b = tar::Builder::new(gz);
+            let data = b"#!/bin/sh\necho codex";
+            let mut h = tar::Header::new_gnu();
+            h.set_size(data.len() as u64);
+            h.set_mode(0o755);
+            h.set_cksum();
+            b.append_data(&mut h, "codex-app-server-aarch64-apple-darwin", &data[..]).unwrap();
+            b.into_inner().unwrap().finish().unwrap();
+        }
+        let bin = extract_binary(&tar_bytes, "codex-app-server-aarch64-apple-darwin.tar.gz").unwrap();
+        assert!(bin.starts_with(b"#!/bin/sh"));
+        assert_eq!(sha256_hex(b"abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     }
 
     #[test]
