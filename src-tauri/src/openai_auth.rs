@@ -303,12 +303,39 @@ pub async fn logout_chatgpt() -> Result<(), String> {
     delete(KEY_CHATGPT)
 }
 
-const DONE_PAGE: &str = "<!doctype html><html lang=\"cs\"><meta charset=\"utf-8\"><title>Stavebák</title>\
-<body style=\"font-family:system-ui;display:grid;place-items:center;height:90vh;color:#1d1c1a;background:#f5f3ee\">\
-<div style=\"text-align:center\"><h1 style=\"font-size:20px\">Přihlášení k ChatGPT dokončeno</h1>\
-<p>Můžete zavřít toto okno a vrátit se do aplikace Stavebák.</p></div></body></html>";
+/// Port z příkladu OpenAI; když je obsazený (jiné přihlášení, Codex CLI), vezme se volný.
+const PREFERRED_PORT: u16 = 1455;
 
-async fn wait_for_callback(listener: tokio::net::TcpListener) -> Result<Vec<(String, String)>, String> {
+fn result_page(ok: bool, detail: &str) -> String {
+    let (title, text) = if ok {
+        ("Přihlášení k ChatGPT dokončeno", "Můžete zavřít toto okno a vrátit se do aplikace Stavebák.".to_string())
+    } else {
+        ("Přihlášení k ChatGPT se nepodařilo", format!("{} Vraťte se do aplikace Stavebák a zkuste to znovu.", detail))
+    };
+    format!(
+        "<!doctype html><html lang=\"cs\"><meta charset=\"utf-8\"><title>Stavebák</title>\
+<body style=\"font-family:system-ui;display:grid;place-items:center;height:90vh;color:#1d1c1a;background:#f5f3ee\">\
+<div style=\"text-align:center;max-width:520px\"><h1 style=\"font-size:20px\">{}</h1><p>{}</p></div></body></html>",
+        title,
+        html_escape(&text)
+    )
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
+async fn respond(mut sock: tokio::net::TcpStream, page: &str) {
+    let resp = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        page.len(),
+        page
+    );
+    let _ = sock.write_all(resp.as_bytes()).await;
+}
+
+/// Počká na přesměrování z prohlížeče; spojení vrátí otevřené, odpoví se až podle výsledku výměny.
+async fn wait_for_callback(listener: tokio::net::TcpListener) -> Result<(Vec<(String, String)>, tokio::net::TcpStream), String> {
     loop {
         let (mut sock, _) = listener.accept().await.map_err(|e| e.to_string())?;
         let mut buf = vec![0u8; 8192];
@@ -321,13 +348,7 @@ async fn wait_for_callback(listener: tokio::net::TcpListener) -> Result<Vec<(Str
             continue;
         }
         let params: Vec<(String, String)> = url::form_urlencoded::parse(query.as_bytes()).into_owned().collect();
-        let resp = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-            DONE_PAGE.len(),
-            DONE_PAGE
-        );
-        let _ = sock.write_all(resp.as_bytes()).await;
-        return Ok(params);
+        return Ok((params, sock));
     }
 }
 
@@ -358,16 +379,20 @@ fn authorize_url(
 }
 
 /// Celé přihlášení přes ChatGPT: prohlížeč, návrat na loopback, výměna kódu, kontrola grantu.
+/// Stránka v prohlížeči odpoví až podle výsledku výměny.
 pub async fn login_chatgpt(open_browser: impl FnOnce(&str) -> Result<(), String>) -> Result<OpenAiAuthStatus, String> {
     if !siwc_enabled() {
         return Err("Přihlášení přes ChatGPT zatím není v této verzi dostupné.".into());
     }
-    let mut reg = load_registration();
     // Adresa musí být 127.0.0.1 (ne localhost) a cesta /auth/callback, měnit se smí jen port
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.map_err(|e| e.to_string())?;
+    let listener = match tokio::net::TcpListener::bind(("127.0.0.1", PREFERRED_PORT)).await {
+        Ok(l) => l,
+        Err(_) => tokio::net::TcpListener::bind("127.0.0.1:0").await.map_err(|e| e.to_string())?,
+    };
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
     let redirect_uri = format!("http://127.0.0.1:{}{}", port, CALLBACK_PATH);
 
+    let reg = load_registration();
     let verifier = random_b64(32);
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
     let state = random_b64(16);
@@ -375,10 +400,30 @@ pub async fn login_chatgpt(open_browser: impl FnOnce(&str) -> Result<(), String>
     let url = authorize_url(reg.client_id.as_deref(), &reg.host_id, &redirect_uri, &challenge, &state, &nonce);
     open_browser(&url)?;
 
-    let params = tokio::time::timeout(LOGIN_TIMEOUT, wait_for_callback(listener))
+    let (params, sock) = tokio::time::timeout(LOGIN_TIMEOUT, wait_for_callback(listener))
         .await
         .map_err(|_| "Přihlášení vypršelo, zkuste to znovu.".to_string())??;
+    let result = finish_login(&params, reg, &verifier, &state, &nonce, &redirect_uri).await;
+    let page = match &result {
+        Ok(_) => result_page(true, ""),
+        Err(e) => result_page(false, e),
+    };
+    respond(sock, &page).await;
+    result
+}
+
+async fn finish_login(
+    params: &[(String, String)],
+    mut reg: Registration,
+    verifier: &str,
+    state: &str,
+    nonce: &str,
+    redirect_uri: &str,
+) -> Result<OpenAiAuthStatus, String> {
     let get = |k: &str| params.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
+    if get("state").as_deref() != Some(state) {
+        return Err("Přihlášení se nepodařilo ověřit (state), zkuste to znovu.".into());
+    }
     if let Some(err) = get("error") {
         return Err(if err == "access_denied" {
             "Přihlášení k ChatGPT bylo zrušeno.".to_string()
@@ -386,15 +431,17 @@ pub async fn login_chatgpt(open_browser: impl FnOnce(&str) -> Result<(), String>
             format!("Přihlášení k ChatGPT se nezdařilo ({})", err)
         });
     }
-    if get("state").as_deref() != Some(state.as_str()) {
-        return Err("Přihlášení se nepodařilo ověřit (state), zkuste to znovu.".into());
-    }
     let code = get("code").ok_or("OpenAI nevrátilo kód přihlášení")?;
-    let client_id = match (get("client_id"), reg.client_id.clone()) {
-        (Some(new), _) if new != DYNAMIC_CLIENT => new,
-        (_, Some(existing)) => existing,
-        _ => return Err("OpenAI nevydalo identifikátor aplikace, zkuste to znovu.".into()),
+    let client_id = match (get("client_id").filter(|c| c != DYNAMIC_CLIENT), reg.client_id.clone()) {
+        // Při opakovaném přihlášení nesmí přijít jiné ID, než jaké jsme poslali
+        (Some(new), Some(existing)) if new != existing => {
+            return Err("OpenAI vrátilo jiný identifikátor aplikace, zkuste to znovu.".into())
+        }
+        (Some(new), _) => new,
+        (None, Some(existing)) => existing,
+        (None, None) => return Err("OpenAI nevydalo identifikátor aplikace, zkuste to znovu.".into()),
     };
+    // Vydané ID uložit hned: i když výměna selže, další pokus jde s ním (postup OpenAI pro invalid_grant)
     if reg.client_id.as_deref() != Some(client_id.as_str()) {
         reg.client_id = Some(client_id.clone());
         save_registration(&reg);
@@ -404,14 +451,21 @@ pub async fn login_chatgpt(open_browser: impl FnOnce(&str) -> Result<(), String>
         ("grant_type", "authorization_code"),
         ("client_id", &client_id),
         ("code", &code),
-        ("code_verifier", &verifier),
-        ("redirect_uri", &redirect_uri),
+        ("code_verifier", verifier),
+        ("redirect_uri", redirect_uri),
         ("resource", RESOURCE),
     ])
-    .await?;
+    .await
+    .map_err(|e| {
+        if e.contains("invalid_grant") {
+            "Kód přihlášení OpenAI nepřijalo (invalid_grant). Přihlaste se prosím znovu.".to_string()
+        } else {
+            e
+        }
+    })?;
     let claims = match t.id_token.as_deref() {
-        Some(id) => check_id_token(id, &client_id, Some(&nonce))?,
-        None => IdClaims { email: None, plan: None },
+        Some(id) => check_id_token(id, &client_id, Some(nonce))?,
+        None => return Err("OpenAI nevrátilo ID token.".into()),
     };
     // Platný ID token ještě neznamená souhlas s použitím plánu
     if !has_plan_scope(t.scope.as_deref()) {
