@@ -1061,8 +1061,8 @@ pub async fn install_binary(progress: impl Fn(u8)) -> Result<PathBuf, String> {
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| format!("Stažení Codexu selhalo: {}", e))?;
         data.extend_from_slice(&chunk);
-        if total > 0 {
-            let pct = ((data.len() as u64 * 100) / total).min(100) as u8;
+        if let Some(pct) = (data.len() as u64 * 100).checked_div(total) {
+            let pct = pct.min(100) as u8;
             if pct != last {
                 last = pct;
                 progress(pct);
