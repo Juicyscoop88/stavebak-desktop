@@ -1,20 +1,25 @@
 #!/usr/bin/env node
 
 // stavebak-cli.mjs — CLI tool for driving Stavebak GUI (debug builds)
-// Connects to the test harness Unix socket provided by tauri-plugin-mcp.
+// Connects to the test harness in src-tauri/src/test_harness.rs: a Unix socket on macOS/Linux,
+// TCP on 127.0.0.1 with a token on Windows (port and token in %TEMP%\stavebak-test.json).
 // All output is JSON (one line per invocation) for AI consumption.
 // Zero external dependencies — Node.js built-in modules only.
 
 import { connect } from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { execFileSync, execSync, spawn } from 'node:child_process';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+const IS_WINDOWS = process.platform === 'win32';
 const SOCKET_PATH = process.env.Stavebak_SOCKET || '/tmp/stavebak-test.sock';
+const HARNESS_FILE = process.env.Stavebak_HARNESS_FILE || join(tmpdir(), 'stavebak-test.json');
+const HARNESS_LOCATION = IS_WINDOWS ? HARNESS_FILE : SOCKET_PATH;
 const DEFAULT_TIMEOUT = 10_000;
 const SCREENSHOT_TIMEOUT = 15_000;
 const RESTART_TIMEOUT = 120_000;
@@ -22,7 +27,21 @@ const POLL_INTERVAL = 500;
 
 // ─── Socket Client ───────────────────────────────────────────────────────────
 
-function createClient(socketPath) {
+/** Where the running debug build listens: `{ path }` (Unix) or `{ host, port, token }` (Windows). */
+function harnessTarget() {
+  if (!IS_WINDOWS) return { path: SOCKET_PATH };
+  let info;
+  try {
+    info = JSON.parse(readFileSync(HARNESS_FILE, 'utf8'));
+  } catch {
+    const err = new Error(`harness file not found at ${HARNESS_FILE}`);
+    err.code = 'ENOENT';
+    throw err;
+  }
+  return { host: '127.0.0.1', port: info.port, token: info.token };
+}
+
+function createClient(target) {
   let socket = null;
   let buffer = '';
   let closed = false;
@@ -62,7 +81,8 @@ function createClient(socketPath) {
   return {
     connect() {
       return new Promise((resolve, reject) => {
-        socket = connect({ path: socketPath }, () => {
+        const address = target.path ? { path: target.path } : { host: target.host, port: target.port };
+        socket = connect(address, () => {
           // After successful connect, set up disconnect handlers
           socket.on('close', () => rejectAll('Socket closed by Stavebak'));
           socket.on('end', () => rejectAll('Socket connection ended'));
@@ -85,7 +105,7 @@ function createClient(socketPath) {
           reject(new Error(`Command '${command}' timed out after ${timeout}ms`));
         }, timeout);
         pending.set(id, { resolve, reject, timer });
-        socket.write(JSON.stringify({ command, payload, id }) + '\n');
+        socket.write(JSON.stringify({ command, payload, id, token: target.token }) + '\n');
       });
     },
 
@@ -514,6 +534,9 @@ const commands = {
   async relaunch(_client, { flags }) {
     // Hard restart: kill Tauri process tree + Vite, relaunch `pnpm tauri dev` (opens new window).
     // This is a standalone command — it manages its own socket connections.
+    if (IS_WINDOWS) {
+      throw new Error('relaunch is not supported on Windows yet (lsof, process groups): restart `pnpm tauri dev` manually');
+    }
     const timeout = parseInt(flags.timeout) || RESTART_TIMEOUT;
     const start = Date.now();
 
@@ -626,7 +649,7 @@ const commands = {
     while (Date.now() < pollDeadline) {
       await sleep(2000);
       try {
-        const testClient = createClient(SOCKET_PATH);
+        const testClient = createClient(harnessTarget());
         await testClient.connect();
         const resp = await testClient.send('ping', { value: 'restart' }, 5000);
         testClient.close();
@@ -657,7 +680,10 @@ const commands = {
         waiting: ['wait-for --text TEXT|--selector SEL [--timeout MS]', 'wait-until-done [--timeout MS]', 'wait-for-phase PHASE [--timeout MS]', 'delay MS'],
         raw: ['exec JS_CODE [--timeout MS]'],
       },
-      env: { Stavebak_SOCKET: `Override socket path (default: ${SOCKET_PATH})` },
+      env: {
+        Stavebak_SOCKET: `Override socket path on macOS/Linux (default: ${SOCKET_PATH})`,
+        Stavebak_HARNESS_FILE: `Override harness port/token file on Windows (default: ${HARNESS_FILE})`,
+      },
     };
   },
 };
@@ -699,14 +725,14 @@ async function main() {
 
   let client;
   try {
-    client = createClient(SOCKET_PATH);
+    client = createClient(harnessTarget());
     await client.connect();
   } catch (err) {
     const msg =
       err.code === 'ENOENT'
-        ? `Stavebak not running (socket not found at ${SOCKET_PATH}). Start with: pnpm tauri dev`
+        ? `Stavebak not running (harness not found at ${HARNESS_LOCATION}). Start with: pnpm tauri dev`
         : err.code === 'ECONNREFUSED'
-          ? `Socket exists but connection refused. Is Stavebak debug build running?`
+          ? `Harness found at ${HARNESS_LOCATION} but connection refused. Is Stavebak debug build running?`
           : `Cannot connect to Stavebak: ${err.message}`;
     out({ ok: false, error: msg });
     process.exit(1);

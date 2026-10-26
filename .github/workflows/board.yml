@@ -1,0 +1,64 @@
+name: Board
+
+# Board Stavebák (https://github.com/users/Juicyscoop88/projects/1) spojuje repa stavebak.cz,
+# stavebak-desktop a geodata. Stejný soubor je ve všech třech.
+# - nové issue a PR se přidá na board
+# - otevřený PR přepne issues, které uzavírá („Closes #N“, i z jiného repa), do In Progress
+# - Done nastaví board sám při zavření issue a merge PR (vestavěné workflows boardu)
+# Potřebuje secret PROJECT_TOKEN (classic PAT se scope project a repo): GITHUB_TOKEN na board uživatele
+# nedosáhne. Bez secretu se nic neděje. Volá přímo GraphQL API, ne `gh project`, který navíc vyžaduje
+# scope read:org a read:discussion. pull_request_target kvůli PR z forku (veřejný desktop): kód PR se
+# nikdy nespouští, workflow čte jen ID z události.
+
+on:
+  issues:
+    types: [opened, reopened, transferred]
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: board-${{ github.event.issue.number || github.event.pull_request.number }}
+
+jobs:
+  board:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+      OWNER: Juicyscoop88
+      PROJECT: '1'
+      REPO: ${{ github.repository }}
+      CONTENT_ID: ${{ github.event.issue.node_id || github.event.pull_request.node_id }}
+      URL: ${{ github.event.issue.html_url || github.event.pull_request.html_url }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Board
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::Secret PROJECT_TOKEN není nastavený, board se neaktualizuje."
+            exit 0
+          fi
+          project_id=$(gh api graphql -F n="$PROJECT" -f login="$OWNER" --jq .data.user.projectV2.id \
+            -f query='query($login: String!, $n: Int!) { user(login: $login) { projectV2(number: $n) { id } } }')
+          add() {
+            gh api graphql -f p="$project_id" -f c="$1" --jq .data.addProjectV2ItemById.item.id \
+              -f query='mutation($p: ID!, $c: ID!) { addProjectV2ItemById(input: {projectId: $p, contentId: $c}) { item { id } } }'
+          }
+          add "$CONTENT_ID" >/dev/null
+          echo "Na boardu: $URL"
+          [ -n "$PR" ] || exit 0
+
+          status=$(gh api graphql -f p="$project_id" \
+            --jq '.data.node.field | .id + " " + ([.options[] | select(.name == "In Progress") | .id] | first)' \
+            -f query='query($p: ID!) { node(id: $p) { ... on ProjectV2 { field(name: "Status") {
+              ... on ProjectV2SingleSelectField { id options { id name } } } } } }')
+          read -r field_id option_id <<<"$status"
+          for issue in $(gh pr view "$PR" --repo "$REPO" --json closingIssuesReferences --jq '.closingIssuesReferences[].id'); do
+            item=$(add "$issue")
+            gh api graphql -f p="$project_id" -f i="$item" -f f="$field_id" -f o="$option_id" >/dev/null \
+              -f query='mutation($p: ID!, $i: ID!, $f: ID!, $o: String!) { updateProjectV2ItemFieldValue(input: {
+                projectId: $p, itemId: $i, fieldId: $f, value: {singleSelectOptionId: $o} }) { projectV2Item { id } } }'
+            echo "In Progress: $issue"
+          done

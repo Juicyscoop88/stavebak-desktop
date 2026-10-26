@@ -5,8 +5,7 @@ mod events;
 pub mod path_access;
 mod protocol;
 mod stavebak_auth;
-// Listens on a Unix socket, so Windows debug builds compile without it for now (#18).
-#[cfg(all(debug_assertions, unix))]
+#[cfg(debug_assertions)]
 mod test_harness;
 // windows_ps compiles on all platforms so its pure-logic tests run on
 // non-Windows CI; it is only *invoked* from `#[cfg(target_os = "windows")]`
@@ -7376,8 +7375,8 @@ pub fn run() {
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
 
-            // GUI test harness for scripts/stavebak-cli.mjs (debug builds only, Unix)
-            #[cfg(all(debug_assertions, unix))]
+            // GUI test harness for scripts/stavebak-cli.mjs (debug builds only)
+            #[cfg(debug_assertions)]
             test_harness::start(app.handle());
 
             #[cfg(not(desktop))]

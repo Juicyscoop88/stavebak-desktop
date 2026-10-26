@@ -1,7 +1,13 @@
 //! Debug-only GUI test harness for `scripts/stavebak-cli.mjs`.
 //!
-//! Listens on a Unix socket and speaks the NDJSON protocol the CLI expects:
-//! request `{command, payload, id}` → response `{id, success, data?, error?}`.
+//! Speaks the NDJSON protocol the CLI expects:
+//! request `{command, payload, id, token?}` → response `{id, success, data?, error?}`.
+//!
+//! Transport:
+//! - Unix: socket at `SOCKET_PATH`, reachable only by the current user (file permissions).
+//! - Windows: TCP on `127.0.0.1` with a random port. Any local process can reach a TCP port,
+//!   so every request must carry the random token. Port and token are written to
+//!   `%TEMP%\stavebak-test.json` (per-user temp dir), where the CLI reads them.
 //!
 //! Supported commands:
 //! - `ping`             → echoes `payload.value`
@@ -17,12 +23,16 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, Listener, Manager};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::UnixListener;
+use tauri::{AppHandle, Emitter, Listener};
+#[cfg(target_os = "macos")]
+use tauri::Manager;
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::oneshot;
 
+#[cfg(unix)]
 pub const SOCKET_PATH: &str = "/tmp/stavebak-test.sock";
+#[cfg(windows)]
+const DISCOVERY_FILE: &str = "stavebak-test.json";
 const EVAL_TIMEOUT: Duration = Duration::from_secs(30);
 
 type Pending = Arc<Mutex<HashMap<String, oneshot::Sender<Value>>>>;
@@ -41,44 +51,89 @@ pub fn start(app: &AppHandle) {
         }
     });
 
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let _ = std::fs::remove_file(SOCKET_PATH);
-        let listener = match UnixListener::bind(SOCKET_PATH) {
-            Ok(l) => l,
-            Err(e) => {
-                eprintln!("[Stavebak] Test harness failed to bind {}: {}", SOCKET_PATH, e);
-                return;
+    tauri::async_runtime::spawn(listen(app.clone(), pending));
+}
+
+#[cfg(unix)]
+async fn listen(app: AppHandle, pending: Pending) {
+    let _ = std::fs::remove_file(SOCKET_PATH);
+    let listener = match tokio::net::UnixListener::bind(SOCKET_PATH) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("[Stavebak] Test harness failed to bind {}: {}", SOCKET_PATH, e);
+            return;
+        }
+    };
+    eprintln!("[Stavebak] Test harness registered on {}", SOCKET_PATH);
+
+    while let Ok((stream, _)) = listener.accept().await {
+        tauri::async_runtime::spawn(serve(stream, app.clone(), pending.clone(), None));
+    }
+}
+
+#[cfg(windows)]
+async fn listen(app: AppHandle, pending: Pending) {
+    let listener = match tokio::net::TcpListener::bind("127.0.0.1:0").await {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("[Stavebak] Test harness failed to bind 127.0.0.1: {}", e);
+            return;
+        }
+    };
+    let port = match listener.local_addr() {
+        Ok(addr) => addr.port(),
+        Err(e) => {
+            eprintln!("[Stavebak] Test harness has no local address: {}", e);
+            return;
+        }
+    };
+    let token = Arc::new(uuid::Uuid::new_v4().to_string());
+    let file = std::env::temp_dir().join(DISCOVERY_FILE);
+    let discovery = json!({ "port": port, "token": token.as_str(), "pid": std::process::id() });
+    if let Err(e) = std::fs::write(&file, discovery.to_string()) {
+        eprintln!("[Stavebak] Test harness failed to write {}: {}", file.display(), e);
+        return;
+    }
+    eprintln!("[Stavebak] Test harness registered on 127.0.0.1:{} ({})", port, file.display());
+
+    while let Ok((stream, _)) = listener.accept().await {
+        tauri::async_runtime::spawn(serve(stream, app.clone(), pending.clone(), Some(token.clone())));
+    }
+}
+
+/// One client connection: NDJSON requests in, responses out. With `token`, a request
+/// without the matching token gets an error and the connection is closed.
+async fn serve<S>(stream: S, app: AppHandle, pending: Pending, token: Option<Arc<String>>)
+where
+    S: AsyncRead + AsyncWrite + Send + 'static,
+{
+    let (read, mut write) = tokio::io::split(stream);
+    let mut lines = BufReader::new(read).lines();
+    while let Ok(Some(line)) = lines.next_line().await {
+        let Ok(req) = serde_json::from_str::<Value>(&line) else { continue };
+        let id = req.get("id").cloned().unwrap_or(Value::Null);
+
+        let authorized = match &token {
+            Some(t) => req.get("token").and_then(Value::as_str) == Some(t.as_str()),
+            None => true,
+        };
+        let mut resp = if !authorized {
+            json!({ "success": false, "error": "invalid harness token" })
+        } else {
+            let command = req.get("command").and_then(Value::as_str).unwrap_or("");
+            let payload = req.get("payload").cloned().unwrap_or(Value::Null);
+            match handle(&app, &pending, command, &payload).await {
+                Ok(data) => json!({ "success": true, "data": data }),
+                Err(error) => json!({ "success": false, "error": error }),
             }
         };
-        eprintln!("[Stavebak] Test harness registered on {}", SOCKET_PATH);
-
-        while let Ok((stream, _)) = listener.accept().await {
-            let app = app.clone();
-            let pending = pending.clone();
-            tauri::async_runtime::spawn(async move {
-                let (read, mut write) = stream.into_split();
-                let mut lines = BufReader::new(read).lines();
-                while let Ok(Some(line)) = lines.next_line().await {
-                    let Ok(req) = serde_json::from_str::<Value>(&line) else { continue };
-                    let id = req.get("id").cloned().unwrap_or(Value::Null);
-                    let command = req.get("command").and_then(Value::as_str).unwrap_or("");
-                    let payload = req.get("payload").cloned().unwrap_or(Value::Null);
-
-                    let mut resp = match handle(&app, &pending, command, &payload).await {
-                        Ok(data) => json!({ "success": true, "data": data }),
-                        Err(error) => json!({ "success": false, "error": error }),
-                    };
-                    resp["id"] = id;
-                    let mut out = resp.to_string();
-                    out.push('\n');
-                    if write.write_all(out.as_bytes()).await.is_err() {
-                        break;
-                    }
-                }
-            });
+        resp["id"] = id;
+        let mut out = resp.to_string();
+        out.push('\n');
+        if write.write_all(out.as_bytes()).await.is_err() || !authorized {
+            break;
         }
-    });
+    }
 }
 
 async fn handle(app: &AppHandle, pending: &Pending, command: &str, payload: &Value) -> Result<Value, String> {

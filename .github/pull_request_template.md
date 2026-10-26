@@ -1,4 +1,5 @@
 ## Co se mění a proč
+Closes #
 
 ## Jak jsem to ověřil
 - [ ] `pnpm build`, `pnpm exec vitest run`
