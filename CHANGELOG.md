@@ -2,6 +2,14 @@
 
 Důležité změny Stavebák Desktop.
 
+## [0.14.2] - 2026-10-26
+
+### Opraveno
+- Historie konverzací najde projekty ve složkách s diakritikou a na Windows.
+
+### Změněno
+- Vydání pro macOS i Windows vzniká celé v CI (podpis a notarizace macOS), aktualizace mají jeden manifest pro obě platformy.
+
 ## [0.14.1] - 2026-10-25
 
 ### Opraveno
