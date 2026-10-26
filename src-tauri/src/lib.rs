@@ -1,5 +1,6 @@
 #![allow(unexpected_cfgs)]
 
+mod codex_bridge;
 mod commands;
 mod events;
 pub mod path_access;
