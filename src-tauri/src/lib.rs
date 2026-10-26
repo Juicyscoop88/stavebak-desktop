@@ -5,7 +5,8 @@ mod events;
 pub mod path_access;
 mod protocol;
 mod stavebak_auth;
-#[cfg(debug_assertions)]
+// Listens on a Unix socket, so Windows debug builds compile without it for now (#18).
+#[cfg(all(debug_assertions, unix))]
 mod test_harness;
 // windows_ps compiles on all platforms so its pure-logic tests run on
 // non-Windows CI; it is only *invoked* from `#[cfg(target_os = "windows")]`
@@ -2725,144 +2726,81 @@ fn extract_session_info(path: &std::path::Path) -> (String, String) {
     (preview, cwd)
 }
 
+/// Encode a path the way Claude CLI names project dirs under `~/.claude/projects`:
+/// every char except ASCII letters and digits becomes `-`, e.g.
+///   /Users/alice/ppt-maker      → -Users-alice-ppt-maker
+///   C:\Users\Schin\Stavebák\RD  → C--Users-Schin-Staveb-k-RD
+fn encode_project_path(path: &str) -> String {
+    path.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect()
+}
+
 /// Decode project directory name back to readable path.
 ///
-/// Claude CLI encodes paths by replacing `/` with `-`, e.g.:
-///   /Users/alice/Desktop/ppt-maker → -Users-alice-Desktop-ppt-maker
-///
-/// Simple `.replace('-', '/')` fails when directory names contain hyphens
-/// (e.g. "ppt-maker" becomes "ppt/maker").
-///
-/// Claude CLI encodes project paths by replacing `/`, `.`, and ` ` (space)
-/// with `-`. This is lossy: "a-b" could mean "a/b", "a.b", "a b", or literal
-/// "a-b". We resolve ambiguity via greedy filesystem probing.
-///
-/// Strategy: greedily match real filesystem segments from left to right.
-/// At each position, try the longest possible segment first.  For each
-/// candidate span of dash-separated parts, try joining them with the
-/// original `-`, then ` ` (space), then `.` — whichever produces a path
-/// that actually exists on disk wins.
+/// The encoding (`encode_project_path`) is lossy: `-` may stand for `/`, `\`,
+/// `:`, `.`, a space, a literal `-` or any non-ASCII char (`á` in `Stavebák`).
+/// Instead of guessing separators, the decoder walks the filesystem from the
+/// root: at each level it lists the current directory and picks the child
+/// whose encoded name is the longest prefix of the rest (ending at a `-`).
+/// Parts that do not exist on disk fall back to one segment per dash, with
+/// leading empty parts read as dots (`--claude` → `.claude`).
 fn decode_project_name(encoded: &str) -> String {
-    // Detect Windows-style encoded paths: "C-Users-..." (drive letter prefix without leading dash)
-    // vs Unix-style: "-Users-..." (leading dash = root /)
-    let is_windows_path = encoded.len() >= 2
-        && encoded.as_bytes()[0].is_ascii_alphabetic()
-        && encoded.as_bytes()[1] == b'-';
-
-    let (trimmed, root, sep) = if is_windows_path {
-        // Windows: "C-Users-foo" → root = "C:\", rest = "Users-foo"
-        let drive = &encoded[0..1];
-        let rest = &encoded[2..]; // skip "C-"
-        (rest, format!("{}:\\", drive), "\\")
+    // Windows: "C--Users-…" (drive letter, then `:` and `\` as two dashes;
+    // older CLI versions wrote "C-Users-…"). Unix: "-Users-…" (leading `/`).
+    let bytes = encoded.as_bytes();
+    let (root, sep, mut rest) = if bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b'-' {
+        let skip = if bytes.get(2) == Some(&b'-') { 3 } else { 2 };
+        (format!("{}:\\", encoded[..1].to_ascii_uppercase()), "\\", &encoded[skip..])
     } else {
-        // Unix: "-Users-foo" → root = "/", rest = "Users-foo"
-        let rest = encoded.strip_prefix('-').unwrap_or(encoded);
-        (rest, "/".to_string(), "/")
+        ("/".to_string(), "/", encoded.strip_prefix('-').unwrap_or(encoded))
     };
 
-    let parts: Vec<&str> = trimmed.split('-').collect();
+    let mut dir = std::path::PathBuf::from(&root);
+    let mut segments: Vec<String> = Vec::new();
 
-    if parts.is_empty() {
-        return encoded.to_string();
-    }
+    while !rest.is_empty() {
+        let is_prefix = |name: &str| {
+            let enc = encode_project_path(name);
+            rest.get(..enc.len()).is_some_and(|p| p.eq_ignore_ascii_case(&enc))
+                && matches!(rest.as_bytes().get(enc.len()), None | Some(b'-'))
+        };
+        let on_disk = std::fs::read_dir(&dir).ok().and_then(|entries| {
+            entries
+                .flatten()
+                .filter(|e| e.path().is_dir())
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|name| is_prefix(name))
+                .max_by_key(|name| encode_project_path(name).len())
+        });
 
-    let mut decoded_segments: Vec<String> = Vec::new();
-    let mut i = 0;
-
-    while i < parts.len() {
-        let mut best_len = 1;
-        let mut best_segment = parts[i].to_string();
-
-        // Build the parent path for existence checking
-        let parent = if decoded_segments.is_empty() {
-            root.clone()
-        } else {
-            format!("{}{}", root, decoded_segments.join(sep))
+        let (segment, consumed) = match on_disk {
+            Some(name) => {
+                let len = encode_project_path(&name).len();
+                (name, len)
+            }
+            None => {
+                let dots = rest.len() - rest.trim_start_matches('-').len();
+                let after = &rest[dots..];
+                let part = &after[..after.find('-').unwrap_or(after.len())];
+                if part.is_empty() {
+                    // Trailing dashes: append dots to the last segment.
+                    if let Some(last) = segments.last_mut() {
+                        last.push_str(&".".repeat(dots));
+                    }
+                    break;
+                }
+                (format!("{}{}", ".".repeat(dots), part), dots + part.len())
+            }
         };
 
-        // Try combining parts[i..j], longest first.
-        // For each candidate length, try multiple join separators.
-        let max_j = parts.len().min(i + 10); // limit lookahead
-        let mut found = false;
-        'outer: for j in (i + 1..=max_j).rev() {
-            let slice = &parts[i..j];
-            // Separators to try: hyphen (original name), space, dot
-            for join_sep in ["-", " ", "."] {
-                let candidate = slice.join(join_sep);
-                let full_path = format!(
-                    "{}{}{}",
-                    parent,
-                    if parent.ends_with(sep) { "" } else { sep },
-                    candidate
-                );
-                if std::path::Path::new(&full_path).exists() {
-                    best_len = j - i;
-                    best_segment = candidate;
-                    found = true;
-                    break 'outer;
-                }
-            }
-        }
-
-        // Handle empty parts from consecutive dashes (e.g. "/." encoded as "--").
-        // If we're at an empty part and no filesystem match was found, try
-        // prepending a "." to the next segment (hidden dirs like .claude).
-        if !found && parts[i].is_empty() {
-            // Collect consecutive empty parts (each represents one encoded char)
-            let start = i;
-            while i < parts.len() && parts[i].is_empty() {
-                i += 1;
-            }
-            let dot_count = i - start; // number of dots/special chars
-
-            if i < parts.len() {
-                // Try interpreting as dot-prefixed segment:
-                // e.g. empty + "claude-worktrees" → ".claude-worktrees"
-                let prefix = ".".repeat(dot_count);
-                // Greedy match on the remaining parts after the dots
-                let remaining_max = parts.len().min(i + 10);
-                let mut dot_found = false;
-                for j in (i + 1..=remaining_max).rev() {
-                    for join_sep in ["-", " ", "."] {
-                        let after = parts[i..j].join(join_sep);
-                        let candidate = format!("{}{}", prefix, after);
-                        let full_path = format!(
-                            "{}{}{}",
-                            parent,
-                            if parent.ends_with(sep) { "" } else { sep },
-                            candidate
-                        );
-                        if std::path::Path::new(&full_path).exists() {
-                            decoded_segments.push(candidate);
-                            i = j;
-                            dot_found = true;
-                            break;
-                        }
-                    }
-                    if dot_found {
-                        break;
-                    }
-                }
-                if !dot_found {
-                    // Fallback: just use dot + next part as segment
-                    let candidate = format!("{}{}", prefix, parts[i]);
-                    decoded_segments.push(candidate);
-                    i += 1;
-                }
-            } else {
-                // Trailing empty parts — append dots to last segment or ignore
-                if let Some(prev) = decoded_segments.last_mut() {
-                    prev.push_str(&".".repeat(dot_count));
-                }
-            }
-            continue;
-        }
-
-        decoded_segments.push(best_segment);
-        i += best_len;
+        dir.push(&segment);
+        segments.push(segment);
+        rest = &rest[consumed..];
+        rest = rest.strip_prefix('-').unwrap_or(rest);
     }
 
-    format!("{}{}", root, decoded_segments.join(sep))
+    format!("{}{}", root, segments.join(sep))
 }
 
 #[tauri::command]
@@ -7438,8 +7376,8 @@ pub fn run() {
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
 
-            // GUI test harness for scripts/stavebak-cli.mjs (debug builds only)
-            #[cfg(debug_assertions)]
+            // GUI test harness for scripts/stavebak-cli.mjs (debug builds only, Unix)
+            #[cfg(all(debug_assertions, unix))]
             test_harness::start(app.handle());
 
             #[cfg(not(desktop))]
@@ -7538,29 +7476,30 @@ pub fn run() {
 
 #[cfg(test)]
 mod decode_tests {
-    use super::decode_project_name;
+    use super::{decode_project_name, encode_project_path};
     use tempfile::TempDir;
 
-    /// Encode a Unix absolute path the way Claude CLI encodes project dirs:
-    /// `/` → `-`, `.` before a path component → empty part (so `/.foo` → `--foo`).
-    fn encode_path(path: &str) -> String {
-        // Replace leading `/` with `-`, then all remaining `/` with `-`.
-        // Dots at the start of a component become empty parts between dashes.
-        let mut encoded = String::new();
-        for ch in path.chars() {
-            if ch == '/' {
-                encoded.push('-');
-            } else {
-                encoded.push(ch);
-            }
-        }
-        encoded
+    /// Real (long, case-correct) path of a temp dir, as Claude CLI sees the cwd.
+    /// Windows temp paths may be 8.3 short names (`RUNNER~1`) and canonicalize
+    /// adds the `\\?\` prefix, neither of which appears in a real cwd.
+    fn real_path(path: &std::path::Path) -> String {
+        let s = std::fs::canonicalize(path).unwrap().to_string_lossy().into_owned();
+        s.strip_prefix(r"\\?\").map(str::to_string).unwrap_or(s)
+    }
+
+    #[test]
+    fn test_encoding_matches_claude_cli() {
+        // Real dir names from ~/.claude/projects on macOS and Windows.
+        assert_eq!(encode_project_path("/Users/alice/Desktop/ppt-maker"), "-Users-alice-Desktop-ppt-maker");
+        assert_eq!(encode_project_path(r"D:\WebProjects\stavebak.cz"), "D--WebProjects-stavebak-cz");
+        assert_eq!(
+            encode_project_path(r"C:\Users\Schin\Documents\Stavebák\asadasd"),
+            "C--Users-Schin-Documents-Staveb-k-asadasd"
+        );
     }
 
     #[test]
     fn test_simple_no_ambiguity() {
-        // When no filesystem probing is needed (all parts are unambiguous
-        // single-segment names), the decoder just replaces `-` with `/`.
         // Use a path prefix that definitely does NOT exist so the decoder
         // falls back to segment-per-dash.
         let result = decode_project_name("-nonexistent9999-aaa-bbb-ccc");
@@ -7568,19 +7507,20 @@ mod decode_tests {
     }
 
     #[test]
+    fn test_windows_root_without_disk_match() {
+        assert_eq!(decode_project_name("Q--nonexistent9999-aaa"), r"Q:\nonexistent9999\aaa");
+        // older CLI versions: single dash after the drive letter
+        assert_eq!(decode_project_name("Q-nonexistent9999-aaa"), r"Q:\nonexistent9999\aaa");
+    }
+
+    #[test]
     fn test_hyphenated_dir_with_tempdir() {
-        // Create a real directory structure with a hyphenated leaf name so
-        // the filesystem probe can disambiguate.
         let tmp = TempDir::new().unwrap();
-        let base = tmp.path().join("sub");
-        let hyphenated = base.join("ppt-maker");
+        let hyphenated = tmp.path().join("sub").join("ppt-maker");
         std::fs::create_dir_all(&hyphenated).unwrap();
 
-        // Encode the path: e.g. /tmp/xxx/sub/ppt-maker
-        let full_path = hyphenated.to_string_lossy().to_string();
-        let encoded = encode_path(&full_path);
-
-        let result = decode_project_name(&encoded);
+        let full_path = real_path(&hyphenated);
+        let result = decode_project_name(&encode_project_path(&full_path));
         assert_eq!(
             result, full_path,
             "Decoder should find the hyphenated dir on disk and keep the hyphen"
@@ -7589,7 +7529,6 @@ mod decode_tests {
 
     #[test]
     fn test_hidden_dir_double_dash_with_tempdir() {
-        // Create .claude-worktrees/condescending-brown inside a temp dir
         let tmp = TempDir::new().unwrap();
         let hidden = tmp
             .path()
@@ -7597,37 +7536,35 @@ mod decode_tests {
             .join("condescending-brown");
         std::fs::create_dir_all(&hidden).unwrap();
 
-        let full_path = hidden.to_string_lossy().to_string();
-        let encoded = encode_path(&full_path);
-        // The `.` in `.claude-worktrees` encodes as an empty part → `--claude-worktrees`
-        let encoded = encoded.replacen("-.", "--", 1);
-
-        let result = decode_project_name(&encoded);
-        println!("Encoded: {}", encoded);
-        println!("Result:  {}", result);
-        assert!(
-            result.contains(".claude"),
-            "Expected .claude in path, got: {}",
-            result
-        );
+        let full_path = real_path(&hidden);
+        let result = decode_project_name(&encode_project_path(&full_path));
+        assert_eq!(result, full_path);
     }
 
     #[test]
     fn test_space_in_dir_name_with_tempdir() {
-        // Create a dir with a space in its name
         let tmp = TempDir::new().unwrap();
         let spaced = tmp.path().join("jd 设计");
         std::fs::create_dir_all(&spaced).unwrap();
 
-        let full_path = spaced.to_string_lossy().to_string();
-        // Claude CLI encodes spaces as dashes too (same as `/`)
-        let encoded = encode_path(&full_path).replace(' ', "-");
-
-        let result = decode_project_name(&encoded);
+        let full_path = real_path(&spaced);
+        let result = decode_project_name(&encode_project_path(&full_path));
         assert_eq!(
             result, full_path,
             "Decoder should find the space-containing dir on disk"
         );
+    }
+
+    #[test]
+    fn test_czech_diacritics_with_tempdir() {
+        // `á`, `ý`, `ů` each encode as `-`: "Stavebák" → "Staveb-k".
+        let tmp = TempDir::new().unwrap();
+        let czech = tmp.path().join("Stavebák").join("Rodinný dům.v2");
+        std::fs::create_dir_all(&czech).unwrap();
+
+        let full_path = real_path(&czech);
+        let result = decode_project_name(&encode_project_path(&full_path));
+        assert_eq!(result, full_path, "Decoder should find dirs with diacritics");
     }
 
     #[test]

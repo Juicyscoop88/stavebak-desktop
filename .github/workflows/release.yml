@@ -27,9 +27,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # verze pnpm z packageManager v package.json
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v7
         with:
@@ -123,9 +122,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # verze pnpm z packageManager v package.json
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v7
         with:
