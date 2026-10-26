@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
-# Lokální podepsaný a notarizovaný DMG (universal) pro ověření mimo CI. Nic nenahrává.
+# Podepsaný a notarizovaný DMG (universal) a balíček pro updater. Stejný skript běží v CI (release.yml)
+# i lokálně (ověřovací build, nouzový release). Nic nenahrává.
 #
-# Tajemství jsou jen v klíčence, nikdy v repu ani v .env:
-#   - identita Developer ID Application (Xcode → Settings → Accounts → Manage Certificates)
-#   - profil notarizace: xcrun notarytool store-credentials "$NOTARY_PROFILE" --apple-id … --team-id … --password <heslo pro aplikaci>
-#   - klíč updateru jen pro UPDATER=1: ~/.tauri/stavebak-updater.key, heslo v klíčence („Stavebak updater key“)
+# Podpis: identita Developer ID Application z klíčenky (lokálně login, v CI dočasná klíčenka z tajemství).
+# Notarizace, jedno z:
+#   - App Store Connect API klíč: NOTARY_KEY_PATH (.p8), NOTARY_KEY_ID, NOTARY_ISSUER (CI)
+#   - profil notarytool v klíčence: NOTARY_PROFILE (výchozí f2p-notary, lokálně)
+# Klíč updateru jen pro UPDATER=1: TAURI_SIGNING_PRIVATE_KEY a TAURI_SIGNING_PRIVATE_KEY_PASSWORD z prostředí (CI),
+#   jinak ~/.tauri/stavebak-updater.key a heslo v klíčence („Stavebak updater key“).
 #
-# Použití: ./scripts/release-macos-local.sh
-#          SKIP_NOTARIZE=1 ./scripts/release-macos-local.sh   (jen build a podpis)
-#          UPDATER=1 ./scripts/release-macos-local.sh         (i podepsaný .app.tar.gz pro updater)
+# Použití: ./scripts/release-macos.sh
+#          SKIP_NOTARIZE=1 ./scripts/release-macos.sh   (jen build a podpis)
+#          UPDATER=1 ./scripts/release-macos.sh         (release soubory v dist-release/vX.Y.Z, latest.json složí CI)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Release (UPDATER=1) se staví jen z čistého origin/main s verzí, která ještě nemá tag.
-# Ověřovací build bez UPDATER smí stavět cokoli.
-if [ -n "${UPDATER:-}" ] && [ -z "${SKIP_RELEASE_CHECKS:-}" ]; then
+# Lokální release (UPDATER=1) se staví jen z čistého origin/main s verzí, která ještě nemá tag.
+# V CI tag už existuje a shodu tagu s verzí ověřuje workflow. Ověřovací build bez UPDATER smí stavět cokoli.
+if [ -n "${UPDATER:-}" ] && [ -z "${CI:-}" ] && [ -z "${SKIP_RELEASE_CHECKS:-}" ]; then
   fail() { echo "Release: $1 (nouzově přeskočit: SKIP_RELEASE_CHECKS=1)" >&2; exit 1; }
   [ -z "$(git status --porcelain)" ] || fail "pracovní složka není čistá"
   git fetch -q origin main
@@ -24,7 +27,11 @@ if [ -n "${UPDATER:-}" ] && [ -z "${SKIP_RELEASE_CHECKS:-}" ]; then
   [ -z "$(git ls-remote --tags origin "v$VERSION")" ] || fail "tag v$VERSION už existuje, zvyš verzi"
 fi
 
-NOTARY_PROFILE="${NOTARY_PROFILE:-f2p-notary}"
+if [ -n "${NOTARY_KEY_PATH:-}" ]; then
+  NOTARY_AUTH=(--key "$NOTARY_KEY_PATH" --key-id "${NOTARY_KEY_ID:?}" --issuer "${NOTARY_ISSUER:?}")
+else
+  NOTARY_AUTH=(--keychain-profile "${NOTARY_PROFILE:-f2p-notary}")
+fi
 IDENTITY="${APPLE_SIGNING_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -1)}"
 [ -n "$IDENTITY" ] || { echo "Chybí identita Developer ID Application v klíčence." >&2; exit 1; }
 
@@ -33,15 +40,17 @@ rustup target add aarch64-apple-darwin x86_64-apple-darwin >/dev/null
 
 EXTRA=()
 if [ -n "${UPDATER:-}" ]; then
-  export TAURI_SIGNING_PRIVATE_KEY="$(cat "$HOME/.tauri/stavebak-updater.key")"
-  export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(security find-generic-password -a stavebak-updater -s "Stavebak updater key" -w)"
+  if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+    export TAURI_SIGNING_PRIVATE_KEY="$(cat "$HOME/.tauri/stavebak-updater.key")"
+    export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(security find-generic-password -a stavebak-updater -s "Stavebak updater key" -w)"
+  fi
 else
   EXTRA=(--config '{"bundle":{"createUpdaterArtifacts":false}}')
 fi
 
-# Tauri podepíše identitou z klíčenky. Notarizaci dělá skript sám přes profil notarytool,
-# proto se APPLE_ID ani APPLE_API_* nepředávají.
-unset APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID APPLE_API_KEY APPLE_API_ISSUER
+# Tauri podepíše identitou z klíčenky. Notarizaci dělá skript sám (notarytool), proto se Tauri
+# nepředávají APPLE_ID ani APPLE_API_*, jinak by notarizoval podruhé.
+unset APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID APPLE_API_KEY APPLE_API_ISSUER APPLE_API_KEY_PATH
 export APPLE_SIGNING_IDENTITY="$IDENTITY"
 
 echo "==> Build $TARGET, podpis: $IDENTITY"
@@ -53,11 +62,11 @@ DMG=$(ls "$BUNDLE"/dmg/*.dmg | head -1)
 
 notarize() {
   local out id
-  out=$(xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait 2>&1) || true
+  out=$(xcrun notarytool submit "$1" "${NOTARY_AUTH[@]}" --wait 2>&1) || true
   echo "$out"
   if ! grep -q "status: Accepted" <<<"$out"; then
     id=$(awk '/^  id:/{print $2; exit}' <<<"$out")
-    xcrun notarytool log "$id" --keychain-profile "$NOTARY_PROFILE" >&2 || true
+    xcrun notarytool log "$id" "${NOTARY_AUTH[@]}" >&2 || true
     exit 1
   fi
 }
@@ -67,7 +76,7 @@ codesign --verify --deep --strict --verbose=2 "$APP"
 codesign -dvv "$APP" 2>&1 | grep -E "Authority=Developer ID|TeamIdentifier|flags"
 
 if [ -z "${SKIP_NOTARIZE:-}" ]; then
-  echo "==> Notarizace DMG (profil $NOTARY_PROFILE)"
+  echo "==> Notarizace DMG"
   notarize "$DMG"
   xcrun stapler staple "$DMG"
   xcrun stapler validate "$DMG"
@@ -94,15 +103,8 @@ if [ -n "${UPDATER:-}" ]; then
   # Stálé jméno: web odkazuje na releases/latest/download/Stavebak.dmg (bez GitHub API)
   cp "$DMG" "$OUT/Stavebak.dmg"
   cp "$BUNDLE/macos/$(basename "$APP").tar.gz" "$OUT/Stavebak_universal.app.tar.gz"
-  SIG=$(cat "$BUNDLE/macos/$(basename "$APP").tar.gz.sig")
-  URL="https://github.com/Juicyscoop88/stavebak-desktop/releases/download/v$VERSION/Stavebak_universal.app.tar.gz"
-  node -e '
-    const [version, sig, url] = process.argv.slice(1);
-    const p = { signature: sig, url };
-    console.log(JSON.stringify({ version, notes: process.env.NOTES || "", pub_date: new Date().toISOString(),
-      platforms: { "darwin-aarch64": p, "darwin-x86_64": p } }, null, 2));
-  ' "$VERSION" "$SIG" "$URL" > "$OUT/latest.json"
-  echo "==> Release soubory: $OUT (nahrát do draftu: gh release create v$VERSION --draft $OUT/*)"
+  cp "$BUNDLE/macos/$(basename "$APP").tar.gz.sig" "$OUT/Stavebak_universal.app.tar.gz.sig"
+  echo "==> Release soubory: $OUT (latest.json: scripts/updater-manifest.mjs, v CI job draft)"
 fi
 
 echo "==> Hotovo: $DMG"

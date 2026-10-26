@@ -1,9 +1,9 @@
 name: Release
 
-# Tag v* sestaví Windows (NSIS) a nahraje ho do draftu releasu. macOS se dělá lokálně
-# (scripts/release-macos-local.sh) a nahrává se do draftu PŘED tagem. Windows pak jen doplní
-# svou položku do latest.json. Nic se nepublikuje samo.
-# Postup a tajemství: docs/ops/release.md
+# Tag v* sestaví macOS (universal, podepsaný a notarizovaný) a Windows (NSIS). Teprve když jsou hotové
+# obě platformy, job draft založí draft releasu se všemi soubory a latest.json pro updater.
+# Neúplný draft nevznikne. Nic se nepublikuje samo. Postup a tajemství: docs/ops/release.md
+
 on:
   push:
     tags:
@@ -17,26 +17,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    # Tajemství podpisu jsou jen v prostředí release, job na něj čeká podle jeho pravidel.
+  # Tajemství podpisu jsou jen v prostředí release, joby macos a windows na něj čekají podle jeho pravidel
+  # (jedno schválení pustí oba). Joby jen staví, do releasu nic nenahrávají.
+  macos:
     environment: release
-    permissions:
-      contents: write
-    # Jen Windows. macOS se staví lokálně (scripts/release-macos-local.sh), Linux nenabízíme.
-    runs-on: windows-latest
-    timeout-minutes: 60
+    runs-on: macos-latest
+    timeout-minutes: 90
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
         with:
           version: 10
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -44,16 +39,109 @@ jobs:
       - name: Tag odpovídá verzi aplikace
         run: node scripts/check-version.mjs '${{ github.ref_name }}'
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Tajemství pro macOS jsou nastavená
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER: ${{ secrets.APPLE_NOTARY_ISSUER }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          missing=()
+          for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_NOTARY_KEY APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER TAURI_SIGNING_PRIVATE_KEY; do
+            [ -n "${!v}" ] || missing+=("$v")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Chybí tajemství v environmentu release: ${missing[*]}. Nastaví je scripts/setup-ci-signing.sh na Macu (docs/ops/release.md)."
+            exit 1
+          fi
 
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
 
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
+
+      # Identita Developer ID v dočasné klíčence, kterou úklid na konci smaže. Notarizační klíč do souboru
+      # v RUNNER_TEMP. Nic z toho se nevypisuje.
+      - name: Dočasná klíčenka a notarizační klíč
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY }}
+        run: |
+          KC="$RUNNER_TEMP/release.keychain-db"
+          KC_PASS=$(openssl rand -base64 24)
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KC_PASS" "$KC"
+          security set-keychain-settings -lut 7200 "$KC"
+          security unlock-keychain -p "$KC_PASS" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          # Mezilehlý certifikát Developer ID (G2), aby codesign sestavil řetězec i na čistém runneru
+          curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$RUNNER_TEMP/DeveloperIDG2CA.cer"
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$KC" >/dev/null || true
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KC_PASS" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          printf '%s' "$APPLE_NOTARY_KEY" > "$RUNNER_TEMP/notary.p8"
+
+      - name: Build, podpis a notarizace (scripts/release-macos.sh)
+        env:
+          UPDATER: '1'
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          NOTARY_KEY_PATH: ${{ runner.temp }}/notary.p8
+          NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.APPLE_NOTARY_ISSUER }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: ./scripts/release-macos.sh
+
+      - name: Úklid klíčenky a klíče
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/release.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/cert.p12"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist-release/${{ github.ref_name }}/*
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    environment: release
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Tag odpovídá verzi aplikace
+        run: node scripts/check-version.mjs '${{ github.ref_name }}'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - run: pnpm install --frozen-lockfile
 
       # Podpis Windows přes Azure Artifact Signing. Bez proměnné AZURE_SIGNING_ACCOUNT se
       # installer sestaví nepodepsaný (SmartScreen varuje), viz docs/ops/release.md.
@@ -72,47 +160,82 @@ jobs:
             "$ENDPOINT" "$ACCOUNT" "$PROFILE" > "$CONF"
           echo "args=--config $CONF" >> "$GITHUB_OUTPUT"
 
-      - name: Build the app
-        uses: tauri-apps/tauri-action@v0
+      - name: Build (NSIS)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Stavebák ${{ github.ref_name }}'
-          releaseBody: 'Instalační soubory jsou v sekci Assets.'
-          releaseDraft: true
-          # latest.json skládáme sami (macOS je lokální), jinak by CI přepsal macOS položku
-          includeUpdaterJson: false
-          prerelease: false
-          args: ${{ steps.winsign.outputs.args }}
+        run: pnpm exec tauri build --bundles nsis ${{ steps.winsign.outputs.args }}
 
-      # Windows: instalátor pod stálým jménem (web odkazuje na releases/latest/download/Stavebak-setup.exe,
+      # Instalátor i pod stálým jménem (web odkazuje na releases/latest/download/Stavebak-setup.exe,
       # stejný vzor jako Stavebak.dmg) a kontrola podpisu, pokud je podepisování zapnuté.
-      - name: Windows installer, stálé jméno a kontrola podpisu
+      - name: Installer, stálé jméno a kontrola podpisu
         shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
           SIGNING: ${{ vars.AZURE_SIGNING_ACCOUNT }}
         run: |
           $setup = Get-ChildItem -Path src-tauri/target/release/bundle/nsis -Filter '*-setup.exe' | Select-Object -First 1
           if (-not $setup) { throw 'NSIS installer nenalezen' }
-          if ($SIGNING) {
+          if ($env:SIGNING) {
             $sig = Get-AuthenticodeSignature $setup.FullName
             if ($sig.Status -ne 'Valid') { throw "Installer není podepsaný (stav: $($sig.Status))" }
             Write-Host "Podpis OK: $($sig.SignerCertificate.Subject)"
           } else {
             Write-Warning 'Installer je NEPODEPSANÝ (chybí AZURE_SIGNING_ACCOUNT). Nepublikovat mimo testery.'
           }
-          Copy-Item $setup.FullName 'Stavebak-setup.exe'
           $sigFile = "$($setup.FullName).sig"
           if (-not (Test-Path $sigFile)) { throw 'Chybí .sig pro updater (TAURI_SIGNING_PRIVATE_KEY)' }
-          node scripts/merge-updater-windows.mjs '${{ github.ref_name }}' $setup.FullName $sigFile "$env:RUNNER_TEMP/latest.json"
-          Copy-Item "$env:RUNNER_TEMP/latest.json" latest.json
-          gh release upload '${{ github.ref_name }}' latest.json --clobber
-          gh release upload '${{ github.ref_name }}' 'Stavebak-setup.exe' --clobber
+          $out = New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/out"
+          Copy-Item $setup.FullName, $sigFile $out
+          Copy-Item $setup.FullName "$out/Stavebak-setup.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: ${{ runner.temp }}/out/*
+          if-no-files-found: error
+          retention-days: 7
+
+  # Draft jen se všemi platformami: latest.json bez kterékoli z nich updater-manifest.mjs odmítne.
+  draft:
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: latest.json pro updater
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          node scripts/updater-manifest.mjs "$GITHUB_REF_NAME" dist/latest.json \
+            darwin-aarch64=dist/Stavebak_universal.app.tar.gz \
+            darwin-x86_64=dist/Stavebak_universal.app.tar.gz \
+            windows-x86_64="dist/Stavebak_${V}_x64-setup.exe"
+
+      # Opakovaný běh doplní soubory do existujícího draftu. Publikovaný release se nikdy nepřepisuje.
+      - name: Draft releasu
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -l dist
+          if draft=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2>/dev/null); then
+            [ "$draft" = true ] || { echo "::error::Release $GITHUB_REF_NAME je už publikovaný, nepřepisuji ho."; exit 1; }
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --draft --verify-tag \
+              --title "Stavebák $GITHUB_REF_NAME" --notes 'Instalační soubory jsou v sekci Assets.'
+          fi
