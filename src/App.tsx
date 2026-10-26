@@ -11,7 +11,7 @@ import { ImageLightbox } from './components/shared/ImageLightbox';
 import { ChangelogModal } from './components/shared/ChangelogModal';
 import { Toast } from './components/shared/Toast';
 import { SetupWizard } from './components/setup/SetupWizard';
-import { AccountGate, TrialBanner, useAccountRefresh } from './components/account/AccountGate';
+import { AccountBanner, useAccountRefresh } from './components/account/AccountBanner';
 import { useAccountStore } from './stores/accountStore';
 import { loadToolTitles } from './lib/tool-titles';
 import { useSettingsStore } from './stores/settingsStore';
@@ -770,12 +770,11 @@ function App() {
     <>
       <AppShell
         sidebar={<Sidebar />}
-        main={<div className="flex flex-col h-full min-h-0"><TrialBanner /><div className="flex-1 min-h-0"><ChatPanel key={selectedSessionId || 'new'} /></div></div>}
+        main={<div className="flex flex-col h-full min-h-0"><AccountBanner /><div className="flex-1 min-h-0"><ChatPanel key={selectedSessionId || 'new'} /></div></div>}
         secondary={<SecondaryPanel />}
         bottomBar={<BottomBar />}
         forceCollapseSidebar={!setupCompleted}
       />
-      <AccountGate />
       {/* Onboarding overlay — centered, covers entire app */}
       {!setupCompleted && (
         <div className="fixed inset-0 z-100 flex items-center justify-center bg-bg-chat">
