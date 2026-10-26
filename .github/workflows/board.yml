@@ -26,7 +26,8 @@ jobs:
     timeout-minutes: 5
     env:
       GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-      OWNER: Juicyscoop88
+      # vlastník boardu = vlastník tokenu; jméno účtu gh bez scope read:org nerozliší (unknown owner type)
+      OWNER: '@me'
       PROJECT: '1'
       REPO: ${{ github.repository }}
       URL: ${{ github.event.issue.html_url || github.event.pull_request.html_url }}
