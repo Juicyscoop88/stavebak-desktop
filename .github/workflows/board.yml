@@ -1,0 +1,54 @@
+name: Board
+
+# Board Stavebák (https://github.com/users/Juicyscoop88/projects/1) spojuje repa stavebak.cz,
+# stavebak-desktop a geodata. Stejný soubor je ve všech třech.
+# - nové issue a PR se přidá na board
+# - otevřený PR přepne issues, které uzavírá („Closes #N“, i z jiného repa), do In Progress
+# - Done nastaví board sám při zavření issue a merge PR (vestavěné workflows boardu)
+# Potřebuje secret PROJECT_TOKEN (classic PAT se scope project a repo): GITHUB_TOKEN na board uživatele
+# nedosáhne. Bez secretu se nic neděje. pull_request_target kvůli PR z forku (veřejný desktop):
+# kód PR se nikdy nespouští, workflow čte jen URL a čísla z události.
+
+on:
+  issues:
+    types: [opened, reopened, transferred]
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: board-${{ github.event.issue.number || github.event.pull_request.number }}
+
+jobs:
+  board:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+      OWNER: Juicyscoop88
+      PROJECT: '1'
+      REPO: ${{ github.repository }}
+      URL: ${{ github.event.issue.html_url || github.event.pull_request.html_url }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Board
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::Secret PROJECT_TOKEN není nastavený, board se neaktualizuje."
+            exit 0
+          fi
+          gh project item-add "$PROJECT" --owner "$OWNER" --url "$URL" >/dev/null
+          echo "Na boardu: $URL"
+          [ -n "$PR" ] || exit 0
+
+          project_id=$(gh project view "$PROJECT" --owner "$OWNER" --format json --jq .id)
+          status='.fields[] | select(.name == "Status")'
+          field_id=$(gh project field-list "$PROJECT" --owner "$OWNER" --format json --jq "$status | .id")
+          option_id=$(gh project field-list "$PROJECT" --owner "$OWNER" --format json \
+            --jq "$status | .options[] | select(.name == \"In Progress\") | .id")
+          for issue in $(gh pr view "$PR" --repo "$REPO" --json closingIssuesReferences --jq '.closingIssuesReferences[].url'); do
+            item=$(gh project item-add "$PROJECT" --owner "$OWNER" --url "$issue" --format json --jq .id)
+            gh project item-edit --project-id "$project_id" --id "$item" --field-id "$field_id" --single-select-option-id "$option_id" >/dev/null
+            echo "In Progress: $issue"
+          done
