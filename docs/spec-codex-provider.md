@@ -95,17 +95,19 @@ S API klíčem místo SIWC: stejný provider s `env_key="OPENAI_API_KEY"` a klí
 - Nová konverzace na výchozím poskytovateli (Nastavení), rozběhnutá zůstává u svého. Projekt je na MCP serveru, přepnutí o nic nepřijde.
 - Ceník (web): u tarifů uvést „Funguje s předplatným Claude i ChatGPT“.
 
-## Instalace binárky
+## Instalace
 
-Jako u Claude: stažení na pozadí do `~/.stavebak/bin/`. Zdroj: GitHub release `rust-v0.164.0`, asset `codex-app-server-<triple>` (macOS arm64/x64 `.tar.gz`, Windows x64 `.exe.zip`), SHA-256 natvrdo v kódu. Aktualizace verze = změna konstanty a kontrolních součtů v PR.
+Jako u Claude: stažení na pozadí. Zdroj: GitHub release `rust-v0.164.0`, **balíček** `codex-app-server-package-<triple>.tar.gz` (macOS arm64/x64, Windows x64/arm64), SHA-256 natvrdo v kódu, rozbalení beze změn do `~/.stavebak/codex-runtime/<verze>/`. Samotná binárka nestačí: nástroje (i MCP) model volá přes `exec`, který spouští `bin/codex-code-mode-host` vedle `bin/codex-app-server`. Aktualizace verze = změna konstanty a kontrolních součtů v PR.
 
-## Rizika k ověření testem
+## Ověřeno testem (2026-10-26, macOS arm64, ChatGPT Plus, lokální MCP)
 
-1. **`tool_search`**: Codex u všech modelů v katalogu (`supports_search_tool=true`) posílá s MCP nástroji Responses `tool_search`, které SIWC odmítá. Řešení: `model_catalog_json` s kopií katalogu s `supports_search_tool=false`. Ověřit, že to stačí a že model MCP nástroje vidí.
-2. **Únik tokenů do příkazů modelu**: výchozí `shell_environment_policy` předává celé prostředí. Ověřit, že `exclude` funguje (příkaz `env` v sandboxu nesmí ukázat `ACCESS_TOKEN`).
-3. **app-server je experimentální**: připnutá verze, aktualizace s testem.
-4. **Free plán**: plán v open-source aplikacích má fungovat i pro Free, ověřit (`subscription_sharing_user_not_eligible`).
-5. **Windows sandbox**: `mxc` vyžaduje Windows 11 24H2+, jinak `unelevated`.
+1. **`tool_search`**: Codex 0.164 nástroje nevkládá přes Responses `tool_search`, ale za vlastní `exec` (code mode). Tah s MCP nástroji na plánu ChatGPT prošel, model zavolal `classify_project`. Katalog bez `supports_search_tool` (`catalog_without_tool_search`) zatím není potřeba.
+2. **Únik tokenů**: příkaz modelu `env` vidí z citlivých proměnných jen `CODEX_HOME`, `ACCESS_TOKEN` ani `STAVEBAK_TOKEN` ne.
+3. **Stop a obnova**: Stop ukončí proces, další zpráva obnoví vlákno (`thread/resume`) a model si pamatuje předchozí volání nástroje.
+4. **Plán Free nestačí**: OpenAI v souhlasu hlásí „A required permission is unavailable“. Potřeba Go, Plus nebo Pro, Nastavení to říká předem.
+5. **Port**: první registrace na náhodném portu skončila `invalid_grant`, na portu 1455 (příklad OpenAI) prošla.
+
+Zbývá: app-server je experimentální (připnutá verze, aktualizace s testem), Windows sandbox (`mxc` vyžaduje Windows 11 24H2+).
 
 ## Pořadí implementace
 

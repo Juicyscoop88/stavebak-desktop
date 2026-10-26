@@ -794,7 +794,13 @@ fn user_text(content: &Value) -> String {
     }
 }
 
-/// Kde je binárka: `STAVEBAK_CODEX_BIN` (vývoj), jinak `~/.stavebak/bin/codex-app-server[.exe]`.
+/// Složka s rozbaleným balíčkem Codexu připnuté verze: `~/.stavebak/codex-runtime/<verze>/`
+/// (`bin/codex-app-server`, pomocné `bin/codex-code-mode-host`, `codex-path/rg`, `codex-resources/`).
+pub fn runtime_dir() -> Option<PathBuf> {
+    Some(dirs::home_dir()?.join(".stavebak").join("codex-runtime").join(CODEX_VERSION))
+}
+
+/// Kde je binárka: `STAVEBAK_CODEX_BIN` (vývoj), jinak `bin/codex-app-server[.exe]` v runtime_dir.
 pub fn find_binary() -> Option<PathBuf> {
     if let Ok(p) = std::env::var("STAVEBAK_CODEX_BIN") {
         let p = PathBuf::from(p);
@@ -803,7 +809,7 @@ pub fn find_binary() -> Option<PathBuf> {
         }
     }
     let name = if cfg!(windows) { "codex-app-server.exe" } else { "codex-app-server" };
-    let p = dirs::home_dir()?.join(".stavebak").join("bin").join(name);
+    let p = runtime_dir()?.join("bin").join(name);
     p.is_file().then_some(p)
 }
 
@@ -989,19 +995,20 @@ pub async fn spawn_session(
     })
 }
 
-// ── Instalace binárky ───────────────────────────────────────────────────────
+// ── Instalace ───────────────────────────────────────────────────────────────
 
-/// Asset `codex-app-server` pro tuto platformu: (název v release, SHA-256).
-/// Součty z GitHub release `rust-v0.164.0` (pole `digest`); změna verze = změna v PR.
+/// Balíček `codex-app-server-package` pro tuto platformu: (název v release, SHA-256).
+/// Balíček, ne samotná binárka: nástroje (i MCP) model volá přes `exec`, které spouští
+/// pomocné `codex-code-mode-host` vedle binárky. Součty z release `rust-v0.164.0` (pole `digest`).
 fn release_asset() -> Option<(&'static str, &'static str)> {
     if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        Some(("codex-app-server-aarch64-apple-darwin.tar.gz", "2eb75238651acb7d5c7cbb088b56433c71bbb680189c3bbd50318589858d57b1"))
+        Some(("codex-app-server-package-aarch64-apple-darwin.tar.gz", "7fcd5f0346c9338dd45f1af7c53115a29f651ac61a4264e2dbca49b7aa064ac0"))
     } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
-        Some(("codex-app-server-x86_64-apple-darwin.tar.gz", "8bcb46d2eb100ddccd81446339496e35c4f9640639339691d19dda551bb67a3f"))
+        Some(("codex-app-server-package-x86_64-apple-darwin.tar.gz", "125dea1f429558275a6cd73dfc7f20cc823193c1a61ee69222af250ae04e9762"))
     } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
-        Some(("codex-app-server-x86_64-pc-windows-msvc.exe.zip", "35b93235a1d502352c840ebf960be6194aa9f3bec724fee478d2c7c86492fb27"))
+        Some(("codex-app-server-package-x86_64-pc-windows-msvc.tar.gz", "e177a62037b0b6b26774700f07a713db67f85efd2187c6a574c7a6a14ebf4b7e"))
     } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
-        Some(("codex-app-server-aarch64-pc-windows-msvc.exe.zip", "3054bab7cdb1110d53a6ea79f25e2acb21a56b4d3aecc88f64e4dfe75f3adbb8"))
+        Some(("codex-app-server-package-aarch64-pc-windows-msvc.tar.gz", "80dd56064d111b6c1e0fb45e48fb89c5b767cb3ee1b7f172cc9ef9f864cd3047"))
     } else {
         None
     }
@@ -1012,38 +1019,25 @@ fn sha256_hex(data: &[u8]) -> String {
     Sha256::digest(data).iter().map(|b| format!("{:02x}", b)).collect()
 }
 
-/// Vytáhne z archivu jediný spustitelný soubor `codex-app-server*`.
-fn extract_binary(archive: &[u8], asset: &str) -> Result<Vec<u8>, String> {
-    use std::io::Read;
-    let mut out = Vec::new();
-    if asset.ends_with(".zip") {
-        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(archive)).map_err(|e| e.to_string())?;
-        for i in 0..zip.len() {
-            let mut f = zip.by_index(i).map_err(|e| e.to_string())?;
-            let name = f.name().rsplit('/').next().unwrap_or_default().to_string();
-            if f.is_file() && name.starts_with("codex-app-server") {
-                f.read_to_end(&mut out).map_err(|e| e.to_string())?;
-                return Ok(out);
-            }
+/// Rozbalí balíček do `dir` beze změn. Cesty mimo `dir` (absolutní, `..`) odmítne.
+fn unpack_package(archive: &[u8], dir: &Path) -> Result<(), String> {
+    let gz = flate2::read::GzDecoder::new(archive);
+    let mut tar = tar::Archive::new(gz);
+    tar.set_preserve_permissions(true);
+    for entry in tar.entries().map_err(|e| e.to_string())? {
+        let mut e = entry.map_err(|e| e.to_string())?;
+        let path = e.path().map_err(|e| e.to_string())?.to_path_buf();
+        if path.is_absolute() || path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+            return Err(format!("Neplatná cesta v balíčku Codexu: {}", path.display()));
         }
-    } else {
-        let gz = flate2::read::GzDecoder::new(archive);
-        let mut tar = tar::Archive::new(gz);
-        for entry in tar.entries().map_err(|e| e.to_string())? {
-            let mut e = entry.map_err(|e| e.to_string())?;
-            let path = e.path().map_err(|e| e.to_string())?.to_path_buf();
-            let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-            if e.header().entry_type().is_file() && name.starts_with("codex-app-server") {
-                e.read_to_end(&mut out).map_err(|e| e.to_string())?;
-                return Ok(out);
-            }
-        }
+        // unpack_in sám odmítne cesty mimo dir; vrací false u přeskočených položek
+        e.unpack_in(dir).map_err(|e| e.to_string())?;
     }
-    Err("V archivu Codexu chybí codex-app-server".into())
+    Ok(())
 }
 
-/// Stáhne připnutou verzi z GitHub release OpenAI, ověří SHA-256 a uloží do `~/.stavebak/bin/`.
-/// Binárka se nijak neupravuje.
+/// Stáhne připnutý balíček z GitHub release OpenAI, ověří SHA-256 a rozbalí do runtime_dir.
+/// Nic se neupravuje.
 pub async fn install_binary(progress: impl Fn(u8)) -> Result<PathBuf, String> {
     use futures_util::StreamExt;
     let (asset, sha) = release_asset().ok_or("Codex pro tuto platformu zatím nepodporujeme.")?;
@@ -1072,20 +1066,16 @@ pub async fn install_binary(progress: impl Fn(u8)) -> Result<PathBuf, String> {
     if sha256_hex(&data) != sha {
         return Err("Stažený Codex neodpovídá kontrolnímu součtu, instalace zrušena.".into());
     }
-    let bin = extract_binary(&data, asset)?;
-    let dir = dirs::home_dir().ok_or("Chybí domovská složka")?.join(".stavebak").join("bin");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let name = if cfg!(windows) { "codex-app-server.exe" } else { "codex-app-server" };
-    let target = dir.join(name);
-    let tmp = dir.join(format!("{name}.download"));
-    std::fs::write(&tmp, &bin).map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
-    }
+    let target = runtime_dir().ok_or("Chybí domovská složka")?;
+    let parent = target.parent().ok_or("Chybí domovská složka")?.to_path_buf();
+    std::fs::create_dir_all(&parent).map_err(|e| e.to_string())?;
+    let tmp = parent.join(format!("{CODEX_VERSION}.download"));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
+    unpack_package(&data, &tmp)?;
+    let _ = std::fs::remove_dir_all(&target);
     std::fs::rename(&tmp, &target).map_err(|e| e.to_string())?;
-    Ok(target)
+    find_binary().ok_or_else(|| "V balíčku Codexu chybí codex-app-server".to_string())
 }
 
 #[cfg(test)]
@@ -1316,22 +1306,43 @@ mod tests {
         assert_eq!(codex_effort(Some("off")), None);
     }
 
-    #[test]
-    fn rozbali_binarku_z_tar_gz() {
-        let mut tar_bytes = Vec::new();
+    fn tar_gz(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut out = Vec::new();
         {
-            let gz = flate2::write::GzEncoder::new(&mut tar_bytes, flate2::Compression::fast());
+            let gz = flate2::write::GzEncoder::new(&mut out, flate2::Compression::fast());
             let mut b = tar::Builder::new(gz);
-            let data = b"#!/bin/sh\necho codex";
-            let mut h = tar::Header::new_gnu();
-            h.set_size(data.len() as u64);
-            h.set_mode(0o755);
-            h.set_cksum();
-            b.append_data(&mut h, "codex-app-server-aarch64-apple-darwin", &data[..]).unwrap();
+            for (name, data) in entries {
+                let mut h = tar::Header::new_gnu();
+                h.set_size(data.len() as u64);
+                h.set_mode(0o755);
+                h.set_cksum();
+                b.append_data(&mut h, name, *data).unwrap();
+            }
             b.into_inner().unwrap().finish().unwrap();
         }
-        let bin = extract_binary(&tar_bytes, "codex-app-server-aarch64-apple-darwin.tar.gz").unwrap();
-        assert!(bin.starts_with(b"#!/bin/sh"));
+        out
+    }
+
+    #[test]
+    fn rozbali_balicek_vcetne_pomocnych_binarek() {
+        let dir = std::env::temp_dir().join(format!("codex-pkg-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let pkg = tar_gz(&[
+            ("bin/codex-app-server", b"#!/bin/sh\necho server"),
+            ("bin/codex-code-mode-host", b"#!/bin/sh\necho host"),
+            ("codex-path/rg", b"rg"),
+        ]);
+        unpack_package(&pkg, &dir).unwrap();
+        assert!(dir.join("bin/codex-app-server").is_file());
+        assert!(dir.join("bin/codex-code-mode-host").is_file());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(dir.join("bin/codex-app-server")).unwrap().permissions().mode();
+            assert_eq!(mode & 0o111, 0o111);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(sha256_hex(b"abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     }
 
