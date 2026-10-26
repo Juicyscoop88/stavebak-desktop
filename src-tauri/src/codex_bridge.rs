@@ -86,6 +86,9 @@ pub fn launch_args(cfg: &LaunchConfig) -> Vec<String> {
             toml_str(STAVEBAK_TOKEN_ENV)
         ),
         "shell_environment_policy.ignore_default_excludes=false".to_string(),
+        // Síť v příkazech modelu jako u Claude Code: stažení výsledků nástrojů (náhled výkresu,
+        // převod DWG) jde přes odkazy ze serveru. Tokeny jsou z prostředí příkazů vyřazené výše.
+        "sandbox_workspace_write.network_access=true".to_string(),
     ];
     if cfg.stavebak_token.is_some() {
         overrides.push(format!(
@@ -174,7 +177,7 @@ fn sandbox_policy(sandbox: &str) -> Value {
     match sandbox {
         "read-only" => json!({ "type": "readOnly" }),
         "danger-full-access" => json!({ "type": "dangerFullAccess" }),
-        _ => json!({ "type": "workspaceWrite" }),
+        _ => json!({ "type": "workspaceWrite", "networkAccess": true }),
     }
 }
 
@@ -1117,6 +1120,7 @@ mod tests {
         assert!(args.contains("bearer_token_env_var=\"STAVEBAK_TOKEN\""));
         assert!(args.contains("shell_environment_policy.exclude=[\"ACCESS_TOKEN\",\"OPENAI_API_KEY\",\"STAVEBAK_TOKEN\"]"));
         assert!(args.contains("requires_openai_auth=false"));
+        assert!(args.contains("sandbox_workspace_write.network_access=true"));
         let env = launch_env(&c);
         assert!(env.contains(&("ACCESS_TOKEN".into(), "SECRET-ACCESS".into())));
         assert!(env.contains(&("CODEX_HOME".into(), "/tmp/codex-home".into())));

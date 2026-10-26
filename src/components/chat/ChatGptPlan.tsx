@@ -32,10 +32,12 @@ export function ChatGptPlanBadge() {
 
   if (provider !== 'codex' || !status?.chatgpt_signed_in) return null;
   return (
-    <div className="flex justify-end gap-2 px-4 pt-1 text-xs text-text-tertiary select-none">
+    <div className="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-text-tertiary select-none">
+      <span className="w-1.5 h-1.5 rounded-full bg-[#10a37f]" aria-hidden />
       <span>{t('chatgpt.usingPlan')}</span>
-      <span aria-hidden>·</span>
-      <button onClick={() => openUrl(MANAGE_USAGE_URL)} className="hover:text-text-primary underline-offset-2 hover:underline cursor-pointer">
+      <span aria-hidden className="text-text-muted">·</span>
+      <button onClick={() => openUrl(MANAGE_USAGE_URL)}
+        className="text-text-secondary hover:text-text-primary hover:underline underline-offset-2 cursor-pointer">
         {t('chatgpt.manageUsage')}
       </button>
     </div>

@@ -2,7 +2,6 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useFileStore } from '../../stores/fileStore';
 import { GearSix } from '@phosphor-icons/react';
 import { InputBar } from '../chat/InputBar';
-import { ChatGptPlanBadge } from '../chat/ChatGptPlan';
 import { useUiStore } from '../../stores/uiStore';
 import { useMcpStore } from '../../stores/mcpStore';
 
@@ -60,7 +59,6 @@ export function BottomBar() {
 
       {/* Chat input area */}
       <div className={`flex-1 min-w-0 ${composerHidden ? 'invisible' : ''}`}>
-        {showInput && <ChatGptPlanBadge />}
         {showInput && <InputBar />}
       </div>
     </div>
