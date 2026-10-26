@@ -134,6 +134,8 @@ pub const ENV_REMOVE: &[&str] = &[
 ];
 
 /// Katalog modelů z `models.json` Codexu s vypnutým `supports_search_tool`.
+/// Zapojí se, pokud test se SIWC potvrdí, že Responses `tool_search` selhává (spec, rizika 1).
+#[allow(dead_code)]
 pub fn catalog_without_tool_search(catalog: &Value) -> Value {
     let mut out = catalog.clone();
     fn walk(v: &mut Value) {
@@ -752,13 +754,14 @@ impl Translator {
                     }
                 }
             }
-            "mcpServer/startupStatus/updated" => {
-                if p["status"].as_str() == Some("failed") && p["name"].as_str() == Some(&self.stavebak_server) {
-                    let why = p["error"].as_str().unwrap_or_default();
-                    out.to_ui.push(system_error(&format!(
-                        "Nástroje Stavebáku se nepodařilo připojit. {why}"
-                    )));
-                }
+            "mcpServer/startupStatus/updated"
+                if p["status"].as_str() == Some("failed")
+                    && p["name"].as_str() == Some(&self.stavebak_server) =>
+            {
+                let why = p["error"].as_str().unwrap_or_default();
+                out.to_ui.push(system_error(&format!(
+                    "Nástroje Stavebáku se nepodařilo připojit. {why}"
+                )));
             }
             _ => {}
         }
@@ -812,11 +815,178 @@ pub fn codex_home() -> Option<PathBuf> {
 }
 
 /// Zapíše katalog bez tool_search vedle CODEX_HOME, pokud je k dispozici zdrojový katalog.
+#[allow(dead_code)]
 pub fn write_model_catalog(codex_home: &Path, source: &Value) -> Option<PathBuf> {
     let path = codex_home.join("models-no-tool-search.json");
     let data = serde_json::to_vec_pretty(&catalog_without_tool_search(source)).ok()?;
     std::fs::write(&path, data).ok()?;
     Some(path)
+}
+
+// ── Běh procesu ─────────────────────────────────────────────────────────────
+
+use crate::commands::claude_process::{ManagedProcess, ProcessManager, SessionInfo, StdinManager};
+use crate::events::emit_to_frontend;
+use tauri::AppHandle;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+pub struct SessionStart {
+    pub sid: String,
+    pub cwd: String,
+    pub prompt: String,
+    pub resume_thread: Option<String>,
+    pub model: Option<String>,
+    pub effort: Option<&'static str>,
+    pub mode: String,
+}
+
+async fn write_all(stdin: &mut Option<tokio::process::ChildStdin>, msgs: &[Value]) {
+    let Some(pipe) = stdin.as_mut() else { return };
+    for m in msgs {
+        let line = format!("{}\n", m);
+        if pipe.write_all(line.as_bytes()).await.is_err() || pipe.flush().await.is_err() {
+            *stdin = None;
+            return;
+        }
+    }
+}
+
+/// Spustí `codex-app-server` a zaregistruje ho stejně jako proces `claude`: vstup přes
+/// StdinManager (kanál), Stop přes ProcessManager, události na `claude:stream:<sid>`.
+pub async fn spawn_session(
+    app: AppHandle,
+    procs: ProcessManager,
+    stdin_mgr: StdinManager,
+    bin: PathBuf,
+    launch: LaunchConfig,
+    extra_env: Vec<(String, String)>,
+    start: SessionStart,
+) -> Result<SessionInfo, String> {
+    let mut cmd = tokio::process::Command::new(&bin);
+    cmd.args(launch_args(&launch))
+        .current_dir(&start.cwd)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
+    for k in ENV_REMOVE {
+        cmd.env_remove(k);
+    }
+    for (k, v) in extra_env {
+        cmd.env(k, v);
+    }
+    for (k, v) in launch_env(&launch) {
+        cmd.env(k, v);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        cmd.creation_flags(0x08000000);
+    }
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("Codex se nepodařilo spustit ({}): {}", bin.display(), e))?;
+    let pid = child.id().unwrap_or(0);
+    eprintln!("[Stavebak] Codex spawned: pid={}, bin={}, auth={:?}", pid, bin.display(), launch.auth);
+
+    let stdout = child.stdout.take().ok_or("Codex: chybí stdout")?;
+    let stderr = child.stderr.take().ok_or("Codex: chybí stderr")?;
+    let mut child_stdin = child.stdin.take();
+
+    let sid = start.sid.clone();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    stdin_mgr.insert_channel(sid.clone(), tx.clone()).await;
+    if !start.prompt.is_empty() {
+        let first = json!({ "type": "user", "message": { "role": "user", "content": start.prompt } });
+        let _ = tx.send(first.to_string());
+    }
+    drop(tx);
+
+    let (kill_tx, mut kill_rx) = tokio::sync::oneshot::channel::<()>();
+    let exit_notify = std::sync::Arc::new(tokio::sync::Notify::new());
+    procs
+        .insert(
+            sid.clone(),
+            ManagedProcess {
+                session_id: sid.clone(),
+                pid,
+                kill_tx: Some(kill_tx),
+                exit_notify: exit_notify.clone(),
+            },
+        )
+        .await;
+
+    {
+        let app = app.clone();
+        let sid = sid.clone();
+        tokio::spawn(async move {
+            let mut lines = BufReader::with_capacity(256 * 1024, stderr).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let _ = emit_to_frontend(&app, &format!("claude:stderr:{}", sid), json!(line));
+            }
+        });
+    }
+
+    let mut translator = Translator::new(
+        &start.cwd,
+        start.resume_thread.clone(),
+        start.model.clone(),
+        start.effort,
+        &start.mode,
+        &launch.mcp_server,
+    );
+    let stream_event = format!("claude:stream:{}", sid);
+    tokio::spawn(async move {
+        let emit = |events: Vec<Value>| {
+            for e in events {
+                let _ = emit_to_frontend(&app, &stream_event, e);
+            }
+        };
+        let first = translator.start();
+        write_all(&mut child_stdin, &first.to_codex).await;
+        let mut lines = BufReader::with_capacity(1024 * 1024, stdout).lines();
+        loop {
+            tokio::select! {
+                line = lines.next_line() => match line {
+                    Ok(Some(line)) => {
+                        let out = translator.on_codex(&line);
+                        write_all(&mut child_stdin, &out.to_codex).await;
+                        emit(out.to_ui);
+                        if out.fatal {
+                            break;
+                        }
+                    }
+                    _ => break,
+                },
+                Some(input) = rx.recv() => {
+                    let out = translator.on_input(&input);
+                    write_all(&mut child_stdin, &out.to_codex).await;
+                    emit(out.to_ui);
+                }
+                _ = &mut kill_rx => {
+                    eprintln!("[Stavebak] kill signal for Codex session {}", sid);
+                    break;
+                }
+            }
+        }
+        drop(child_stdin);
+        let _ = child.start_kill();
+        let _ = child.wait().await;
+        eprintln!("[Stavebak] Codex session {} ended (thread {:?})", sid, translator.thread_id());
+
+        let _ = emit_to_frontend(&app, &stream_event, json!({ "type": "process_exit" }));
+        let _ = emit_to_frontend(&app, &format!("claude:exit:{}", sid), json!(null));
+        let _ = emit_to_frontend(&app, "sessions:changed", json!(null));
+        procs.drop_entry(&sid).await;
+        stdin_mgr.drop_entry(&sid).await;
+        exit_notify.notify_one();
+    });
+
+    Ok(SessionInfo {
+        stdin_id: start.sid,
+        cli_session_id: start.resume_thread,
+        pid,
+        cli_path: bin.to_string_lossy().to_string(),
+    })
 }
 
 #[cfg(test)]
