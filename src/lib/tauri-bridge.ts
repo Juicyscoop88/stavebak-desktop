@@ -283,6 +283,8 @@ export const bridge = {
   stavebakLogin: () => invoke<void>('stavebak_login'),
   stavebakLogout: () => invoke<void>('stavebak_logout'),
   stavebakAuthStatus: () => invoke<boolean>('stavebak_auth_status'),
+  previewCacheGet: (path: string, to: string) => invoke<string | null>('preview_cache_get', { path, to }),
+  previewCachePut: (path: string, to: string, dataUrl: string) => invoke<void>('preview_cache_put', { path, to, dataUrl }),
 
   getStavebakMcp: () =>
     invoke<{ url: string; env: 'prod' | 'local' | 'custom' }>('get_stavebak_mcp'),

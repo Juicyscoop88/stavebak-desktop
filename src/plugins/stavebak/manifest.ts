@@ -65,7 +65,7 @@ export const manifest: PluginManifest = {
   ],
 
   fileConverters: [
-    { from: 'dwg', to: 'dxf', convert: (path) => import('./store').then((m) => m.convertDwg(path)) },
+    { from: 'dwg', to: 'dxf', convert: (path, onStep) => import('./store').then((m) => m.convertDwg(path, onStep)) },
   ],
 
   fileRenderers: [
