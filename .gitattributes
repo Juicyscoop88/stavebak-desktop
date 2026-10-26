@@ -1,0 +1,2 @@
+# Konce řádků LF na všech OS, i při checkoutu na Windows (lokálně i na runneru windows-latest).
+* text=auto eol=lf

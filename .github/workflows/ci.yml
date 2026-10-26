@@ -33,10 +33,16 @@ jobs:
           tar -xzf "$archive" gitleaks
           ./gitleaks git --redact --no-banner -v .
 
-  # macOS runner: aplikace cílí nejdřív na macOS a část Rust kódu je jen pro macOS.
-  validate:
-    runs-on: macos-latest
-    timeout-minutes: 30
+  # Build a testy na obou cílových platformách (část Rust kódu je jen pro macOS, část jen pro Windows).
+  # Povinná kontrola v rulesetu je `validate`, proto se matrix jmenuje build a validate ho shrnuje.
+  build:
+    name: build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -66,3 +72,12 @@ jobs:
       - name: Testy (Tauri)
         working-directory: src-tauri
         run: cargo test --locked
+
+  validate:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Všechny platformy prošly
+        run: test "${{ needs.build.result }}" = success
