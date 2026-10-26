@@ -283,7 +283,8 @@ export function FilePreview() {
           </div>
         ) : isDwg && selectedFile ? (
           <Suspense fallback={null}><DwgPreview path={selectedFile} /></Suspense>
-        ) : isDxf && fileContent ? (
+        ) : isDxf && fileContent?.startsWith('data:') ? (
+          /* Jen data URL: text DXF by prohlížeč načetl jako relativní adresu a dostal index.html */
           <Suspense fallback={null}><DxfPreview url={fileContent} /></Suspense>
         ) : isPdf && selectedFile && fileContent ? (
           /* PDF preview: iframe with base64 data URL */

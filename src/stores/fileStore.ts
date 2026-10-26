@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { bridge, FileNode, RecentProject } from '../lib/tauri-bridge';
 import { computeRevealExpansions, findNodeByPath, reconcilePathToRoot } from './fileReveal';
+import { previewKind } from './previewKind';
 
 export type FileChangeKind = 'created' | 'modified' | 'removed';
 export type PreviewMode = 'preview' | 'source' | 'edit';
@@ -151,22 +152,16 @@ export const useFileStore = create<FileState>()((set, get) => ({
       const defaultMode = 'preview' as PreviewMode;
       set({ selectedFile: path, fileContent: null, isLoadingContent: true, previewMode: defaultMode, editContent: null, revealTarget: path });
 
-      // Binary-preview files: skip text reading, render with file:// URL in FilePreview
-      const ext = path.split('.').pop()?.toLowerCase() || '';
-      const BINARY_PREVIEW = new Set([
-        'png','jpg','jpeg','gif','webp','bmp','ico',
-        'pdf','mp4','webm','mov','avi',
-        'mp3','wav','ogg','aac','m4a',
-        'dxf', // can be tens of MB; the viewer fetches the data URL itself
-      ]);
+      // Binary-preview files: skip text reading, render with a data URL in FilePreview
+      const kind = previewKind(path);
 
       // Converted for preview (DwgPreview): nothing to read here
-      if (ext === 'dwg') {
+      if (kind === 'dwg') {
         set({ fileContent: null, isLoadingContent: false });
         return;
       }
 
-      if (BINARY_PREVIEW.has(ext)) {
+      if (kind === 'binary') {
         // Load binary files as base64 data URL for rendering in webview
         try {
           const dataUrl = await bridge.readFileBase64(path);
@@ -263,13 +258,10 @@ export const useFileStore = create<FileState>()((set, get) => ({
     // Don't reload while user is editing
     if (get().editContent !== null) return;
     try {
-      const ext = path.split('.').pop()?.toLowerCase() || '';
-      const BINARY_PREVIEW = new Set([
-        'png','jpg','jpeg','gif','webp','bmp','ico',
-        'pdf','mp4','webm','mov','avi',
-        'mp3','wav','ogg','aac','m4a',
-      ]);
-      if (BINARY_PREVIEW.has(ext)) {
+      const kind = previewKind(path);
+      // DwgPreview si změnu převede sám
+      if (kind === 'dwg') return;
+      if (kind === 'binary') {
         const dataUrl = await bridge.readFileBase64(path);
         if (get().selectedFile === path) set({ fileContent: dataUrl });
       } else {
