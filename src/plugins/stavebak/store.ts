@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { ConvertStep } from '../../lib/panel-registry'
 import { bridge } from '../../lib/tauri-bridge'
 import { useMcpStore } from '../../stores/mcpStore'
 import { ACTION_PREFIX } from '../../components/chat/MessageBubble'
@@ -174,19 +175,22 @@ export async function createProjectFile(dir: string, values: Record<string, stri
  * DWG → DXF on the Stavebák server (LibreDWG runs there, nothing GPL ships in the app).
  * Same tools any MCP client uses: request_upload → PUT to the presigned URL → convert_drawing → download.
  */
-export async function convertDwg(path: string): Promise<string> {
+export async function convertDwg(path: string, onStep?: (step: ConvertStep) => void): Promise<string> {
   const url = serverUrl()
   if (!url) throw new Error('Stavebák MCP není nastavený.')
+  onStep?.('upload')
   const sizeBytes = await bridge.getFileSize(path)
   const filename = path.split(/[\\/]/).pop() ?? 'vykres.dwg'
   const upload = await bridge.callMcpTool<{ key: string; uploadUrl: string; headers: Record<string, string> }>(
     url, 'request_upload', { filename, sizeBytes },
   )
   await bridge.putFileToUrl(upload.uploadUrl, path, upload.headers)
+  onStep?.('convert')
   // Conversion of a large drawing can take up to a minute on the server
   const converted = await bridge.callMcpTool<{ downloadUrl: string; mimeType: string }>(
     url, 'convert_drawing', { key: upload.key }, 120,
   )
+  onStep?.('download')
   return bridge.getUrlAsDataUrl(converted.downloadUrl, converted.mimeType || 'application/dxf')
 }
 
