@@ -50,8 +50,8 @@ Updater instaluje jen vyšší verzi, než je nainstalovaná. Z toho plyne:
 | Secret / proměnná | K čemu | Stav |
 |---|---|---|
 | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | podpis aktualizací pro updater | v environmentu `release` od 2026-10-25 (repo s čistou historií, nastaveno znovu z lokálního klíče). Lokálně `~/.tauri/stavebak-updater.key`, heslo v klíčence „Stavebak updater key“, záloha v iCloud Drive a v aplikaci Hesla |
-| `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | podpis macOS (Developer ID Application, export .p12 v base64) | nastaví `scripts/setup-ci-signing.sh`, viz níže. Lokálně identita v klíčence |
-| `APPLE_NOTARY_KEY`, `APPLE_NOTARY_KEY_ID`, `APPLE_NOTARY_ISSUER` | notarizace macOS přes App Store Connect API klíč (.p8) | nastaví `scripts/setup-ci-signing.sh`. Lokálně dál profil notarytool v klíčence |
+| `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | podpis macOS (Developer ID Application, export .p12 v base64) | v environmentu `release` od 2026-10-26 (`scripts/setup-ci-signing.sh`, viz níže). Lokálně identita v klíčence, záloha `.p12` v iCloud Drive `Stavebak/ci-signing`, heslo v klíčence „Stavebak CI p12“ |
+| `APPLE_NOTARY_KEY`, `APPLE_NOTARY_KEY_ID`, `APPLE_NOTARY_ISSUER` | notarizace macOS přes App Store Connect API klíč (.p8) | v environmentu `release` od 2026-10-26, klíč `stavebak-ci-notary` (role Developer), záloha `.p8` s Key ID a Issuer ID v iCloud Drive `Stavebak/ci-signing`. Lokálně dál profil notarytool v klíčence |
 | `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID` + proměnné `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_SIGNING_PROFILE` | podpis Windows (Azure Artifact Signing) | čeká na ověření organizace |
 
 `GITHUB_TOKEN` dává GitHub sám, `contents: write` má jen job `draft`.
@@ -71,7 +71,7 @@ Ověření bez publikace: tag dalšího patche, schválit, zkontrolovat draft (o
 ## Rozhodnutí (2026-10-23, spec 097 v repu serveru)
 
 1. **Klíč updateru je nový.** Veřejný klíč v `src-tauri/tauri.conf.json` je náš. Instalace se starým klíčem (jen vývojové) aktualizaci nepřijmou, nainstalují se znovu. Ztráta soukromého klíče znamená, že stávající instalace už žádnou aktualizaci nepřijmou: záloha do správce hesel je povinná.
-2. **macOS: jeden universal build**, podpis Developer ID, notarizace. Minimální verze macOS 13. DMG je i pod stálým jménem `Stavebak.dmg`, na které odkazuje stavebak.cz/download/macos. Od 2026-10-26 (#15) se macOS staví v CI stejným skriptem jako lokálně (`scripts/release-macos.sh`), dřív jen lokálně z klíčenky jednoho Macu.
+2. **macOS: jeden universal build**, podpis Developer ID, notarizace. Minimální verze macOS 13. DMG je i pod stálým jménem `Stavebak.dmg`, na které odkazuje stavebak.cz/download/macos. Od 2026-10-26 (#15) se macOS staví v CI stejným skriptem jako lokálně (`scripts/release-macos.sh`), dřív jen lokálně z klíčenky jednoho Macu. První release celý z CI: v0.14.2 (9,5 min, notarizace a `spctl` v pořádku).
    **Windows:** CI nahraje do draftu instalátor i pod stálým jménem `Stavebak-setup.exe` (pro budoucí `stavebak.cz/download/windows`) a při zapnutém podpisu ověří `Get-AuthenticodeSignature`, jinak job selže. Odkaz na webu (`server/downloads.ts`) se zapne až po prvním podepsaném releasu, do té doby `/download/windows` vede na `/stahnout`.
 3. **Platformy: macOS, hned po prvním e2e Windows**, Linux ne. Cílovka pracuje v BricsCADu a AutoCADu, převážně na Windows.
 4. **Podpis Windows přes Azure Artifact Signing**, vydavatel Typico Games s.r.o. (pro jednotlivce v EU služba není). Dokud není nastavená proměnná `AZURE_SIGNING_ACCOUNT`, workflow sestaví installer nepodepsaný a SmartScreen varuje. Takový release nepublikovat mimo testery. Reputace SmartScreen se u nového vydavatele buduje s počtem stažení.
