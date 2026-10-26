@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { SpinnerGap } from '@phosphor-icons/react';
 import { panelRegistry, type ConvertStep } from '../../lib/panel-registry';
+import { bridge } from '../../lib/tauri-bridge';
 
 const DxfPreview = lazy(() => import('./DxfPreview'));
 
@@ -42,10 +43,26 @@ export default function DwgPreview({ path }: { path: string }) {
         setError('Převod trvá příliš dlouho. Zkontrolujte připojení k internetu a zkuste to znovu.');
       }
     }, 1000);
-    converter.convert(path, (s) => { if (!done) setStep(s); }).then(
-      (dxf) => { if (!done) { done = true; clearInterval(timer); setUrl(dxf); } },
-      (e) => { if (!done) { done = true; clearInterval(timer); setError(String(e)); } },
-    );
+    // Stejný výkres (podle obsahu) se nepřevádí znovu: výsledek je v lokální cache
+    bridge.previewCacheGet(path, converter.to).catch(() => null).then((cached) => {
+      if (done) return;
+      if (cached) {
+        done = true;
+        clearInterval(timer);
+        setUrl(cached);
+        return;
+      }
+      converter.convert(path, (s) => { if (!done) setStep(s); }).then(
+        (dxf) => {
+          if (done) return;
+          done = true;
+          clearInterval(timer);
+          setUrl(dxf);
+          bridge.previewCachePut(path, converter.to, dxf).catch(() => {});
+        },
+        (e) => { if (!done) { done = true; clearInterval(timer); setError(String(e)); } },
+      );
+    });
     return () => { done = true; clearInterval(timer); };
   }, [path, attempt]);
 

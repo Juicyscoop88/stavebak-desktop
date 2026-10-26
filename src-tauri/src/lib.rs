@@ -3,6 +3,7 @@
 mod codex_bridge;
 mod commands;
 mod openai_auth;
+mod preview_cache;
 mod events;
 pub mod path_access;
 mod protocol;
@@ -3575,6 +3576,43 @@ async fn check_file_access(path: String) -> Result<bool, String> {
 /// Read a binary file and return it as a base64-encoded data URL.
 /// Used for previewing images, PDFs, and other binary files in the webview.
 /// Limit: 50MB to prevent memory issues.
+/// Klíč cache náhledu pro soubor projektu (čtení projde kontrolou přístupu jako ostatní čtení).
+async fn preview_cache_key(
+    path_access: &PathAccessManager,
+    path: &str,
+    to: &str,
+) -> Result<String, String> {
+    let p = path_access
+        .validate(std::path::Path::new(path), None, PathCapability::Read)
+        .await?;
+    let bytes = std::fs::read(&p).map_err(|e| format!("Cannot read file: {}", e))?;
+    preview_cache::key_for(&bytes, to).ok_or_else(|| "Neplatný formát náhledu".to_string())
+}
+
+/// Převedený náhled z cache (data URL), nebo null. Viz preview_cache.rs.
+#[tauri::command]
+async fn preview_cache_get(
+    path_access: State<'_, PathAccessManager>,
+    path: String,
+    to: String,
+) -> Result<Option<String>, String> {
+    let key = preview_cache_key(&path_access, &path, &to).await?;
+    Ok(preview_cache::cache_dir().and_then(|dir| preview_cache::get(&dir, &key, &to)))
+}
+
+/// Uloží převedený náhled (data URL) pro soubor projektu.
+#[tauri::command]
+async fn preview_cache_put(
+    path_access: State<'_, PathAccessManager>,
+    path: String,
+    to: String,
+    data_url: String,
+) -> Result<(), String> {
+    let key = preview_cache_key(&path_access, &path, &to).await?;
+    let dir = preview_cache::cache_dir().ok_or("Chybí složka cache")?;
+    preview_cache::put(&dir, &key, &data_url)
+}
+
 #[tauri::command]
 async fn read_file_base64(
     path_access: State<'_, PathAccessManager>,
@@ -7571,6 +7609,8 @@ pub fn run() {
             get_home_dir,
             get_stavebak_mcp,
             read_file_base64,
+            preview_cache_get,
+            preview_cache_put,
             list_slash_commands,
             list_skills,
             read_skill,

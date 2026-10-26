@@ -311,6 +311,8 @@ export const bridge = {
   openaiLogoutChatgpt: () => invoke<void>('openai_logout_chatgpt'),
   openaiSetApiKey: (key: string) => invoke<void>('openai_set_api_key', { key }),
   openaiClearApiKey: () => invoke<void>('openai_clear_api_key'),
+  previewCacheGet: (path: string, to: string) => invoke<string | null>('preview_cache_get', { path, to }),
+  previewCachePut: (path: string, to: string, dataUrl: string) => invoke<void>('preview_cache_put', { path, to, dataUrl }),
 
   getStavebakMcp: () =>
     invoke<{ url: string; env: 'prod' | 'local' | 'custom' }>('get_stavebak_mcp'),
