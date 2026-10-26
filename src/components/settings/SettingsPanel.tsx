@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, type ReactNode } from 'react';
 import { X, CaretRight } from '@phosphor-icons/react';
 import { useSettingsStore, MODEL_OPTIONS, type Locale } from '../../stores/settingsStore';
+import { useOpenAiStore, codexReady } from '../../stores/openaiStore';
 import { useAccountStore } from '../../stores/accountStore';
 import { useMcpStore } from '../../stores/mcpStore';
 import { useT } from '../../lib/i18n';
@@ -179,8 +180,98 @@ function AccountsSection() {
           </button>
         ) : null}
       </Row>
+      <ChatGptAccountRows linkButton={linkButton} />
+      <AiProviderRow />
       <StavebakAccountRow linkButton={linkButton} />
     </Section>
+  );
+}
+
+const MANAGE_USAGE_URL = 'https://chatgpt.com/settings/usage';
+
+/** ChatGPT přes Codex: plán ChatGPT (Sign in with ChatGPT), nebo API klíč OpenAI. */
+function ChatGptAccountRows({ linkButton }: { linkButton: string }) {
+  const t = useT();
+  const { status, codex, busy, error, refresh, loginChatgpt, logoutChatgpt, setApiKey, clearApiKey } = useOpenAiStore();
+  const [keyDraft, setKeyDraft] = useState('');
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const openUrl = (url: string) => {
+    import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url)).catch(() => {});
+  };
+  const account = [status?.chatgpt_email, status?.chatgpt_plan && status.chatgpt_plan.charAt(0).toUpperCase() + status.chatgpt_plan.slice(1)]
+    .filter(Boolean).join(' · ');
+  const description = status?.chatgpt_signed_in
+    ? t('settings.chatgptSignedIn').replace('{account}', account || 'ChatGPT')
+    : status && !status.siwc_available ? t('settings.chatgptUnavailable')
+    : t('settings.chatgptDesc');
+
+  return (
+    <>
+      <Row label={t('settings.chatgptAccount')} description={description}>
+        {status?.chatgpt_signed_in ? (
+          <>
+            <button className={linkButton} onClick={() => openUrl(MANAGE_USAGE_URL)}>{t('chatgpt.manageUsage')}</button>
+            <button className={linkButton} disabled={busy} onClick={() => { logoutChatgpt(); }}>{t('settings.signOut')}</button>
+          </>
+        ) : status?.siwc_available ? (
+          <button className={linkButton} disabled={busy} onClick={() => { loginChatgpt(); }}>{t('chatgpt.continue')}</button>
+        ) : null}
+      </Row>
+      {status?.siwc_available && !status.chatgpt_signed_in && (
+        <p className="pb-2 text-xs text-text-tertiary leading-snug">{t('settings.chatgptPrivacy')}</p>
+      )}
+      <Row
+        label={t('settings.openaiApiKey')}
+        description={status?.api_key_set ? t('settings.openaiApiKeySet') : t('settings.openaiApiKeyDesc')}
+      >
+        {status?.api_key_set ? (
+          <button className={linkButton} onClick={() => { clearApiKey(); }}>{t('settings.apiKeyRemove')}</button>
+        ) : (
+          <>
+            <input
+              type="password"
+              value={keyDraft}
+              onChange={(e) => setKeyDraft(e.target.value)}
+              placeholder="sk-…"
+              autoComplete="off"
+              spellCheck={false}
+              className="w-36 text-xs bg-transparent border border-border rounded-md px-2 py-1 text-text-primary"
+            />
+            <button className={linkButton} disabled={busy || !keyDraft.trim()}
+              onClick={async () => { if (await setApiKey(keyDraft)) setKeyDraft(''); }}>
+              {t('settings.apiKeySave')}
+            </button>
+          </>
+        )}
+      </Row>
+      {codex && !codex.installed && (
+        <p className="pb-2 text-xs text-text-tertiary leading-snug">
+          {t('settings.codexMissing').replace('{version}', codex.version)}
+        </p>
+      )}
+      {error && <p className="pb-2 text-xs text-text-primary leading-snug">{error}</p>}
+    </>
+  );
+}
+
+/** Výchozí asistent pro nové konverzace. Rozběhnutá konverzace zůstává u svého. */
+function AiProviderRow() {
+  const t = useT();
+  const aiProvider = useSettingsStore((s) => s.aiProvider);
+  const setAiProvider = useSettingsStore((s) => s.setAiProvider);
+  const ready = useOpenAiStore((s) => codexReady(s));
+  return (
+    <Row label={t('settings.aiProvider')} description={t('settings.aiProviderDesc')}>
+      <Segmented
+        value={aiProvider}
+        onChange={(id) => { if (id === 'claude' || ready) setAiProvider(id); }}
+        options={[
+          { id: 'claude' as const, label: 'Claude' },
+          { id: 'codex' as const, label: 'ChatGPT' },
+        ]}
+      />
+    </Row>
   );
 }
 
