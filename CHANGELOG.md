@@ -2,6 +2,16 @@
 
 Důležité změny Stavebák Desktop.
 
+## [0.15.0] - 2026-10-27
+
+### Přidáno
+- ChatGPT přes Codex jako druhý asistent vedle Clauda: výběr asistenta v Nastavení → Účty, API klíč OpenAI v klíčence, instalace Codexu z oficiálního vydání OpenAI. Přihlášení účtem ChatGPT je zatím jen ve vývojovém buildu.
+
+### Opraveno
+- Přihlášení do Clauda v úvodním průvodci otevře prohlížeč (`claude auth login`). Když se přihlášení nespustí, průvodce to řekne a nabídne přihlášení v terminálu.
+- Chat funguje i bez účtu Stavebák a po zkušební době, účet odemyká jen nástroje Stavebáku.
+- Náhled DXF se obnoví po změně souboru, náhled DWG ukazuje průběh a ukládá se do mezipaměti.
+
 ## [0.14.2] - 2026-10-26
 
 ### Opraveno
