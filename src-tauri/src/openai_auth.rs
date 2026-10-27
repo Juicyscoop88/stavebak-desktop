@@ -34,10 +34,10 @@ const CALLBACK_PATH: &str = "/auth/callback";
 const REFRESH_MARGIN_SECS: u64 = 300;
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(300);
 
-/// Přihlášení přes ChatGPT je zapnuté v debug buildu. V release až po rozhodnutí o vydání
-/// (dotaz na OpenAI), do té doby jen s `STAVEBAK_SIWC=1`.
+/// Přihlášení přes ChatGPT je zapnuté (samoobslužná open-source cesta SIWC, viz docs/spec-codex-provider.md).
+/// `STAVEBAK_SIWC=0` ho vypne, třeba kdyby OpenAI cestu pro nás uzavřela.
 pub fn siwc_enabled() -> bool {
-    cfg!(debug_assertions) || std::env::var("STAVEBAK_SIWC").as_deref() == Ok("1")
+    std::env::var("STAVEBAK_SIWC").as_deref() != Ok("0")
 }
 
 #[derive(Serialize, Deserialize, Clone)]

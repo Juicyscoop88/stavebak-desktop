@@ -84,7 +84,7 @@ S API klíčem místo SIWC: stejný provider s `env_key="OPENAI_API_KEY"` a klí
 5. Tokeny do klíčenky. Access token 1 h: obnova sériově (rotace refresh tokenu), pak restart app-serveru s novým `ACCESS_TOKEN` a `thread/resume`.
 6. Odhlášení: revokace refresh tokenu (`revocation_endpoint` z OpenID konfigurace), smazání z klíčenky.
 
-**Do vyjádření OpenAI**: zapnuto v debug buildu. V release buildu za přepínačem `siwc_enabled` (výchozí vypnuto, dokud uživatel nerozhodne o vydání).
+**Vydání (2026-10-27)**: zapnuto i v release buildu, samoobslužná open-source cesta. Dotaz na OpenAI běží dál jako potvrzení. Vypnout jde přes `STAVEBAK_SIWC=0` (`siwc_enabled`).
 
 ## UX (pokyny OpenAI)
 
