@@ -35,6 +35,7 @@ export function SetupWizard() {
   const setSetupCompleted = useSettingsStore((s) => s.setSetupCompleted);
 
   const [waitingForLogin, setWaitingForLogin] = useState(false);
+  const [loginFailed, setLoginFailed] = useState(false);
   const [subscribeClicked, setSubscribeClicked] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const accountBusy = useAccountStore((s) => s.busy);
@@ -134,9 +135,25 @@ export function SetupWizard() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [step, waitingForLogin, subscribeClicked, cli, checkAuth]);
 
+  // The CLI opens the browser itself. If it exits with an error, say so instead
+  // of spinning forever; the terminal fallback also takes a pasted sign-in code.
   const handleLogin = useCallback(() => {
     setWaitingForLogin(true);
-    bridge.startClaudeLogin().catch(() => { /* login continues in the browser */ });
+    setLoginFailed(false);
+    bridge.startClaudeLogin().catch(async () => {
+      if (await checkAuth()) return;
+      setWaitingForLogin(false);
+      setLoginFailed(true);
+    });
+  }, [checkAuth]);
+
+  const handleTerminalLogin = useCallback(() => {
+    setWaitingForLogin(true);
+    setLoginFailed(false);
+    bridge.openTerminalLogin().catch(() => {
+      setWaitingForLogin(false);
+      setLoginFailed(true);
+    });
   }, []);
 
   const goNextFromWelcome = () => {
@@ -196,15 +213,23 @@ export function SetupWizard() {
                 <ArrowSquareOut size={13} />
                 {t('onb.claude.subscribe')}
               </SecondaryButton>
-              <div className="h-5 pt-2 text-center text-xs text-text-tertiary">
+              <div className="min-h-5 pt-2 text-center text-xs text-text-tertiary">
                 {cli !== 'ready' ? (
                   <Status>{t('onb.preparing')}{cliPercent > 0 ? ` ${cliPercent} %` : ''}</Status>
                 ) : waitingForLogin ? (
                   <Status>{t('onb.claude.waiting')}</Status>
+                ) : loginFailed ? (
+                  <span className="text-text-primary">{t('onb.claude.failed')}</span>
                 ) : subscribeClicked ? (
                   t('onb.claude.subscribeHint')
                 ) : null}
               </div>
+              {cli === 'ready' && (waitingForLogin || loginFailed) && (
+                <button onClick={handleTerminalLogin}
+                  className="block mx-auto text-xs text-text-tertiary hover:text-text-primary underline underline-offset-2">
+                  {t('onb.claude.terminal')}
+                </button>
+              )}
             </div>
           )}
         </>

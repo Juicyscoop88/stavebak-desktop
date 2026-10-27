@@ -1327,7 +1327,7 @@ async fn start_claude_session(
     perf!("enriched_path");
 
     // Env the app adds on top of the inherited environment. The user's own
-    // Claude Code auth (`claude login`, ANTHROPIC_API_KEY, gateway settings)
+    // Claude Code auth (`claude auth login`, ANTHROPIC_API_KEY, gateway settings)
     // is inherited untouched; the app never sets or strips credentials.
     let mut resolved_env: HashMap<String, String> = HashMap::new();
 
@@ -6950,7 +6950,11 @@ fn extract_node_archive(
     }
 }
 
-/// Start the Claude OAuth login flow by running `claude login`.
+/// Start the Claude OAuth login flow by running `claude auth login`.
+///
+/// Not `claude login`: the CLI has no such subcommand, it treats "login" as a
+/// prompt, prints "Not logged in · Please run /login" and exits 1 without
+/// ever opening the browser.
 #[tauri::command]
 async fn start_claude_login(app: AppHandle) -> Result<(), String> {
     let claude_bin = find_claude_binary().ok_or_else(|| {
@@ -6973,7 +6977,7 @@ async fn start_claude_login(app: AppHandle) -> Result<(), String> {
         } else {
             Command::new(&claude_bin)
         };
-        cmd.args(["login"])
+        cmd.args(["auth", "login"])
             .env("PATH", &enriched_path)
             .env_remove("CLAUDECODE")
             .stdout(Stdio::piped())
@@ -6984,7 +6988,7 @@ async fn start_claude_login(app: AppHandle) -> Result<(), String> {
     };
     #[cfg(not(target_os = "windows"))]
     let mut child = Command::new(&claude_bin)
-        .args(["login"])
+        .args(["auth", "login"])
         .env("PATH", &enriched_path)
         .env_remove("CLAUDECODE")
         .stdout(Stdio::piped())
@@ -7420,7 +7424,8 @@ async fn generate_session_title(
     Ok(Some(raw))
 }
 
-/// Open a native terminal window to run `claude login`.
+/// Open a native terminal window to run `claude auth login`. Fallback when the
+/// browser does not open: the terminal can take the pasted sign-in code.
 /// On macOS: uses osascript to open Terminal.app.
 /// On Linux: tries common terminal emulators.
 /// On Windows: opens cmd.exe with enriched PATH.
@@ -7432,7 +7437,7 @@ async fn open_terminal_login() -> Result<(), String> {
 
     #[cfg(target_os = "macos")]
     {
-        let command = format!("{} login", shell_single_quote(&claude_bin));
+        let command = format!("{} auth login", shell_single_quote(&claude_bin));
         let script = format!(
             r#"tell application "Terminal"
     activate
@@ -7449,10 +7454,10 @@ end tell"#,
     #[cfg(target_os = "linux")]
     {
         // Try common terminal emulators in order of preference
-        let xterm_cmd = format!("{} login", shell_single_quote(&claude_bin));
+        let xterm_cmd = format!("{} auth login", shell_single_quote(&claude_bin));
         let terminals = [
-            ("gnome-terminal", vec!["--", &claude_bin, "login"]),
-            ("konsole", vec!["-e", &claude_bin, "login"]),
+            ("gnome-terminal", vec!["--", &claude_bin, "auth", "login"]),
+            ("konsole", vec!["-e", &claude_bin, "auth", "login"]),
             ("xterm", vec!["-e", xterm_cmd.as_str()]),
         ];
         let mut opened = false;
@@ -7478,7 +7483,7 @@ end tell"#,
         let enriched_path = build_enriched_path();
         std::process::Command::new("cmd")
             .arg("/k")
-            .arg(&format!("\"{}\" login", claude_bin))
+            .arg(&format!("\"{}\" auth login", claude_bin))
             .env("PATH", &enriched_path)
             .creation_flags(0x00000010) // CREATE_NEW_CONSOLE
             .spawn()

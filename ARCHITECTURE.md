@@ -147,7 +147,7 @@ Bidirectional communication with Claude CLI when launched with `--permission-pro
 ### Authentication
 
 Claude Code authenticates itself, the app only runs the unmodified binary:
-- Sign-in runs Claude Code's own flow (`claude login`); status comes from `claude auth status` (signed in, method, e-mail, plan).
+- Sign-in runs Claude Code's own flow (`claude auth login`); status comes from `claude auth status` (signed in, method, e-mail, plan).
 - The user's own auth environment (`ANTHROPIC_API_KEY`, gateway settings) is inherited untouched. The app never sets, strips or forwards Claude credentials and never routes Claude Code to other endpoints.
 - `path_access.rs` refuses `.claude/.credentials.json` and `.codex/auth.json` for every webview file command.
 - The Stavebák account (MCP server OAuth) is separate and concerns only the Stavebák tools.

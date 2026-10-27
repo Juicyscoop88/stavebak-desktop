@@ -19,7 +19,7 @@ Aplikace sama žádnou AI neprovozuje. Rozhovor vede Claude Code uživatele, odb
 
 Jsou to dvě nezávislá přihlášení:
 
-1. **Claude Code.** Přihlašuje se přímo Claude Code (`claude login`) vlastním účtem Claude, nebo používá vlastní API klíč uživatele. Aplikace jen spustí neupravený Claude Code a jeho přihlášení. Přihlašovací údaje Claude nikdy nečte, neukládá ani nikam neposílá a za využití Clauda neúčtuje. Pro kanceláře a firmy jsou určené tarify Claude Team a Enterprise.
+1. **Claude Code.** Přihlašuje se přímo Claude Code (`claude auth login`) vlastním účtem Claude, nebo používá vlastní API klíč uživatele. Aplikace jen spustí neupravený Claude Code a jeho přihlášení. Přihlašovací údaje Claude nikdy nečte, neukládá ani nikam neposílá a za využití Clauda neúčtuje. Pro kanceláře a firmy jsou určené tarify Claude Team a Enterprise.
 2. **Stavebák.** Účet ke službě Stavebák (přihlášení přes Google). Týká se jen nástrojů serveru Stavebák, ne Clauda.
 
 ## Instalace
