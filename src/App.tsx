@@ -12,6 +12,7 @@ import { ChangelogModal } from './components/shared/ChangelogModal';
 import { Toast } from './components/shared/Toast';
 import { SetupWizard } from './components/setup/SetupWizard';
 import { AccountBanner, useAccountRefresh } from './components/account/AccountBanner';
+import { ChatGptWelcome } from './components/chat/ChatGptPlan';
 import { useAccountStore } from './stores/accountStore';
 import { loadToolTitles } from './lib/tool-titles';
 import { useSettingsStore } from './stores/settingsStore';
@@ -775,6 +776,7 @@ function App() {
         bottomBar={<BottomBar />}
         forceCollapseSidebar={!setupCompleted}
       />
+      <ChatGptWelcome />
       {/* Onboarding overlay — centered, covers entire app */}
       {!setupCompleted && (
         <div className="fixed inset-0 z-100 flex items-center justify-center bg-bg-chat">

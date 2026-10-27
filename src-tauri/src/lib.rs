@@ -1,6 +1,8 @@
 #![allow(unexpected_cfgs)]
 
+mod codex_bridge;
 mod commands;
+mod openai_auth;
 mod preview_cache;
 mod events;
 pub mod path_access;
@@ -1199,6 +1201,7 @@ async fn start_claude_session(
         .await;
     let session_id = params
         .session_id
+        .clone()
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
     // Clean up any existing process with the same session_id
@@ -1206,6 +1209,11 @@ async fn start_claude_session(
     state.remove(&session_id).await;
     bypass_modes.remove(&session_id).await;
     perf!("cleanup");
+
+    // Druhý poskytovatel AI: Codex za stejným rozhraním (docs/spec-codex-provider.md)
+    if params.provider.as_deref() == Some("codex") {
+        return start_codex_session(app, state.inner().clone(), stdin_mgr.inner().clone(), params, session_id).await;
+    }
 
     // Use persistent stream-json input mode instead of per-message -p mode.
     // This keeps the CLI process alive so slash commands (/rewind, /compact, /cost, etc.) work.
@@ -2001,6 +2009,132 @@ async fn start_claude_session(
         pid,
         cli_path: claude_bin.clone(),
     })
+}
+
+/// Spustí Codex (`codex-app-server`) pro session. Platí plán ChatGPT uživatele (Sign in with
+/// ChatGPT), nebo jeho API klíč OpenAI. Nástroje Stavebáku stejně jako u Claude.
+async fn start_codex_session(
+    app: AppHandle,
+    procs: ProcessManager,
+    stdin_mgr: StdinManager,
+    params: StartSessionParams,
+    session_id: String,
+) -> Result<SessionInfo, String> {
+    let bin = codex_bridge::find_binary()
+        .ok_or("Codex není nainstalovaný. Doinstalujte ho v Nastavení → Účty.")?;
+    let auth = match openai_auth::chatgpt_access_token().await {
+        Some(token) => codex_bridge::CodexAuth::ChatgptPlan(token),
+        None => match openai_auth::api_key() {
+            Some(key) => codex_bridge::CodexAuth::ApiKey(key),
+            None => return Err("Pro práci s ChatGPT se nejdřív přihlaste v Nastavení → Účty.".into()),
+        },
+    };
+    let target = stavebak_mcp_target();
+    let stavebak_token = stavebak_auth::access_token(&target.url).await;
+    let codex_home = codex_bridge::codex_home().ok_or("Nelze vytvořit ~/.stavebak/codex")?;
+    let catalog = codex_home.join("models-no-tool-search.json");
+    let launch = codex_bridge::LaunchConfig {
+        auth,
+        codex_home,
+        mcp_server: STAVEBAK_MCP_SERVER.to_string(),
+        mcp_url: target.url.clone(),
+        stavebak_token,
+        model_catalog: catalog.is_file().then_some(catalog),
+    };
+
+    let mut extra_env: Vec<(String, String)> = vec![("PATH".into(), build_enriched_path())];
+    #[cfg(not(target_os = "windows"))]
+    for (k, v) in login_shell_proxy_env() {
+        if std::env::var(k).is_err() {
+            extra_env.push((k.clone(), v.clone()));
+        }
+    }
+    let has_proxy = extra_env.iter().any(|(k, _)| k.to_lowercase().ends_with("_proxy"))
+        || ["https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY"].iter().any(|k| std::env::var(k).is_ok());
+    if !has_proxy {
+        if let Some(url) = cached_proxy_url() {
+            for key in ["https_proxy", "http_proxy", "HTTPS_PROXY", "HTTP_PROXY"] {
+                extra_env.push((key.to_string(), url.clone()));
+            }
+        }
+    }
+
+    let mode = params.permission_mode.clone().unwrap_or_else(|| "acceptEdits".into());
+    codex_bridge::spawn_session(
+        app,
+        procs,
+        stdin_mgr,
+        bin,
+        launch,
+        extra_env,
+        codex_bridge::SessionStart {
+            sid: session_id,
+            cwd: params.cwd.clone(),
+            prompt: params.prompt.clone(),
+            resume_thread: params.resume_session_id.clone(),
+            model: codex_bridge::codex_model(params.model.as_deref()),
+            effort: codex_bridge::codex_effort(params.thinking_level.as_deref()),
+            mode,
+        },
+    )
+    .await
+}
+
+#[derive(Serialize)]
+struct CodexStatus {
+    installed: bool,
+    path: Option<String>,
+    version: &'static str,
+}
+
+#[tauri::command]
+fn codex_status() -> CodexStatus {
+    let path = codex_bridge::find_binary();
+    CodexStatus {
+        installed: path.is_some(),
+        path: path.map(|p| p.to_string_lossy().to_string()),
+        version: codex_bridge::CODEX_VERSION,
+    }
+}
+
+/// Stáhne připnutý `codex-app-server` (průběh na `codex:install:progress`).
+#[tauri::command]
+async fn install_codex(app: tauri::AppHandle) -> Result<CodexStatus, String> {
+    let app2 = app.clone();
+    codex_bridge::install_binary(move |pct| {
+        let _ = emit_to_frontend(&app2, "codex:install:progress", serde_json::json!({ "percent": pct }));
+    })
+    .await?;
+    Ok(codex_status())
+}
+
+#[tauri::command]
+fn openai_auth_status() -> openai_auth::OpenAiAuthStatus {
+    openai_auth::status()
+}
+
+#[tauri::command]
+async fn openai_login_chatgpt(app: tauri::AppHandle) -> Result<openai_auth::OpenAiAuthStatus, String> {
+    use tauri_plugin_opener::OpenerExt;
+    openai_auth::login_chatgpt(|auth_url| {
+        app.opener().open_url(auth_url, None::<&str>).map_err(|e| format!("Nepodařilo se otevřít prohlížeč: {}", e))
+    })
+    .await
+}
+
+#[tauri::command]
+async fn openai_logout_chatgpt() -> Result<(), String> {
+    openai_auth::logout_chatgpt().await
+}
+
+#[tauri::command]
+fn openai_set_api_key(key: String) -> Result<(), String> {
+    openai_auth::set_api_key(&key)
+}
+
+#[tauri::command]
+fn openai_clear_api_key() -> Result<(), String> {
+    openai_auth::clear_api_key()
 }
 
 #[tauri::command]
@@ -7425,6 +7559,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             start_claude_session,
             stavebak_login,
+            codex_status,
+            install_codex,
+            openai_auth_status,
+            openai_login_chatgpt,
+            openai_logout_chatgpt,
+            openai_set_api_key,
+            openai_clear_api_key,
             mcp_list_tools,
             stavebak_logout,
             stavebak_auth_status,

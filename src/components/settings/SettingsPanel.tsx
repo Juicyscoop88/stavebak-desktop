@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, type ReactNode } from 'react';
 import { X, CaretRight } from '@phosphor-icons/react';
 import { useSettingsStore, MODEL_OPTIONS, type Locale } from '../../stores/settingsStore';
+import { AssistantSection } from './AssistantSettings';
 import { useAccountStore } from '../../stores/accountStore';
 import { useMcpStore } from '../../stores/mcpStore';
 import { useT } from '../../lib/i18n';
@@ -145,42 +146,13 @@ const linkButton = `px-2.5 py-1 rounded-md text-xs border border-border
 
 function AccountsSection() {
   const t = useT();
-  const [account, setAccount] = useState<{ authenticated: boolean; email: string | null } | null>(null);
-
-  useEffect(() => {
-    bridge.checkClaudeAuth()
-      .then((a) => {
-        const plan = a.subscription ? a.subscription.charAt(0).toUpperCase() + a.subscription.slice(1) : null;
-        const label = [a.account, plan].filter(Boolean).join(' · ') || null;
-        setAccount({ authenticated: a.authenticated, email: label });
-      })
-      .catch(() => setAccount({ authenticated: false, email: null }));
-  }, []);
-
-  const openUrl = (url: string) => {
-    import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url)).catch(() => {});
-  };
-
   return (
-    <Section title={t('settings.accounts')}>
-      <Row
-        label={t('settings.claudeAccount')}
-        description={account?.authenticated
-          ? (account.email ?? t('settings.claudeAccountDesc'))
-          : account ? t('settings.notSignedIn') : t('settings.claudeAccountDesc')}
-      >
-        {account?.authenticated ? (
-          <button className={linkButton} onClick={() => openUrl('https://claude.ai/settings/billing')}>
-            {t('settings.manage')}
-          </button>
-        ) : account ? (
-          <button className={linkButton} onClick={() => { bridge.startClaudeLogin().catch(() => {}); }}>
-            {t('settings.signIn')}
-          </button>
-        ) : null}
-      </Row>
-      <StavebakAccountRow linkButton={linkButton} />
-    </Section>
+    <>
+      <AssistantSection />
+      <Section title={t('asst.stavebakTitle')}>
+        <StavebakAccountRow linkButton={linkButton} />
+      </Section>
+    </>
   );
 }
 

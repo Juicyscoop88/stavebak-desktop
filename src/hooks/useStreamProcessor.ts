@@ -6,6 +6,7 @@ import { useAgentStore, resolveAgentId, getAgentDepth } from '../stores/agentSto
 import { useCommandStore } from '../stores/commandStore';
 import { useFileStore } from '../stores/fileStore';
 import { bridge } from '../lib/tauri-bridge';
+import { generateTitle } from '../lib/session-title';
 import { toCliModel, spawnConfigHash, getAutoCompactThreshold } from '../lib/models';
 import { buildApiRetryStatus } from '../lib/api-retry';
 import { t } from '../lib/i18n';
@@ -1362,7 +1363,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
             if (bgUserMsgs.length >= 1 && bgAssistantMsgs.length >= 1) {
               const userMsg = bgUserMsgs.map((m) => m.content).join('\n').slice(0, 500);
               const assistantMsg = bgAssistantMsgs.map((m) => m.content).join('\n').slice(0, 500);
-              bridge.generateSessionTitle(userMsg, assistantMsg)
+              generateTitle(tabId, userMsg, assistantMsg)
                 .then((title) => {
                   if (title) {
                     useSessionStore.getState().setCustomPreview(tabId, title);
@@ -2720,7 +2721,7 @@ export function useStreamProcessor(config: StreamProcessorConfig) {
                 if (assistantTextMsgs.length >= 1) {
                   const userMsg = userTextMsgs.map((m) => m.content).join('\n').slice(0, 500);
                   const assistantMsg = assistantTextMsgs.map((m) => m.content).join('\n').slice(0, 500);
-                  bridge.generateSessionTitle(userMsg, assistantMsg)
+                  generateTitle(tabId, userMsg, assistantMsg)
                     .then((title) => {
                       if (title) {
                         useSessionStore.getState().setCustomPreview(sessionId, title);

@@ -25,6 +25,25 @@ export interface StartSessionParams {
    *  before resuming. This prevents "invalid thinking signature" 400 errors when switching
    *  to a different model that can't verify the old model's cryptographic signatures. */
   model_switch?: boolean;
+  /** Poskytovatel AI: 'claude' (výchozí) nebo 'codex' (docs/spec-codex-provider.md) */
+  provider?: AiProvider;
+}
+
+export type AiProvider = 'claude' | 'codex';
+
+/** Přihlášení k OpenAI pro Codex (Rust openai_auth.rs). Tokeny do UI nikdy nechodí. */
+export interface OpenAiAuthStatus {
+  siwc_available: boolean;
+  chatgpt_signed_in: boolean;
+  chatgpt_email: string | null;
+  chatgpt_plan: string | null;
+  api_key_set: boolean;
+}
+
+export interface CodexStatus {
+  installed: boolean;
+  path: string | null;
+  version: string;
 }
 
 export interface SessionInfo {
@@ -283,6 +302,15 @@ export const bridge = {
   stavebakLogin: () => invoke<void>('stavebak_login'),
   stavebakLogout: () => invoke<void>('stavebak_logout'),
   stavebakAuthStatus: () => invoke<boolean>('stavebak_auth_status'),
+  codexStatus: () => invoke<CodexStatus>('codex_status'),
+  installCodex: () => invoke<CodexStatus>('install_codex'),
+  onCodexInstallProgress: (cb: (percent: number) => void) =>
+    listen<{ percent: number }>('codex:install:progress', (e) => cb(e.payload.percent)),
+  openaiAuthStatus: () => invoke<OpenAiAuthStatus>('openai_auth_status'),
+  openaiLoginChatgpt: () => invoke<OpenAiAuthStatus>('openai_login_chatgpt'),
+  openaiLogoutChatgpt: () => invoke<void>('openai_logout_chatgpt'),
+  openaiSetApiKey: (key: string) => invoke<void>('openai_set_api_key', { key }),
+  openaiClearApiKey: () => invoke<void>('openai_clear_api_key'),
   previewCacheGet: (path: string, to: string) => invoke<string | null>('preview_cache_get', { path, to }),
   previewCachePut: (path: string, to: string, dataUrl: string) => invoke<void>('preview_cache_put', { path, to, dataUrl }),
 
