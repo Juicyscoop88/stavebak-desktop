@@ -18,8 +18,8 @@ function openUrl(url: string) {
 }
 
 /**
- * First-run onboarding. The user sees two plain-language requirements
- * (Claude subscription, Stavebák account); installing the Claude Code
+ * First-run onboarding. The user sees the Claude subscription (required) and
+ * the Stavebák account (offered, can be skipped); installing the Claude Code
  * runtime happens silently in the background and only surfaces on failure.
  * Users who already have everything never see a screen.
  */
@@ -252,6 +252,10 @@ export function SetupWizard() {
               {accountBusy ? <Status>{t('onb.stavebak.waiting')}</Status>
                 : accountError ? <span className="text-text-primary">{t('onb.stavebak.failed')}</span> : null}
             </div>
+            <button onClick={() => useSetupStore.getState().setStep('done')}
+              className="block mx-auto text-xs text-text-tertiary hover:text-text-primary cursor-pointer">
+              {t('onb.stavebak.later')}
+            </button>
           </div>
         </>
       )}

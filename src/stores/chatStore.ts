@@ -89,6 +89,8 @@ export interface ChatMessage {
 
 export interface SessionMeta {
   model?: string;
+  /** Poskytovatel AI konverzace, pevně od prvního spuštění (Claude a Codex nesdílí historii) */
+  provider?: import('../lib/tauri-bridge').AiProvider;
   cost?: number;
   duration?: number;
   turns?: number;

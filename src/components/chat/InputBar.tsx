@@ -19,6 +19,7 @@ import { PlanReviewCard } from './PlanReviewCard';
 import { PermissionCard } from './PermissionCard';
 import { QuestionCard } from './QuestionCard';
 import { TiptapEditor, type TiptapEditorHandle } from './TiptapEditor';
+import { ChatGptPlanBadge } from './ChatGptPlan';
 import { spawnSession, teardownSession, cleanupStdinRoute, waitForStdinCleared } from '../../lib/sessionLifecycle';
 import type { FileAttachment } from '../../hooks/useFileAttachments';
 // drag-state import removed — tree drag handled by ChatPanel
@@ -1466,7 +1467,8 @@ export function InputBar() {
           {/* Spacer */}
           <div className="flex-1" />
 
-
+          {/* Plán ChatGPT u pole pro zprávu (pokyny Sign in with ChatGPT) */}
+          <ChatGptPlanBadge />
         </div>
       </div>
     </div>

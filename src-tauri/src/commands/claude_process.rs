@@ -40,10 +40,18 @@ pub struct ProcessManager {
     processes: Arc<Mutex<HashMap<String, Arc<Mutex<ManagedProcess>>>>>,
 }
 
+/// Kam jde vstup session: roura procesu `claude`, nebo kanál do adaptéru Codexu
+/// (codex_bridge), který přijímá stejné řádky stream-json.
+#[derive(Debug)]
+pub enum StdinHandle {
+    Pipe(ChildStdin),
+    Channel(tokio::sync::mpsc::UnboundedSender<String>),
+}
+
 /// Manages stdin handles for sending user responses to Claude processes
 #[derive(Debug, Default, Clone)]
 pub struct StdinManager {
-    handles: Arc<Mutex<HashMap<String, ChildStdin>>>,
+    handles: Arc<Mutex<HashMap<String, StdinHandle>>>,
 }
 
 impl StdinManager {
@@ -55,12 +63,22 @@ impl StdinManager {
 
     pub async fn insert(&self, id: String, stdin: ChildStdin) {
         let mut map = self.handles.lock().await;
-        map.insert(id, stdin);
+        map.insert(id, StdinHandle::Pipe(stdin));
+    }
+
+    pub async fn insert_channel(&self, id: String, tx: tokio::sync::mpsc::UnboundedSender<String>) {
+        let mut map = self.handles.lock().await;
+        map.insert(id, StdinHandle::Channel(tx));
     }
 
     pub async fn send(&self, id: &str, message: &str) -> Result<(), String> {
         let mut map = self.handles.lock().await;
-        if let Some(stdin) = map.get_mut(id) {
+        if let Some(StdinHandle::Channel(tx)) = map.get(id) {
+            return tx
+                .send(message.to_string())
+                .map_err(|_| format!("Session ended: {}", id));
+        }
+        if let Some(StdinHandle::Pipe(stdin)) = map.get_mut(id) {
             // Atomic write: message + newline in one call to prevent interleaving (P1-2 fix)
             let payload = format!("{}\n", message);
             stdin
@@ -210,4 +228,7 @@ pub struct StartSessionParams {
     /// before resuming. This prevents "invalid thinking signature" 400 errors when switching
     /// to a different model that can't verify the old model's cryptographic signatures.
     pub model_switch: Option<bool>,
+    /// Poskytovatel AI: "claude" (výchozí) nebo "codex" (docs/spec-codex-provider.md).
+    #[serde(default)]
+    pub provider: Option<String>,
 }

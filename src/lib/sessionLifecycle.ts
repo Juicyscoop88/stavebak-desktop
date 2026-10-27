@@ -19,6 +19,7 @@ import {
 import { useChatStore, generateInterruptedId } from '../stores/chatStore';
 import type { SessionStatus } from '../stores/chatStore';
 import { useSessionStore } from '../stores/sessionStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import { streamController } from '../stream/instance';
 import type { CliPermissionMode, SessionMode, ThinkingLevel } from '../stores/settingsStore';
 
@@ -264,9 +265,14 @@ export async function spawnSession(params: SpawnParams): Promise<SpawnResult> {
     };
     (window as any).__claudeUnlisteners[stdinId] = combinedUnlisten;
 
-    // STEP 4: Start CLI process
+    // STEP 4: Start CLI process. Poskytovatel je pevný od prvního spuštění konverzace,
+    // nová konverzace dostane výchozího z nastavení.
+    // Obnovovaná konverzace bez poskytovatele pochází z historie Claude (Codex vlákna ho mají vždy).
+    const provider = useChatStore.getState().getTab(tabId)?.sessionMeta.provider
+      ?? (sessionParams.resume_session_id ? 'claude' : useSettingsStore.getState().aiProvider);
+    useChatStore.getState().setSessionMeta(tabId, { provider });
     const spawnT0 = performance.now();
-    const session = await bridge.startSession(sessionParams);
+    const session = await bridge.startSession({ ...sessionParams, provider });
     console.log(`[perf] bridge.startSession: ${Math.round(performance.now() - spawnT0)}ms`);
 
     // STEP 4b: Set sessionStatus to running. This is critical for switch/plan-approve

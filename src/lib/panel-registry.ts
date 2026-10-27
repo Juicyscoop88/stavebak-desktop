@@ -25,11 +25,14 @@ export interface FileRendererDefinition {
 
 type FileRendererEntry = FileRendererDefinition & { pluginId: string }
 
+/** Krok převodu pro náhled: nahrání, převod na serveru, stažení výsledku. */
+export type ConvertStep = 'upload' | 'convert' | 'download'
+
 /** Turns a file the preview can't read into one it can (e.g. DWG → DXF). Returns a data URL. */
 export interface FileConverterDefinition {
   from: string
   to: string
-  convert: (path: string) => Promise<string>
+  convert: (path: string, onStep?: (step: ConvertStep) => void) => Promise<string>
 }
 
 type FileConverterEntry = FileConverterDefinition & { pluginId: string }

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { settingsEvents } from '../lib/settingsEvents';
+import type { AiProvider } from '../lib/tauri-bridge';
 
 // --- Types ---
 
@@ -72,6 +73,10 @@ interface SettingsState {
   setupCompleted: boolean;
   /** Thinking effort level: off disables, low/medium/high/max set effort */
   thinkingLevel: ThinkingLevel;
+  /** Výchozí poskytovatel AI pro nové konverzace (rozběhnutá zůstává u svého) */
+  aiProvider: AiProvider;
+  /** Uvítání „You're using your ChatGPT plan“ se ukazuje jen po prvním přihlášení (pokyny SIWC) */
+  chatgptWelcomeSeen: boolean;
   /** Whether a newer version is available (set by auto-check on startup) */
   updateAvailable: boolean;
   /** Whether a newer CLI version is available */
@@ -128,6 +133,8 @@ interface SettingsState {
   setSidebarWidth: (width: number) => void;
   setSetupCompleted: (completed: boolean) => void;
   setThinkingLevel: (level: ThinkingLevel) => void;
+  setAiProvider: (provider: AiProvider) => void;
+  setChatgptWelcomeSeen: (seen: boolean) => void;
   setUpdateAvailable: (available: boolean, version?: string) => void;
   setUpdateDownloaded: (downloaded: boolean) => void;
   setLastSeenVersion: (version: string) => void;
@@ -172,6 +179,8 @@ export const useSettingsStore = create<SettingsState>()(
       sidebarWidth: 280,
       setupCompleted: false,
       thinkingLevel: 'medium' as ThinkingLevel,
+      aiProvider: 'claude' as AiProvider,
+      chatgptWelcomeSeen: false,
       updateAvailable: false,
       updateVersion: '',
       cliUpdateAvailable: false,
@@ -267,6 +276,9 @@ export const useSettingsStore = create<SettingsState>()(
 
       setSetupCompleted: (completed) =>
         set(() => ({ setupCompleted: completed })),
+
+      setAiProvider: (aiProvider) => set(() => ({ aiProvider })),
+      setChatgptWelcomeSeen: (chatgptWelcomeSeen) => set(() => ({ chatgptWelcomeSeen })),
 
       setThinkingLevel: (level) => {
         const old = get().thinkingLevel;
@@ -394,6 +406,8 @@ export const useSettingsStore = create<SettingsState>()(
         sidebarWidth: state.sidebarWidth,
         setupCompleted: state.setupCompleted,
         thinkingLevel: state.thinkingLevel,
+        aiProvider: state.aiProvider,
+        chatgptWelcomeSeen: state.chatgptWelcomeSeen,
         updateAvailable: state.updateAvailable,
         updateVersion: state.updateVersion,
         lastSeenVersion: state.lastSeenVersion,
