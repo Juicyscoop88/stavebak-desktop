@@ -10,6 +10,13 @@ const PROJECT_FILES: Record<string, string> = {
 /** Display order of the pinned files. */
 export const PROJECT_FILE_KEYS = Object.values(PROJECT_FILES);
 
+/** Project notes (CLAUDE.md) open ready for writing and save on their own. */
+export const PROJECT_NOTES_KEY = 'projectFiles.claudeMd';
+
+export function isProjectNotes(path: string, rootPath: string): boolean {
+  return projectFileKey(path, rootPath) === PROJECT_NOTES_KEY;
+}
+
 function splitPath(path: string): { dir: string; name: string } {
   const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
   const i = normalized.lastIndexOf('/');
