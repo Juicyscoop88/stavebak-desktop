@@ -7,6 +7,9 @@ const PROJECT_FILES: Record<string, string> = {
   'CLAUDE.md': 'projectFiles.claudeMd',
 };
 
+/** Display order of the pinned files. */
+export const PROJECT_FILE_KEYS = Object.values(PROJECT_FILES);
+
 function splitPath(path: string): { dir: string; name: string } {
   const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
   const i = normalized.lastIndexOf('/');
