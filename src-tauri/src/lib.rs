@@ -3734,6 +3734,7 @@ async fn rename_file(
 #[tauri::command]
 async fn delete_file(
     path_access: State<'_, PathAccessManager>,
+    watcher_state: State<'_, WatcherManager>,
     path: String,
     tab_id: Option<String>,
 ) -> Result<(), String> {
@@ -3744,8 +3745,26 @@ async fn delete_file(
             PathCapability::Delete,
         )
         .await?;
-    // Move to system trash/recycle bin (recoverable) instead of permanent delete
-    move_to_trash(&p).map_err(|e| format!("Cannot move to trash: {}", e))
+    // A live directory watcher keeps the folder open: on Windows the move to the
+    // Recycle Bin then fails with a sharing violation. Drop watchers under this path first.
+    {
+        let mut watchers = watcher_state.watchers.lock().await;
+        watchers.retain(|watched, _| !std::path::Path::new(watched).starts_with(&p));
+    }
+    // Move to system trash/recycle bin (recoverable) instead of permanent delete.
+    // Handles are released asynchronously (watcher, just-killed CLI), so retry briefly.
+    let mut last = None;
+    for attempt in 0..5 {
+        match move_to_trash(&p) {
+            Ok(()) => return Ok(()),
+            Err(e) => last = Some(e),
+        }
+        if attempt < 4 {
+            tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        }
+    }
+    // {:?} keeps the OS error code and description, which Display drops
+    Err(format!("Cannot move to trash: {:?}", last.unwrap()))
 }
 
 /// Move a path to the system Trash (recoverable). On macOS use NSFileManager: the default
