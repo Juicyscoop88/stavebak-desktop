@@ -7,6 +7,8 @@ const MAX_ERROR_CHARS = 1500;
 export interface ProblemReport {
   /** Krátce, co uživatel dělal a co nešlo (česky). */
   summary: string;
+  /** Popis od uživatele (volný text). */
+  details?: string;
   /** Technický text chyby, jak ho vrátila aplikace. */
   error?: string;
   /** Cesty, které se z chyby vyřežou (název složky projektu bývá důvěrný). */
@@ -35,7 +37,7 @@ export function reportProblemUrl(report: ProblemReport, version: string): string
   const params = new URLSearchParams({
     template: 'chyba.yml',
     title: report.summary,
-    co: `${report.summary}${error ? `\n\nChyba z aplikace:\n\n\`\`\`\n${error}\n\`\`\`` : ''}`,
+    co: `${report.details ? redactError(report.details, report.redact) : report.summary}${error ? `\n\nChyba z aplikace:\n\n\`\`\`\n${error}\n\`\`\`` : ''}`,
     verze: `${version}, ${system}`,
     labels: 'z-aplikace',
   });
@@ -50,4 +52,23 @@ export async function reportProblem(report: ProblemReport): Promise<void> {
   ]);
   const version = await getVersion().catch(() => 'neznámá');
   await openUrl(reportProblemUrl(report, version));
+}
+
+const recent: string[] = [];
+let capturing = false;
+
+/** Drží posledních pár chyb z okna (neošetřené výjimky), ať je jde přiložit k hlášení. Jen v paměti. */
+export function captureRecentErrors(): void {
+  if (capturing || typeof window === 'undefined') return;
+  capturing = true;
+  const push = (text: string) => {
+    recent.push(`${new Date().toISOString()} ${text}`.slice(0, 400));
+    if (recent.length > 5) recent.shift();
+  };
+  window.addEventListener('error', (e) => push(String(e.message)));
+  window.addEventListener('unhandledrejection', (e) => push(String(e.reason?.message ?? e.reason)));
+}
+
+export function recentErrors(): string[] {
+  return [...recent];
 }

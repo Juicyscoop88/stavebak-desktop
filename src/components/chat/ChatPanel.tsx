@@ -10,6 +10,7 @@ import { PluginSlotStack } from '../layout/PluginComponents';
 import { openProject } from '../../lib/conversations';
 import { useNewProjectStore } from '../../stores/newProjectStore';
 import { UpdateButton } from '../shared/UpdateButton';
+import { ReportProblemButton } from '../shared/ReportProblemButton';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useFileStore } from '../../stores/fileStore';
@@ -468,6 +469,7 @@ export function ChatPanel() {
         </div>
         <div className="relative z-10 ml-auto flex items-center">
           <UpdateButton />
+          <ReportProblemButton />
         </div>
       </div>
 
