@@ -10,8 +10,49 @@ import { startTreeDrag, moveTreeDrag, endTreeDrag } from '../../lib/drag-state';
 import { useChatStore } from '../../stores/chatStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { FileIcon } from '../shared/FileIcon';
+import { projectFileKey, PROJECT_FILE_KEYS } from '../../lib/project-files';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
-import { FilePlus, FolderPlus, ClipboardText, CopySimple, Copy, PencilSimple, Trash, Folder, ArrowSquareOut, CaretRight, ShareNetwork, Play } from '@phosphor-icons/react';
+import { FilePlus, FolderPlus, ClipboardText, CopySimple, Copy, PencilSimple, Trash, Folder, ArrowSquareOut, CaretRight, ShareNetwork, Play, ListChecks, NotePencil } from '@phosphor-icons/react';
+
+const PINNED_ICONS: Record<string, typeof ListChecks> = {
+  'projectFiles.stavebakJson': ListChecks,
+  'projectFiles.claudeMd': NotePencil,
+};
+
+/** Project files (overview, notes for the assistant) as a compact row above the tree. */
+function PinnedProjectFiles({ files, onContextMenu }: {
+  files: { node: FileNode; key: string }[];
+  onContextMenu: (e: React.MouseEvent, path: string, isDir: boolean) => void;
+}) {
+  const t = useT();
+  const selectFile = useFileStore((s) => s.selectFile);
+  const selectedFile = useFileStore((s) => s.selectedFile);
+  return (
+    <div className="pb-1.5 mb-1.5 border-b border-border-subtle">
+      {files.map(({ node, key }) => {
+        const Icon = PINNED_ICONS[key] ?? ListChecks;
+        const active = selectedFile === node.path;
+        return (
+          <button
+            key={node.path}
+            onClick={() => selectFile(node.path)}
+            onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, node.path, false); }}
+            title={`${t(`${key}.hint`)}\n${t('projectFiles.fileOnDisk').replace('{name}', node.name)}`}
+            className={`w-full flex items-center gap-2 py-1 px-2.5 rounded-md text-left text-sm leading-5 cursor-pointer
+              ${active
+                ? 'bg-accent/10 text-accent'
+                : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'}`}
+          >
+            <span className="flex-shrink-0 w-3.5 flex items-center">
+              <Icon size={14} />
+            </span>
+            <span className="truncate">{t(`${key}.label`)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function getChangeBadge(kind: FileChangeKind | undefined) {
   if (!kind) return null;
@@ -431,14 +472,22 @@ export function FileExplorer() {
   const [createName, setCreateName] = useState('');
 
   const filteredTree = useMemo(() => {
-    if (showHiddenFiles) return tree;
     function filterNodes(nodes: FileNode[]): FileNode[] {
       return nodes
         .filter((n) => !n.name.startsWith('.'))
         .map((n) => n.children ? { ...n, children: filterNodes(n.children) } : n);
     }
-    return filterNodes(tree);
-  }, [tree, showHiddenFiles]);
+    const visible = showHiddenFiles ? tree : filterNodes(tree);
+    // Technical files of the project are pinned above the tree, not mixed with the user's documents
+    return visible.filter((n) => n.is_dir || projectFileKey(n.path, rootPath) === null);
+  }, [tree, showHiddenFiles, rootPath]);
+
+  const pinnedFiles = useMemo(() => tree
+    .filter((n) => !n.is_dir)
+    .map((node) => ({ node, key: projectFileKey(node.path, rootPath) }))
+    .filter((f): f is { node: FileNode; key: string } => f.key !== null)
+    .sort((a, b) => PROJECT_FILE_KEYS.indexOf(a.key) - PROJECT_FILE_KEYS.indexOf(b.key)),
+  [tree, rootPath]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, path: string, isDir: boolean) => {
     setContextMenu({ x: e.clientX, y: e.clientY, path, isDir });
@@ -597,6 +646,9 @@ export function FileExplorer() {
           </div>
         )}
         <div className="h-full overflow-y-auto p-1.5">
+        {pinnedFiles.length > 0 && (
+          <PinnedProjectFiles files={pinnedFiles} onContextMenu={handleContextMenu} />
+        )}
         {isLoading && filteredTree.length === 0 ? (
           <div className="flex items-center justify-center py-8">
             <div className="w-5 h-5 border-2 border-accent/30

@@ -11,7 +11,7 @@ import { ImageLightbox } from './components/shared/ImageLightbox';
 import { ChangelogModal } from './components/shared/ChangelogModal';
 import { Toast } from './components/shared/Toast';
 import { SetupWizard } from './components/setup/SetupWizard';
-import { AccountBanner, useAccountRefresh } from './components/account/AccountBanner';
+import { useAccountRefresh } from './components/account/AccountBanner';
 import { ChatGptWelcome } from './components/chat/ChatGptPlan';
 import { useAccountStore } from './stores/accountStore';
 import { loadToolTitles } from './lib/tool-titles';
@@ -771,7 +771,7 @@ function App() {
     <>
       <AppShell
         sidebar={<Sidebar />}
-        main={<div className="flex flex-col h-full min-h-0"><AccountBanner /><div className="flex-1 min-h-0"><ChatPanel key={selectedSessionId || 'new'} /></div></div>}
+        main={<ChatPanel key={selectedSessionId || 'new'} />}
         secondary={<SecondaryPanel />}
         bottomBar={<BottomBar />}
         forceCollapseSidebar={!setupCompleted}
