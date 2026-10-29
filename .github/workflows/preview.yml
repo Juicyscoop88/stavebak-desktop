@@ -1,0 +1,37 @@
+name: Preview
+
+# Testovací nepodepsaný Windows instalátor z libovolné větve, pro testery před vydáním.
+# Spuštění: gh workflow run Preview --ref <větev>. Instalátor je v artefaktu běhu (14 dní).
+# Nepodepisuje, nepublikuje, nešahá na tajemství release.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - run: pnpm install --frozen-lockfile
+      # createUpdaterArtifacts vypnuto: bez podpisového klíče updater artefakty nejdou vyrobit
+      - name: Build (NSIS, nepodepsaný)
+        run: pnpm exec tauri build --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":false}}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stavebak-windows-preview
+          path: src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+          retention-days: 14
