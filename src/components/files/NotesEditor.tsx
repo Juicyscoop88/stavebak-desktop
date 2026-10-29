@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useEditor, EditorContent, useEditorState, Extension, type Editor } from '@tiptap/react';
 import { Plugin, TextSelection } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Highlight from '@tiptap/extension-highlight';
@@ -124,6 +125,7 @@ export function NotesEditor({ content, onChange }: { content: string; onChange: 
   return (
     <div className="notes-editor flex flex-col h-full">
       {editor && <Toolbar editor={editor} />}
+      {editor && <SelectionMenu editor={editor} />}
       <div className="flex-1 min-h-0 overflow-y-auto" onClick={() => editor?.commands.focus()}>
         <EditorContent editor={editor} className="max-w-2xl mx-auto px-6 py-5" />
       </div>
@@ -152,6 +154,22 @@ function toggleBlock(editor: Editor, list: 'bulletList' | 'taskList') {
   (list === 'bulletList' ? chain.toggleBulletList() : chain.toggleTaskList()).run();
 }
 
+/** What the selection covers: decides which buttons would actually do something. */
+function selectionFacts(ed: Editor) {
+  const { from, to, empty } = ed.state.selection;
+  let headings = 0;
+  let others = 0;
+  ed.state.doc.nodesBetween(from, to, (node) => {
+    if (!node.isTextblock) return;
+    if (node.type.name === 'heading') headings++;
+    else others++;
+  });
+  return { empty, headingOnly: headings > 0 && others === 0, spansHeading: !empty && headings > 0 };
+}
+
+const NO_LIST_ON_HEADING = 'Seznam jde udělat jen z běžného textu. Označte text pod nadpisem, nebo klikněte do nadpisu a seznam se založí pod ním.';
+const HEADING_IS_BOLD = 'Nadpisy jsou už tučné.';
+
 function Toolbar({ editor }: { editor: Editor }) {
   const state = useEditorState({
     editor,
@@ -161,25 +179,58 @@ function Toolbar({ editor }: { editor: Editor }) {
       highlight: ed.isActive('highlight'),
       bullet: ed.isActive('bulletList'),
       task: ed.isActive('taskList'),
+      ...selectionFacts(ed),
     }),
   });
-  const buttons: { icon: Icon; label: string; title: string; active: boolean; run: () => void }[] = [
+  const buttons: { icon: Icon; label: string; title: string; active: boolean; disabledWhy?: string; run: () => void }[] = [
     { icon: TextHTwo, label: 'Nadpis', title: 'Udělá z řádku nadpis (nebo zpět běžný text)', active: state.heading, run: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
-    { icon: TextB, label: 'Tučně', title: 'Tučné písmo (⌘B)', active: state.bold, run: () => editor.chain().focus().toggleBold().run() },
+    { icon: TextB, label: 'Tučně', title: 'Tučné písmo (⌘B)', active: state.bold, disabledWhy: state.headingOnly ? HEADING_IS_BOLD : undefined, run: () => editor.chain().focus().toggleBold().run() },
     { icon: Highlighter, label: 'Zvýraznit', title: 'Označí vybraný text barvou', active: state.highlight, run: () => editor.chain().focus().toggleHighlight().run() },
-    { icon: ListBullets, label: 'Odrážky', title: 'Seznam s odrážkami', active: state.bullet, run: () => toggleBlock(editor, 'bulletList') },
-    { icon: ListChecks, label: 'Úkoly', title: 'Seznam úkolů k odškrtnutí', active: state.task, run: () => toggleBlock(editor, 'taskList') },
+    { icon: ListBullets, label: 'Odrážky', title: 'Seznam s odrážkami', active: state.bullet, disabledWhy: state.spansHeading ? NO_LIST_ON_HEADING : undefined, run: () => toggleBlock(editor, 'bulletList') },
+    { icon: ListChecks, label: 'Úkoly', title: 'Seznam úkolů k odškrtnutí', active: state.task, disabledWhy: state.spansHeading ? NO_LIST_ON_HEADING : undefined, run: () => toggleBlock(editor, 'taskList') },
   ];
   return (
     <div className="flex-shrink-0 flex flex-wrap items-center gap-0.5 px-3 py-2 border-b border-border-subtle">
-      {buttons.map(({ icon: Icon, label, title, active, run }) => (
-        <button key={label} title={title} aria-pressed={active} onMouseDown={(e) => e.preventDefault()} onClick={run}
-          className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs cursor-pointer transition-smooth
-            ${active ? 'bg-bg-tertiary text-text-primary' : 'text-text-muted hover:bg-bg-secondary hover:text-text-primary'}`}>
+      {buttons.map(({ icon: Icon, label, title, active, disabledWhy, run }) => (
+        <button key={label} title={disabledWhy ?? title} aria-pressed={active} aria-disabled={!!disabledWhy}
+          onMouseDown={(e) => e.preventDefault()} onClick={() => { if (!disabledWhy) run(); }}
+          className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs transition-smooth
+            ${disabledWhy ? 'text-text-tertiary opacity-40 cursor-not-allowed'
+              : active ? 'bg-bg-tertiary text-text-primary cursor-pointer'
+                : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary cursor-pointer'}`}>
           <Icon size={16} weight={active ? 'bold' : 'regular'} />
           {label}
         </button>
       ))}
     </div>
+  );
+}
+
+/** Small menu that floats over selected text: the formatting you want is right where you are reading. */
+function SelectionMenu({ editor }: { editor: Editor }) {
+  const state = useEditorState({
+    editor,
+    selector: ({ editor: ed }) => ({ bold: ed.isActive('bold'), highlight: ed.isActive('highlight'), ...selectionFacts(ed) }),
+  });
+  const items = [
+    ...(state.headingOnly ? [] : [{ icon: TextB, label: 'Tučně', active: state.bold, run: () => editor.chain().focus().toggleBold().run() }]),
+    { icon: Highlighter, label: 'Zvýraznit', active: state.highlight, run: () => editor.chain().focus().toggleHighlight().run() },
+  ];
+  return (
+    <BubbleMenu
+      editor={editor}
+      options={{ placement: 'top', offset: 8 }}
+      shouldShow={({ editor: ed, state: st }) => ed.isEditable && !st.selection.empty && ed.isFocused}
+      className="flex items-center gap-0.5 p-1 rounded-xl border border-border bg-bg-card shadow-lg"
+    >
+      {items.map(({ icon: Icon, label, active, run }) => (
+        <button key={label} onMouseDown={(e) => e.preventDefault()} onClick={run}
+          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs cursor-pointer transition-smooth
+            ${active ? 'bg-bg-tertiary text-text-primary' : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'}`}>
+          <Icon size={14} weight={active ? 'bold' : 'regular'} />
+          {label}
+        </button>
+      ))}
+    </BubbleMenu>
   );
 }

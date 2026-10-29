@@ -769,12 +769,14 @@ input, textarea, [contenteditable="true"],
 .notes-editor .tiptap ul[data-type="taskList"] li[data-checked="true"] > div { color: var(--color-text-tertiary); text-decoration: line-through; }
 .notes-editor .tiptap input[type="checkbox"] { accent-color: var(--color-accent); width: 14px; height: 14px; cursor: pointer; }
 .notes-editor .tiptap blockquote { border-left: 2px solid var(--color-border); padding-left: 0.9em; color: var(--color-text-muted); }
-.notes-editor .tiptap ::selection { background: color-mix(in srgb, var(--color-accent) 38%, transparent); }
+.notes-editor .tiptap::selection, .notes-editor .tiptap *::selection { background: color-mix(in srgb, var(--color-accent) 38%, transparent); }
 .notes-editor .tiptap .notes-hint {
   margin-top: 0.3em;
   color: var(--color-text-tertiary);
   font-size: var(--text-sm);
   cursor: text;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .notes-editor .tiptap .notes-hint-line::before {
   content: attr(data-hint);
