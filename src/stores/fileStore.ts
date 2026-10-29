@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { bridge, FileNode, RecentProject } from '../lib/tauri-bridge';
 import { computeRevealExpansions, findNodeByPath, reconcilePathToRoot } from './fileReveal';
 import { previewKind } from './previewKind';
+import { isProjectNotes } from '../lib/project-files';
 
 export type FileChangeKind = 'created' | 'modified' | 'removed';
 export type PreviewMode = 'preview' | 'source' | 'edit';
@@ -178,7 +179,9 @@ export const useFileStore = create<FileState>()((set, get) => ({
           const content = await bridge.readFileContent(path);
           // Only update if selectedFile hasn't changed during the async call
           if (get().selectedFile === path) {
-            set({ fileContent: content, isLoadingContent: false });
+            set(isProjectNotes(path, get().rootPath)
+              ? { fileContent: content, isLoadingContent: false, previewMode: 'edit', editContent: content }
+              : { fileContent: content, isLoadingContent: false });
           }
         } catch {
           // File read failed — might be a directory. Try common index files.
@@ -230,7 +233,16 @@ export const useFileStore = create<FileState>()((set, get) => ({
     try {
       await bridge.writeFileContent(selectedFile, editContent);
       // Update fileContent to match saved content
-      set({ fileContent: editContent, editContent: null, isSaving: false, previewMode: 'preview' });
+      // Project notes stay open for writing; other files go back to the preview
+      if (get().selectedFile !== selectedFile) {
+        set({ isSaving: false });
+      } else if (isProjectNotes(selectedFile, get().rootPath)) {
+        // Keep typing that happened while saving
+        const latest = get().editContent;
+        set({ fileContent: editContent, editContent: latest, isSaving: false });
+      } else {
+        set({ fileContent: editContent, editContent: null, isSaving: false, previewMode: 'preview' });
+      }
     } catch {
       set({ isSaving: false });
     }
@@ -255,8 +267,22 @@ export const useFileStore = create<FileState>()((set, get) => ({
   reloadContent: async () => {
     const path = get().selectedFile;
     if (!path) return;
-    // Don't reload while user is editing
-    if (get().editContent !== null) return;
+    // Don't reload while user is editing; open project notes without unsaved typing follow the file
+    const { editContent, fileContent } = get();
+    const notesInSync = isProjectNotes(path, get().rootPath) && editContent === fileContent;
+    if (editContent !== null && !notesInSync) return;
+    if (notesInSync) {
+      try {
+        const content = await bridge.readFileContent(path);
+        const now = get();
+        if (now.selectedFile === path && now.editContent === now.fileContent) {
+          set({ fileContent: content, editContent: content });
+        }
+      } catch {
+        // keep what is shown
+      }
+      return;
+    }
     try {
       const kind = previewKind(path);
       // DwgPreview si změnu převede sám

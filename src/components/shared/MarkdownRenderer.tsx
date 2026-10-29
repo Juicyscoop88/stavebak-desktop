@@ -1,6 +1,6 @@
 import React, { memo, useState, useCallback, useMemo, useEffect, type ReactNode } from 'react';
 import Markdown from 'react-markdown';
-import { ImageBroken, ArrowSquareOut } from '@phosphor-icons/react';
+import { ImageBroken, ArrowSquareOut, FileText, Folder } from '@phosphor-icons/react';
 
 import rehypeHighlight from 'rehype-highlight';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
@@ -505,15 +505,17 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, classN
               useSettingsStore.getState().setSecondaryTab('files');
               useFileStore.getState().revealPath(resolved);
             }}
-            className="inline-flex items-center gap-1 px-2 py-0.5 mx-0.5
-              bg-bg-secondary border border-accent/50 rounded-full
-              text-xs text-accent font-medium cursor-pointer
-              hover:bg-accent/10 hover:border-accent
-              transition-all duration-150 select-none
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5
+              bg-bg-secondary border border-border-subtle rounded-sm
+              text-xs text-text-secondary font-mono cursor-pointer
+              hover:text-accent hover:border-border
+              transition-colors duration-150 select-none
               align-baseline leading-normal whitespace-nowrap"
             title={resolved}
           >
-            <span className="text-xs leading-none">{kind === 'folder' ? '📁' : '📄'}</span>
+            {kind === 'folder'
+              ? <Folder size={12} className="flex-shrink-0" />
+              : <FileText size={12} className="flex-shrink-0" />}
             <span className="max-w-[240px] truncate">{text}</span>
           </button>
         );

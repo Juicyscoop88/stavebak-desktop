@@ -29,8 +29,9 @@ import { bridge } from '../../lib/tauri-bridge';
 import { MarkdownRenderer } from '../shared/MarkdownRenderer';
 import { FileIcon } from '../shared/FileIcon';
 import { stavebakTheme, stavebakHighlight } from '../../lib/codemirror-theme';
+import { NotesEditor } from './NotesEditor';
 import { useT } from '../../lib/i18n';
-import { projectFileKey } from '../../lib/project-files';
+import { projectFileKey, PROJECT_NOTES_KEY } from '../../lib/project-files';
 import { X, SpinnerGap, ArrowSquareOut, PencilSimple, Eye, Code } from '@phosphor-icons/react';
 
 const DxfPreview = lazy(() => import('./DxfPreview'));
@@ -159,8 +160,16 @@ export function FilePreview() {
   const hasPreview = isMarkdown || isHtml || isSvg || hasPluginRenderer;
   const isEditing = previewMode === 'edit';
   const isDirty = editContent !== null && editContent !== fileContent;
+  const isNotes = projectFile === PROJECT_NOTES_KEY;
 
   const langExtension = useMemo(() => getLanguageExtension(ext), [ext]);
+
+  /* Project notes save on their own shortly after typing stops */
+  useEffect(() => {
+    if (!isNotes || !isEditing || !isDirty || isSaving) return;
+    const timer = setTimeout(() => { saveFile(); }, 800);
+    return () => clearTimeout(timer);
+  }, [isNotes, isEditing, isDirty, isSaving, editContent, saveFile]);
 
   /* Cmd+S to save */
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -220,7 +229,12 @@ export function FilePreview() {
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {/* Save / Discard buttons — visible when editing with unsaved changes */}
-          {isEditing && isDirty && (
+          {isNotes && isEditing && (
+            <span className="text-xs text-text-tertiary">
+              {isDirty || isSaving ? t('files.saving') : t('projectFiles.saved')}
+            </span>
+          )}
+          {isEditing && isDirty && !isNotes && (
             <div className="flex items-center gap-1">
               <button
                 onClick={discardEdits}
@@ -353,6 +367,9 @@ export function FilePreview() {
               )}
             </div>
           </div>
+        ) : isEditing && isNotes ? (
+          /* Project notes: a writing surface, not a code editor */
+          <NotesEditor content={editContent ?? fileContent ?? ''} onChange={setEditContent} />
         ) : isEditing ? (
           /* Edit mode: CodeMirror 6 editor */
           <CodeMirror
@@ -411,6 +428,17 @@ export function FilePreview() {
                 const body = fmMatch ? fileContent.slice(fmMatch[0].length) : fileContent;
                 return (
                   <>
+                    {projectFile && (
+                      <div className="mb-4 flex items-start gap-3 rounded-xl border border-border-subtle bg-bg-secondary px-3 py-2.5">
+                        <p className="flex-1 text-xs text-text-muted">{t(`${projectFile}.hint`)}</p>
+                        <button onClick={() => setPreviewMode('edit')}
+                          className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border
+                            text-xs text-text-primary hover:bg-bg-tertiary cursor-pointer">
+                          <PencilSimple size={12} />
+                          {t('projectFiles.edit')}
+                        </button>
+                      </div>
+                    )}
                     {frontmatter && (
                       <div className="mb-4 rounded-lg border border-border-subtle
                         bg-bg-secondary/50 overflow-hidden text-xs font-mono">

@@ -3810,23 +3810,48 @@ mod create_unique_dir_tests {
     }
 }
 
+/// Project notes the assistant reads at the start of every conversation ("Poznámky k projektu" in the UI).
+/// Only headings: the notes editor shows what to write under each one, so no hints end up in the file.
+fn claude_md_template(project_name: &str) -> String {
+    format!(
+        "# {}\n\n## Přání investora\n\n## Dohody z jednání\n\n## Zvyklosti kanceláře\n\n## Otevřené otázky\n",
+        project_name
+    )
+}
+
+/// What older versions wrote into a new project; replaced by the template, never anything a person wrote.
+fn is_legacy_claude_md(content: &str, project_name: &str, path: &str) -> bool {
+    content == format!("# {}\n\nWorking directory: `{}`\n", project_name, path.replace('\\', "/"))
+}
+
+#[cfg(test)]
+mod claude_md_tests {
+    use super::{claude_md_template, is_legacy_claude_md};
+
+    #[test]
+    fn only_the_old_generated_file_is_replaced() {
+        let old = "# RD\n\nWorking directory: `/p/RD`\n";
+        assert!(is_legacy_claude_md(old, "RD", "/p/RD"));
+        assert!(!is_legacy_claude_md(&format!("{}\nInvestor chce plochou střechu.\n", old), "RD", "/p/RD"));
+        assert!(!is_legacy_claude_md(&claude_md_template("RD"), "RD", "/p/RD"));
+    }
+}
+
 #[tauri::command]
 async fn ensure_claude_md(path: String) -> Result<bool, String> {
     let dir = std::path::Path::new(&path);
     let claude_md = dir.join("CLAUDE.md");
-    if claude_md.exists() {
-        return Ok(false);
-    }
     let project_name = dir
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or("Project");
-    let content = format!(
-        "# {}\n\nWorking directory: `{}`\n",
-        project_name,
-        path.replace('\\', "/")
-    );
-    std::fs::write(&claude_md, content)
+        .unwrap_or("Projekt");
+    if claude_md.exists() {
+        let current = std::fs::read_to_string(&claude_md).unwrap_or_default();
+        if !is_legacy_claude_md(&current, project_name, &path) {
+            return Ok(false);
+        }
+    }
+    std::fs::write(&claude_md, claude_md_template(project_name))
         .map_err(|e| format!("Cannot create CLAUDE.md: {}", e))?;
     Ok(true)
 }
