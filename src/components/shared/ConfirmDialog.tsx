@@ -6,6 +6,8 @@ interface ConfirmDialogProps {
   title: string;
   message: string;
   detail?: string;
+  /** Druhá akce vlevo (např. Nahlásit chybu). */
+  extraAction?: { label: string; onClick: () => void };
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'danger' | 'default';
@@ -18,6 +20,7 @@ export function ConfirmDialog({
   title,
   message,
   detail,
+  extraAction,
   confirmLabel,
   cancelLabel,
   variant = 'default',
@@ -42,10 +45,19 @@ export function ConfirmDialog({
         <h3 className="text-sm font-semibold text-text-primary mb-2">{title}</h3>
         <p className="text-sm text-text-primary mb-1">{message}</p>
         {detail && (
-          <p className="text-xs text-text-muted mb-4 truncate">{detail}</p>
+          <p className="text-xs text-text-muted mb-4 break-words max-h-24 overflow-y-auto select-text">{detail}</p>
         )}
         {!detail && <div className="mb-4" />}
         <div className="flex justify-end gap-2">
+          {extraAction && (
+            <button
+              onClick={extraAction.onClick}
+              className="mr-auto px-3 py-1.5 text-xs rounded-lg text-text-muted
+                hover:bg-bg-secondary transition-smooth cursor-pointer"
+            >
+              {extraAction.label}
+            </button>
+          )}
           <button
             onClick={onCancel}
             className="px-3 py-1.5 text-xs rounded-lg bg-bg-secondary

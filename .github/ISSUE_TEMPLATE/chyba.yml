@@ -1,6 +1,6 @@
 name: Chyba
 description: Něco nefunguje, jak má.
-labels: [chyba]
+labels: [bug]
 body:
   - type: textarea
     id: co
