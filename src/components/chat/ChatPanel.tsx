@@ -22,6 +22,7 @@ import { FindBar } from './FindBar';
 import { formatElapsedCompact } from '../../lib/elapsed-time';
 import { formatRetryDelaySeconds, isRateLimitRetry, type ApiRetryStatus } from '../../lib/api-retry';
 import { useProjectStore } from '../../stores/projectStore';
+import { AccountBanner } from '../account/AccountBanner';
 
 /** Shared plan panel toggle — used by ChatPanel (panel) and InputBar (button) */
 export const usePlanPanelStore = create<{
@@ -438,6 +439,9 @@ export function ChatPanel() {
     <div className="flex flex-col h-full">
       {/* Title bar spacer — 28px for macOS traffic lights */}
       <div className="h-[28px] flex-shrink-0" />
+
+      {/* Below the spacer: the title-bar drag region would swallow the banner's clicks */}
+      <AccountBanner />
 
       {/* Header row — conversation title aligned to the message column (px-5, max-w-2xl) */}
       <div
