@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { useEditor, EditorContent, useEditorState, type Editor } from '@tiptap/react';
+import { useEditor, EditorContent, useEditorState, Extension, type Editor } from '@tiptap/react';
+import { Plugin, TextSelection } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Highlight from '@tiptap/extension-highlight';
@@ -13,8 +15,57 @@ const SECTION_HINTS: Record<string, string> = {
   'Přání investora': 'Dispozice, materiály, vytápění, rozpočet, termíny…',
   'Dohody z jednání': 'S kým, kdy a na čem jste se dohodli: úřad, dotčené orgány, správci sítí, sousedé…',
   'Zvyklosti kanceláře': 'Pojmenování výkresů, kdo podepisuje, s jakými dodavateli průzkumů pracujete…',
-  'Otevřené otázky': 'Co je potřeba vyřešit. Zaškrtávátko vložíte přes [ ] na začátku řádku.',
+  'Otevřené otázky': 'Co je potřeba vyřešit. Tlačítkem Úkoly uděláte seznam k odškrtnutí.',
 };
+
+/**
+ * Grey hint under a heading that has nothing written below it yet. A decoration, not content: the empty
+ * line is not in the file (Markdown drops empty paragraphs, so a placeholder paragraph would never show).
+ * Clicking the hint opens a real line under the heading.
+ */
+const SectionHints = Extension.create({
+  name: 'sectionHints',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          decorations: ({ doc }) => {
+            const decorations: Decoration[] = [];
+            doc.forEach((node, offset, index) => {
+              if (node.type.name !== 'heading') return;
+              const next = index + 1 < doc.childCount ? doc.child(index + 1) : null;
+              const hint = SECTION_HINTS[node.textContent];
+              if (!hint) return;
+              const end = offset + node.nodeSize;
+              // The editor appends an empty line after a last heading: the hint sits on that line
+              if (next && next.type.name === 'paragraph' && next.content.size === 0) {
+                decorations.push(Decoration.node(end, end + next.nodeSize, { class: 'notes-hint-line', 'data-hint': hint }));
+                return;
+              }
+              if (next && next.type.name !== 'heading') return;
+              decorations.push(Decoration.widget(end, (view) => {
+                const el = document.createElement('div');
+                el.className = 'notes-hint';
+                el.textContent = hint;
+                el.addEventListener('mousedown', (e) => {
+                  e.preventDefault();
+                  const { state } = view;
+                  const paragraph = state.schema.nodes.paragraph.create();
+                  const tr = state.tr.insert(end, paragraph);
+                  tr.setSelection(TextSelection.near(tr.doc.resolve(end + 1)));
+                  view.dispatch(tr.scrollIntoView());
+                  view.focus();
+                });
+                return el;
+              }, { side: -1, key: `hint-${end}-${hint}` }));
+            });
+            return DecorationSet.create(doc, decorations);
+          },
+        },
+      }),
+    ];
+  },
+});
 
 /**
  * Project notes (CLAUDE.md) as plain writing: one calm column, headings, bold, highlight, lists, tasks.
@@ -29,6 +80,7 @@ export function NotesEditor({ content, onChange }: { content: string; onChange: 
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false, code: false }),
       Highlight,
+      SectionHints,
       TaskList,
       TaskItem.configure({ nested: true }),
       Markdown.configure({ html: true, tightLists: true, bulletListMarker: '-', linkify: false, breaks: false, transformPastedText: true }),
@@ -37,7 +89,8 @@ export function NotesEditor({ content, onChange }: { content: string; onChange: 
         placeholder: ({ editor: ed, node, pos }) => {
           if (node.type.name === 'heading') return 'Nadpis';
           const before = pos > 0 ? ed.state.doc.resolve(pos).nodeBefore : null;
-          if (before?.type.name === 'heading') return SECTION_HINTS[before.textContent] ?? 'Pište…';
+          // Hints under template headings are drawn by SectionHints, so the line itself stays quiet
+          if (before?.type.name === 'heading' && SECTION_HINTS[before.textContent]) return '';
           return 'Pište…';
         },
       }),
@@ -80,7 +133,23 @@ export function NotesEditor({ content, onChange }: { content: string; onChange: 
 
 /** tiptap-markdown keeps the serializer in the editor's storage. */
 function markdownOf(editor: Editor): string {
-  return (editor.storage as unknown as { markdown: MarkdownStorage }).markdown.getMarkdown();
+  return tightenTaskLists((editor.storage as unknown as { markdown: MarkdownStorage }).markdown.getMarkdown());
+}
+
+/** The serializer writes task lists loose (blank line between items); keep them as compact as bullets. */
+export function tightenTaskLists(markdown: string): string {
+  return markdown.replace(/^(- \[[ xX]\] .*)\n\n(?=- \[[ xX]\] )/gm, '$1\n');
+}
+
+/** List buttons never turn a heading into a bullet: from a heading they start the list on a new line below it. */
+function toggleBlock(editor: Editor, list: 'bulletList' | 'taskList') {
+  const { $from } = editor.state.selection;
+  const chain = editor.chain().focus();
+  if ($from.parent.type.name === 'heading') {
+    const after = $from.after($from.depth);
+    chain.insertContentAt(after, { type: 'paragraph' }).setTextSelection(after + 1);
+  }
+  (list === 'bulletList' ? chain.toggleBulletList() : chain.toggleTaskList()).run();
 }
 
 function Toolbar({ editor }: { editor: Editor }) {
@@ -94,20 +163,21 @@ function Toolbar({ editor }: { editor: Editor }) {
       task: ed.isActive('taskList'),
     }),
   });
-  const buttons: { icon: Icon; title: string; active: boolean; run: () => void }[] = [
-    { icon: TextHTwo, title: 'Nadpis', active: state.heading, run: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
-    { icon: TextB, title: 'Tučně (⌘B)', active: state.bold, run: () => editor.chain().focus().toggleBold().run() },
-    { icon: Highlighter, title: 'Zvýraznit', active: state.highlight, run: () => editor.chain().focus().toggleHighlight().run() },
-    { icon: ListBullets, title: 'Odrážky', active: state.bullet, run: () => editor.chain().focus().toggleBulletList().run() },
-    { icon: ListChecks, title: 'Úkoly k odškrtnutí', active: state.task, run: () => editor.chain().focus().toggleTaskList().run() },
+  const buttons: { icon: Icon; label: string; title: string; active: boolean; run: () => void }[] = [
+    { icon: TextHTwo, label: 'Nadpis', title: 'Udělá z řádku nadpis (nebo zpět běžný text)', active: state.heading, run: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
+    { icon: TextB, label: 'Tučně', title: 'Tučné písmo (⌘B)', active: state.bold, run: () => editor.chain().focus().toggleBold().run() },
+    { icon: Highlighter, label: 'Zvýraznit', title: 'Označí vybraný text barvou', active: state.highlight, run: () => editor.chain().focus().toggleHighlight().run() },
+    { icon: ListBullets, label: 'Odrážky', title: 'Seznam s odrážkami', active: state.bullet, run: () => toggleBlock(editor, 'bulletList') },
+    { icon: ListChecks, label: 'Úkoly', title: 'Seznam úkolů k odškrtnutí', active: state.task, run: () => toggleBlock(editor, 'taskList') },
   ];
   return (
-    <div className="flex-shrink-0 flex items-center justify-center gap-0.5 py-1.5 border-b border-border-subtle">
-      {buttons.map(({ icon: Icon, title, active, run }) => (
-        <button key={title} title={title} onMouseDown={(e) => e.preventDefault()} onClick={run}
-          className={`p-1.5 rounded-lg cursor-pointer
-            ${active ? 'bg-bg-tertiary text-text-primary' : 'text-text-tertiary hover:bg-bg-secondary hover:text-text-primary'}`}>
-          <Icon size={16} />
+    <div className="flex-shrink-0 flex flex-wrap items-center gap-0.5 px-3 py-2 border-b border-border-subtle">
+      {buttons.map(({ icon: Icon, label, title, active, run }) => (
+        <button key={label} title={title} aria-pressed={active} onMouseDown={(e) => e.preventDefault()} onClick={run}
+          className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs cursor-pointer transition-smooth
+            ${active ? 'bg-bg-tertiary text-text-primary' : 'text-text-muted hover:bg-bg-secondary hover:text-text-primary'}`}>
+          <Icon size={16} weight={active ? 'bold' : 'regular'} />
+          {label}
         </button>
       ))}
     </div>
