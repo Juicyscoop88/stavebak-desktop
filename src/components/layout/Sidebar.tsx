@@ -5,6 +5,7 @@ import { CaretLeft, CaretUpDown, Check, FolderPlus, Plus, Trash } from '@phospho
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { open } from '@tauri-apps/plugin-dialog';
 import { openProject, deleteProject } from '../../lib/conversations';
+import { reportProblem } from '../../lib/report-problem';
 import { PluginSlotStack } from './PluginComponents';
 import { useNewProjectStore } from '../../stores/newProjectStore';
 import { BrandMark } from '../shared/BrandMark';
@@ -153,6 +154,10 @@ export function Sidebar() {
         title="Smazat projekt"
         message={`Složka „${deleteTarget?.split(/[\\/]/).pop() ?? ''}“ se všemi podklady, výstupy i konverzacemi se přesune do Koše. Dokud Koš nevysypeš, můžeš je odtamtud obnovit.`}
         detail={deleteError ?? deleteTarget ?? undefined}
+        extraAction={deleteError ? {
+          label: 'Nahlásit chybu',
+          onClick: () => { reportProblem({ summary: 'Nejde smazat projekt', error: deleteError, redact: deleteTarget ? [deleteTarget] : [] }).catch(() => {}); },
+        } : undefined}
         variant="danger"
         confirmLabel="Přesunout do Koše"
         onConfirm={async () => {

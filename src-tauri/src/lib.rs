@@ -2484,7 +2484,7 @@ async fn delete_session(session_id: String, session_path: String) -> Result<(), 
                 ));
             }
             // To the system Trash like project folders, so a deleted conversation is recoverable
-            trash::delete(&canonical)
+            move_to_trash(&canonical)
                 .map_err(|e| format!("Failed to delete session file: {}", e))?;
         }
     }
@@ -3734,6 +3734,7 @@ async fn rename_file(
 #[tauri::command]
 async fn delete_file(
     path_access: State<'_, PathAccessManager>,
+    watcher_state: State<'_, WatcherManager>,
     path: String,
     tab_id: Option<String>,
 ) -> Result<(), String> {
@@ -3744,8 +3745,51 @@ async fn delete_file(
             PathCapability::Delete,
         )
         .await?;
-    // Move to system trash/recycle bin (recoverable) instead of permanent delete
-    trash::delete(&p).map_err(|e| format!("Cannot move to trash: {}", e))
+    // A live directory watcher keeps the folder open: on Windows the move to the
+    // Recycle Bin then fails with a sharing violation. Drop watchers under this path first.
+    {
+        let mut watchers = watcher_state.watchers.lock().await;
+        watchers.retain(|watched, _| !std::path::Path::new(watched).starts_with(&p));
+    }
+    trash_with_retry(&p, 5, std::time::Duration::from_millis(400)).await
+}
+
+/// Move to the system trash/recycle bin (recoverable) instead of a permanent delete.
+/// Handles are released asynchronously (watcher, just-killed CLI), so retry briefly.
+async fn trash_with_retry(
+    path: &std::path::Path,
+    attempts: u32,
+    delay: std::time::Duration,
+) -> Result<(), String> {
+    let mut last = None;
+    for attempt in 0..attempts {
+        match move_to_trash(path) {
+            Ok(()) => return Ok(()),
+            Err(e) => last = Some(e),
+        }
+        if attempt + 1 < attempts {
+            tokio::time::sleep(delay).await;
+        }
+    }
+    // {:?} keeps the OS error code and description, which Display drops
+    Err(format!("Cannot move to trash: {:?}", last.expect("attempts > 0")))
+}
+
+/// Move a path to the system Trash (recoverable). On macOS use NSFileManager: the default
+/// Finder (AppleScript) method needs the Automation permission and fails without it
+/// ("Error during a `trash` operation"), which made deleting a project impossible.
+fn move_to_trash(path: &std::path::Path) -> Result<(), trash::Error> {
+    #[cfg(target_os = "macos")]
+    {
+        use trash::macos::{DeleteMethod, TrashContextExtMacos};
+        let mut ctx = trash::TrashContext::default();
+        ctx.set_delete_method(DeleteMethod::NsFileManager);
+        ctx.delete(path)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        trash::delete(path)
+    }
 }
 
 #[tauri::command]
@@ -7861,5 +7905,66 @@ mod mcp_error_tests {
         assert_eq!(mcp_error_message(&json!("Too many requests"), 429), "Too many requests");
         assert_eq!(mcp_error_message(&json!({}), 401), "Stavebák vyžaduje přihlášení (HTTP 401).");
         assert_eq!(mcp_error_message(&json!({}), 500), "MCP chyba (HTTP 500)");
+    }
+}
+
+/// Regression tests for #33: deleting a project folder must work while a watcher holds it
+/// open (the Windows failure). Run on every platform in CI.
+#[cfg(test)]
+mod trash_tests {
+    use super::trash_with_retry;
+    use notify::{RecursiveMode, Watcher};
+    use std::time::Duration;
+
+    fn populated_project() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("Rekonstrukce RD Kostelní Hlavno");
+        std::fs::create_dir_all(root.join("podklady").join("katastr")).unwrap();
+        std::fs::write(root.join("stavebak.json"), "{}").unwrap();
+        std::fs::write(root.join("podklady").join("katastr").join("výpis.txt"), "x").unwrap();
+        dir
+    }
+
+    fn project_path(dir: &tempfile::TempDir) -> std::path::PathBuf {
+        dir.path().join("Rekonstrukce RD Kostelní Hlavno")
+    }
+
+    fn rt() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap()
+    }
+
+    #[test]
+    fn trashes_a_folder_with_nested_files() {
+        let dir = populated_project();
+        let p = project_path(&dir);
+        rt().block_on(trash_with_retry(&p, 5, Duration::from_millis(200))).unwrap();
+        assert!(!p.exists());
+    }
+
+    #[test]
+    fn trashes_a_folder_after_its_watcher_is_dropped() {
+        let dir = populated_project();
+        let p = project_path(&dir);
+        let mut w = notify::recommended_watcher(|_| {}).unwrap();
+        w.watch(&p, RecursiveMode::Recursive).unwrap();
+        // what delete_file does before the move
+        drop(w);
+        rt().block_on(trash_with_retry(&p, 5, Duration::from_millis(200))).unwrap();
+        assert!(!p.exists());
+    }
+
+    #[test]
+    fn retries_until_a_late_handle_is_released() {
+        let dir = populated_project();
+        let p = project_path(&dir);
+        let mut w = notify::recommended_watcher(|_| {}).unwrap();
+        w.watch(&p, RecursiveMode::Recursive).unwrap();
+        // handle released only after the first attempts
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            drop(w);
+        });
+        rt().block_on(trash_with_retry(&p, 10, Duration::from_millis(300))).unwrap();
+        assert!(!p.exists());
     }
 }
