@@ -2484,7 +2484,7 @@ async fn delete_session(session_id: String, session_path: String) -> Result<(), 
                 ));
             }
             // To the system Trash like project folders, so a deleted conversation is recoverable
-            trash::delete(&canonical)
+            move_to_trash(&canonical)
                 .map_err(|e| format!("Failed to delete session file: {}", e))?;
         }
     }
@@ -3745,7 +3745,24 @@ async fn delete_file(
         )
         .await?;
     // Move to system trash/recycle bin (recoverable) instead of permanent delete
-    trash::delete(&p).map_err(|e| format!("Cannot move to trash: {}", e))
+    move_to_trash(&p).map_err(|e| format!("Cannot move to trash: {}", e))
+}
+
+/// Move a path to the system Trash (recoverable). On macOS use NSFileManager: the default
+/// Finder (AppleScript) method needs the Automation permission and fails without it
+/// ("Error during a `trash` operation"), which made deleting a project impossible.
+fn move_to_trash(path: &std::path::Path) -> Result<(), trash::Error> {
+    #[cfg(target_os = "macos")]
+    {
+        use trash::macos::{DeleteMethod, TrashContextExtMacos};
+        let mut ctx = trash::TrashContext::default();
+        ctx.set_delete_method(DeleteMethod::NsFileManager);
+        ctx.delete(path)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        trash::delete(path)
+    }
 }
 
 #[tauri::command]
