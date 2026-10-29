@@ -30,6 +30,7 @@ import { MarkdownRenderer } from '../shared/MarkdownRenderer';
 import { FileIcon } from '../shared/FileIcon';
 import { stavebakTheme, stavebakHighlight } from '../../lib/codemirror-theme';
 import { useT } from '../../lib/i18n';
+import { projectFileKey } from '../../lib/project-files';
 import { X, SpinnerGap, ArrowSquareOut, PencilSimple, Eye, Code } from '@phosphor-icons/react';
 
 const DxfPreview = lazy(() => import('./DxfPreview'));
@@ -141,6 +142,8 @@ export function FilePreview() {
 
   const ext = useMemo(() => selectedFile ? getExt(selectedFile) : '', [selectedFile]);
   const fileName = useMemo(() => selectedFile ? getFileName(selectedFile) : '', [selectedFile]);
+  const rootPath = useFileStore((s) => s.rootPath);
+  const projectFile = selectedFile ? projectFileKey(selectedFile, rootPath) : null;
   const isMarkdown = MARKDOWN_EXTS.has(ext);
   const PluginRenderer = useFileRenderer(fileName);
   const hasPluginRenderer = PluginRenderer !== null;
@@ -202,9 +205,17 @@ export function FilePreview() {
         border-b border-border-subtle flex-shrink-0 relative z-10">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <FileIcon name={fileName} size={16} className="flex-shrink-0 text-text-muted" />
-          <span className="text-xs text-text-tertiary truncate">
-            {fileName}
-          </span>
+          {projectFile ? (
+            <span className="text-xs text-text-tertiary truncate" title={t(`${projectFile}.hint`)}>
+              <span className="text-text-secondary">{t(`${projectFile}.label`)}</span>
+              {' · '}
+              <span className="font-mono">{fileName}</span>
+            </span>
+          ) : (
+            <span className="text-xs text-text-tertiary truncate">
+              {fileName}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">

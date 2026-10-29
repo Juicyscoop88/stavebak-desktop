@@ -10,6 +10,7 @@ import { startTreeDrag, moveTreeDrag, endTreeDrag } from '../../lib/drag-state';
 import { useChatStore } from '../../stores/chatStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { FileIcon } from '../shared/FileIcon';
+import { projectFileKey } from '../../lib/project-files';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { FilePlus, FolderPlus, ClipboardText, CopySimple, Copy, PencilSimple, Trash, Folder, ArrowSquareOut, CaretRight, ShareNetwork, Play } from '@phosphor-icons/react';
 
@@ -226,6 +227,9 @@ function TreeNode({
   // Highlight based on revealTarget (folders can be highlighted too); selectFile sets it
   const isActive = useFileStore((s) => s.revealTarget === node.path);
   const changeKind = useFileStore((s) => s.changedFiles.get(node.path));
+  const rootPath = useFileStore((s) => s.rootPath);
+  const t = useT();
+  const projectFile = node.is_dir ? null : projectFileKey(node.path, rootPath);
   const dirPrefix = node.path + '/';
   const hasChildChanges = useFileStore((s) =>
     node.is_dir
@@ -313,13 +317,18 @@ function TreeNode({
           onContextMenu(e, node.path, node.is_dir);
         }}
         {...(node.is_dir ? { 'data-dir-path': node.path } : {})}
+        title={projectFile
+          ? `${t(`${projectFile}.hint`)}\n${t('projectFiles.fileOnDisk').replace('{name}', node.name)}`
+          : undefined}
         className={`w-full flex items-center gap-2 py-1 px-2.5 rounded-md
           text-left text-sm leading-5 group
           ${isActive
             ? 'bg-accent/10 text-accent'
             : changeKind
               ? 'text-success'
-              : 'text-text-muted hover:bg-bg-secondary hover:text-text-primary'
+              : projectFile
+                ? 'text-text-tertiary hover:bg-bg-secondary hover:text-text-primary'
+                : 'text-text-muted hover:bg-bg-secondary hover:text-text-primary'
           }`}
         style={{ paddingLeft: `${depth * 16 + 10}px` }}
       >
@@ -329,7 +338,8 @@ function TreeNode({
               className={`text-text-tertiary transition-transform duration-150
                 ${isExpanded ? 'rotate-90' : ''}`} />
           ) : (
-            <FileIcon name={node.name} size={14} className="text-accent" />
+            <FileIcon name={node.name} size={14}
+              className={projectFile ? 'text-text-tertiary' : 'text-accent'} />
           )}
         </span>
         {renamingPath === node.path ? (
@@ -348,7 +358,7 @@ function TreeNode({
               rounded-lg px-1.5 py-0.5 outline-none text-text-primary"
           />
         ) : (
-          <span className="truncate">{node.name}</span>
+          <span className="truncate">{projectFile ? t(`${projectFile}.label`) : node.name}</span>
         )}
         {getChangeBadge(changeKind)}
         {!changeKind && hasChildChanges && (
@@ -431,14 +441,16 @@ export function FileExplorer() {
   const [createName, setCreateName] = useState('');
 
   const filteredTree = useMemo(() => {
-    if (showHiddenFiles) return tree;
     function filterNodes(nodes: FileNode[]): FileNode[] {
       return nodes
         .filter((n) => !n.name.startsWith('.'))
         .map((n) => n.children ? { ...n, children: filterNodes(n.children) } : n);
     }
-    return filterNodes(tree);
-  }, [tree, showHiddenFiles]);
+    const visible = showHiddenFiles ? tree : filterNodes(tree);
+    // Technical files of the project go after the user's own documents
+    const isProjectFile = (n: FileNode) => !n.is_dir && projectFileKey(n.path, rootPath) !== null;
+    return [...visible.filter((n) => !isProjectFile(n)), ...visible.filter(isProjectFile)];
+  }, [tree, showHiddenFiles, rootPath]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, path: string, isDir: boolean) => {
     setContextMenu({ x: e.clientX, y: e.clientY, path, isDir });
