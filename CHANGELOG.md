@@ -2,6 +2,16 @@
 
 Důležité změny Stavebák Desktop.
 
+## [0.16.0] - 2026-10-29
+
+### Přidáno
+- Poznámky k projektu jako jednoduchý editor pro projektanty: nadpisy, tučné písmo, zvýraznění, odrážky a úkoly, nápovědy pod každým oddílem a plovoucí menu nad označeným textem. Soubor zůstává Markdown, asistent ho čte jako dřív.
+- Postup projektu a srozumitelné názvy technických souborů v postranním panelu.
+- Tlačítko Nahlásit problém v horní liště vedle aktualizace: otevře předvyplněné hlášení s verzí, systémem a případnou chybou, bez názvu a cesty projektu.
+
+### Opraveno
+- Smazání projektu na Windows a macOS (přesun do Koše) už nekončí chybou, když složku drží otevřenou aplikace nebo chybí oprávnění Finderu. Dialog ukáže celý text chyby.
+
 ## [0.15.0] - 2026-10-27
 
 ### Přidáno
