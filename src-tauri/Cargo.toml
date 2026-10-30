@@ -1,6 +1,6 @@
 [package]
 name = "stavebak"
-version = "0.16.0"
+version = "0.16.1"
 description = "Stavebák Desktop: aplikace pro projektanty, která spouští Claude Code uživatele"
 authors = ["Stavebák"]
 license = "Apache-2.0"

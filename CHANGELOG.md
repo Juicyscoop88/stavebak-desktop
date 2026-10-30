@@ -2,6 +2,11 @@
 
 Důležité změny Stavebák Desktop.
 
+## [0.16.1] - 2026-10-30
+
+### Opraveno
+- Pole pro zprávu už nevyjíždí pod otevřený pravý panel Stav projektu, tlačítko odeslání zůstává u chatu.
+
 ## [0.16.0] - 2026-10-29
 
 ### Přidáno
