@@ -16,6 +16,12 @@ export function BottomBar() {
   const workingDirectory = useSettingsStore((s) => s.workingDirectory);
   const directoryMissing = useFileStore((s) => s.directoryMissing);
   const mcpTarget = useMcpStore((s) => s.target);
+  const secondaryPanelOpen = useSettingsStore((s) => s.secondaryPanelOpen);
+  const secondaryPanelWidth = useSettingsStore((s) => s.secondaryPanelWidth);
+  const filePreviewOpen = useFileStore((s) => !!s.selectedFile);
+  // The right panel is not under the bar's chat column: reserve its width (plus the 1px resize handle)
+  // so the input stays centered on the chat column, like AppShell does for the messages
+  const rightInset = secondaryPanelOpen && !filePreviewOpen ? secondaryPanelWidth + 1 : 0;
 
   const showInput = workingDirectory && !directoryMissing;
   // Hidden, not unmounted: InputBar owns the stream handler and action listeners
@@ -61,6 +67,7 @@ export function BottomBar() {
       <div className={`flex-1 min-w-0 ${composerHidden ? 'invisible' : ''}`}>
         {showInput && <InputBar />}
       </div>
+      <div className="flex-shrink-0" style={{ width: `${rightInset}px` }} />
     </div>
   );
 }
