@@ -7,7 +7,10 @@ import { useT } from '../../lib/i18n';
 
 const REFRESH_MS = 30 * 60 * 1000;
 
-/** Načte stav účtu po startu, při návratu do okna (třeba z platby) a jednou za půl hodiny. */
+/**
+ * Načte stav účtu po startu, při návratu do okna (třeba z platby), jednou za půl hodiny
+ * a hned, když model narazí na chybějící přihlášení (událost z mostu MCP, ADR 0003): lišta pak nabídne přihlášení.
+ */
 export function useAccountRefresh() {
   const setupCompleted = useSettingsStore((s) => s.setupCompleted);
   const refresh = useAccountStore((s) => s.refresh);
@@ -17,7 +20,15 @@ export function useAccountRefresh() {
     const onFocus = () => refresh();
     window.addEventListener('focus', onFocus);
     const timer = setInterval(refresh, REFRESH_MS);
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    import('@tauri-apps/api/event')
+      .then(({ listen }) => listen('stavebak-auth-required', () => { refresh(); }))
+      .then((fn) => { if (disposed) fn(); else unlisten = fn; })
+      .catch(() => {});
     return () => {
+      disposed = true;
+      unlisten?.();
       window.removeEventListener('focus', onFocus);
       clearInterval(timer);
     };

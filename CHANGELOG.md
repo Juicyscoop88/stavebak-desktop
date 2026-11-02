@@ -2,6 +2,11 @@
 
 Důležité změny Stavebák Desktop.
 
+## [Nevydáno]
+
+### Opraveno
+- Stavebák se v dlouhé konverzaci už neodpojuje. Přihlášení se obnovuje samo i po hodinách nebo přes víkend a výpadek sítě uživatele neodhlásí. Když přihlášení opravdu chybí, asistent poradí přihlásit se v aplikaci a lišta nahoře nabídne přihlášení. Po přihlášení funguje konverzace dál bez restartu.
+
 ## [0.16.1] - 2026-10-30
 
 ### Opraveno
