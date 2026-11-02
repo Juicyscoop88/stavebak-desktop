@@ -6,6 +6,7 @@ import { bridge, type UnifiedCommand } from '../../lib/tauri-bridge';
 import { FileUploadChips } from './FileUploadChips';
 import { RewindPanel } from './RewindPanel';
 import { useFileAttachments } from '../../hooks/useFileAttachments';
+import { hasSendableContent, withAttachedFiles } from '../../lib/composeMessage';
 import { useRewind } from '../../hooks/useRewind';
 import { useStreamProcessor, flushStreamBuffer } from '../../hooks/useStreamProcessor';
 import { useAgentStore } from '../../stores/agentStore';
@@ -592,7 +593,8 @@ export function InputBar() {
     const pendingPlanReview = tabState.messages.find(
       (m: import('../../stores/chatStore').ChatMessage) => m.type === 'plan_review' && !m.resolved,
     );
-    if (pendingPlanReview && !text && !useCommandStore.getState().activePrefix) {
+    // Se přílohou je prázdný Enter odeslání, ne schválení plánu
+    if (pendingPlanReview && !text && files.length === 0 && !useCommandStore.getState().activePrefix) {
       const stdinId = tabState.sessionMeta.stdinId;
       const hasLivePlanSession = Boolean(stdinId && tabState.sessionStatus === 'running');
       if (!hasLivePlanSession) {
@@ -639,7 +641,7 @@ export function InputBar() {
       text = text ? `${prefix.name} ${text}` : prefix.name;
     }
 
-    if (!text) return;
+    if (!hasSendableContent(text, false, files.length)) return;
 
     // Intercept immediate (built-in) commands even when submitted directly
     // (e.g. user types "/help" and presses Enter without using the popover)
@@ -689,10 +691,7 @@ export function InputBar() {
     }
 
     // Append file paths if there are attachments
-    if (files.length > 0) {
-      const filePaths = files.map((f) => f.path).join('\n');
-      text = `${text}\n\n${t('input.attachedFiles')}\n${filePaths}`;
-    }
+    text = withAttachedFiles(text, files.map((f) => f.path), t('input.attachedFiles'));
 
     // Gate: queue follow-up messages while AI is actively processing (#142).
     // IMPORTANT: when queueing, do NOT addMessage to messages[] — ChatPanel
@@ -1240,6 +1239,11 @@ export function InputBar() {
         e.preventDefault();
         return true;
       }
+      // Vložený snímek se ještě ukládá: počkat, jinak by zpráva odešla bez něj
+      if (isProcessing) {
+        e.preventDefault();
+        return true;
+      }
       // Plain Enter → send message
       e.preventDefault();
       handleSubmit();
@@ -1421,7 +1425,7 @@ export function InputBar() {
           <button
             data-testid="send-button"
             onClick={handleSubmit}
-            disabled={isAwaiting || isStopping || (!input.trim() && !activePrefix)}
+            disabled={isAwaiting || isStopping || isProcessing || !hasSendableContent(input, !!activePrefix, files.length)}
             className={`flex-shrink-0 self-end w-8 h-8 rounded-full
               flex items-center justify-center transition-smooth
               disabled:opacity-30 disabled:cursor-not-allowed

@@ -7,6 +7,7 @@ Důležité změny Stavebák Desktop.
 ### Opraveno
 - Stavebák se v dlouhé konverzaci už neodpojuje. Přihlášení se obnovuje samo i po hodinách nebo přes víkend a výpadek sítě uživatele neodhlásí. Když přihlášení opravdu chybí, asistent poradí přihlásit se v aplikaci a lišta nahoře nabídne přihlášení. Po přihlášení funguje konverzace dál bez restartu.
 - Projekt ze seznamu jde smazat i tehdy, když se v aplikaci od spuštění neotevřel (na Windows končilo chybou „outside the allowed workspace“).
+- Vložený snímek obrazovky nebo jiný soubor jde odeslat i bez textu (Enter i tlačítko Odeslat). Dokud se vložený snímek ukládá, zpráva neodejde bez něj.
 
 ## [0.16.1] - 2026-10-30
 
