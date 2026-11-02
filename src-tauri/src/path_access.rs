@@ -197,6 +197,39 @@ fn is_credential_store(path: &Path) -> bool {
         .any(|(d, f)| dir.eq_ignore_ascii_case(d) && file.eq_ignore_ascii_case(f))
 }
 
+/// Smí jít složka projektu do Koše? Smazání projektu je výslovná volba uživatele (potvrzení v dialogu),
+/// proto nezávisí na tom, jestli byl projekt v tomto běhu otevřený. Pojistka proti chybné cestě:
+/// nikdy kořen disku, domovská složka, její nadřazené složky ani složky přímo v ní (Dokumenty, Plocha),
+/// nikdy data aplikací (`~/.claude`, `~/.stavebak`, `~/.codex`, `~/Library`, `~/AppData`).
+/// Obě cesty musí být kanonické (na Windows obě s předponou `\\?\`).
+pub fn check_project_trash(path: &Path, home: &Path) -> Result<(), String> {
+    let refuse = || Err(format!("Složku „{}“ aplikace jako projekt nesmaže.", path.display()));
+    let names: Vec<String> = path
+        .components()
+        .filter_map(|c| match c {
+            std::path::Component::Normal(n) => Some(n.to_string_lossy().to_lowercase()),
+            _ => None,
+        })
+        .collect();
+    // Další disky: /Volumes/Data (macOS), /mnt/x a /media/x (Linux) jsou kořeny jako C:\
+    let mounted = names.first().is_some_and(|n| ["volumes", "mnt", "media"].contains(&n.as_str()));
+    let min_depth = if mounted { 3 } else { 2 };
+    if names.len() < min_depth || path_starts_with(home, path) {
+        return refuse();
+    }
+    if path_starts_with(path, home) {
+        let inside: Vec<_> = path.strip_prefix(home).map(|r| r.components().collect()).unwrap_or_default();
+        if inside.len() < 2 {
+            return refuse();
+        }
+        let first = inside[0].as_os_str().to_string_lossy().to_lowercase();
+        if [".claude", ".stavebak", ".codex", "library", "appdata"].contains(&first.as_str()) {
+            return refuse();
+        }
+    }
+    Ok(())
+}
+
 fn path_starts_with(path: &Path, prefix: &Path) -> bool {
     let mut p = path.components();
     for pc in prefix.components() {
@@ -219,6 +252,36 @@ fn push_canonical(roots: &mut Vec<PathBuf>, path: PathBuf) {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn project_trash_allows_projects_but_never_home_or_app_data() {
+        let home = Path::new("/Users/projektant");
+        let ok = |p: &str| check_project_trash(Path::new(p), home).is_ok();
+        // Projekt ve výchozí složce, i neotevřený, a projekt mimo domovskou složku
+        assert!(ok("/Users/projektant/Documents/Stavebák/aaa"));
+        assert!(ok("/Users/projektant/Projekty/RD Novák"));
+        assert!(ok("/Volumes/Data/Projekty/RD"));
+        // Nikdy kořen, domovská složka, nadřazené ani složky přímo v ní
+        assert!(!ok("/"));
+        assert!(!ok("/Users"));
+        assert!(!ok("/Users/projektant"));
+        assert!(!ok("/Users/projektant/Documents"));
+        assert!(!ok("/Volumes/Data"));
+        assert!(!ok("/mnt/d"));
+        // Nikdy data aplikací
+        assert!(!ok("/Users/projektant/.claude/projects"));
+        assert!(!ok("/Users/projektant/.stavebak/codex"));
+        assert!(!ok("/Users/projektant/Library/Application Support"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn project_trash_windows_verbatim_paths() {
+        let home = Path::new(r"\\?\C:\Users\bruzl");
+        assert!(check_project_trash(Path::new(r"\\?\C:\Users\bruzl\Documents\Stavebák\aaa"), home).is_ok());
+        assert!(check_project_trash(Path::new(r"\\?\C:\Users\bruzl\Documents"), home).is_err());
+        assert!(check_project_trash(Path::new(r"\\?\C:\Users\bruzl\AppData\Roaming\x"), home).is_err());
+    }
 
     #[tokio::test]
     async fn fixed_roots_allow_subpath() {
