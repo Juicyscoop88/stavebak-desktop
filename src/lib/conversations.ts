@@ -178,7 +178,7 @@ export async function deleteProject(dir: string): Promise<void> {
   for (const session of projectConversations(useSessionStore.getState().sessions, dir)) {
     await deleteConversation(session);
   }
-  await bridge.deleteFile(dir);
+  await bridge.trashProject(dir);
   useSettingsStore.getState().removeProject(dir);
   if (isOpen) useSettingsStore.getState().setWorkingDirectory('');
 }

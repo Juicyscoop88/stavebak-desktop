@@ -277,6 +277,8 @@ export const bridge = {
 
   deleteFile: (path: string, tabId?: string) =>
     invoke<void>('delete_file', { path, tabId: tabId ?? null }),
+  /** Projekt ze seznamu do Koše po potvrzení uživatele, i když v tomto běhu nebyl otevřený. */
+  trashProject: (path: string) => invoke<void>('trash_project', { path }),
 
   createDirectory: (path: string, tabId?: string) =>
     invoke<void>('create_directory', { path, tabId: tabId ?? null }),

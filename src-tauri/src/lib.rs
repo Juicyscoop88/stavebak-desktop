@@ -3968,12 +3968,33 @@ async fn delete_file(
             PathCapability::Delete,
         )
         .await?;
-    // A live directory watcher keeps the folder open: on Windows the move to the
-    // Recycle Bin then fails with a sharing violation. Drop watchers under this path first.
-    {
-        let mut watchers = watcher_state.watchers.lock().await;
-        watchers.retain(|watched, _| !std::path::Path::new(watched).starts_with(&p));
+    drop_watchers_under(&watcher_state, &p).await;
+    trash_with_retry(&p, 5, std::time::Duration::from_millis(400)).await
+}
+
+/// A live directory watcher keeps the folder open: on Windows the move to the
+/// Recycle Bin then fails with a sharing violation. Drop watchers under this path first.
+async fn drop_watchers_under(watcher_state: &WatcherManager, path: &std::path::Path) {
+    let mut watchers = watcher_state.watchers.lock().await;
+    watchers.retain(|watched, _| !std::path::Path::new(watched).starts_with(path));
+}
+
+/// Smazání projektu ze seznamu po potvrzení v dialogu (do Koše, obnovitelné). Na rozdíl od `delete_file`
+/// nezávisí na tom, jestli byl projekt v tomto běhu otevřený: projekt ze seznamu po restartu aplikace
+/// mezi povolenými složkami ještě není. Pojistku proti chybné cestě drží `check_project_trash`.
+#[tauri::command]
+async fn trash_project(watcher_state: State<'_, WatcherManager>, path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path)
+        .canonicalize()
+        .map_err(|e| format!("Složka projektu není dostupná: {}", e))?;
+    if !p.is_dir() {
+        return Err(format!("„{}“ není složka projektu.", p.display()));
     }
+    let home = dirs::home_dir()
+        .and_then(|h| h.canonicalize().ok())
+        .ok_or("Nelze zjistit domovskou složku")?;
+    path_access::check_project_trash(&p, &home)?;
+    drop_watchers_under(&watcher_state, &p).await;
     trash_with_retry(&p, 5, std::time::Duration::from_millis(400)).await
 }
 
@@ -7896,6 +7917,7 @@ pub fn run() {
             delete_file,
             create_directory,
             create_project_directory,
+            trash_project,
             ensure_claude_md,
             open_in_vscode,
             reveal_in_finder,
