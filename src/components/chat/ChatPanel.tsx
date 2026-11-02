@@ -444,34 +444,36 @@ export function ChatPanel() {
       {/* Below the spacer: the title-bar drag region would swallow the banner's clicks */}
       <AccountBanner />
 
-      {/* Header row — conversation title aligned to the message column (px-5, max-w-2xl) */}
+      {/* Header row: [lead][title][actions]. The lead column is the message column's left offset
+          (px-5, max-w-2xl centered), at least the sidebar toggle, so the title lines up with the messages.
+          Actions keep their own width and the title column takes the rest and truncates, so on a narrow
+          pane (sidebar open) the title never slides under the buttons on the right. */}
       <div
-        className="relative flex items-center h-[36px] pl-3.5 pr-5 border-b border-border-subtle
-        flex-shrink-0 bg-bg-chat cursor-default">
-        {(!sidebarOpen || isFilePreviewMode) && (
-          <button onClick={toggleSidebar}
-            className="relative z-10 p-1 rounded-lg hover:bg-bg-tertiary text-text-tertiary
-              transition-smooth mr-2" title={t('chat.showSidebar')}>
-            <List size={14} weight="light" />
-          </button>
-        )}
-        <div className="absolute inset-0 px-5 flex items-center pointer-events-none">
-          {/* When the sidebar toggle is shown, keep clear of it if the column reaches the edge */}
-          <div className={`relative flex items-center pointer-events-auto ${(!sidebarOpen || isFilePreviewMode)
-            ? 'ml-[max(24px,calc((100%-42rem)/2))] w-[min(42rem,calc(100%-max(24px,calc((100%-42rem)/2))))]'
-            : 'w-full max-w-2xl mx-auto'}`}>
-            {workingDirectory && sessionStatus !== 'idle' && (
-              <span className={`absolute -left-3 w-1.5 h-1.5 rounded-full shrink-0
-                ${sessionStatus === 'running'
-                  ? 'bg-success'
-                  : sessionStatus === 'error'
-                    ? 'bg-error'
-                    : 'bg-transparent'}`} />
-            )}
-            <ConversationMenu />
-          </div>
+        className={`grid items-center h-[36px] px-5 border-b border-border-subtle flex-shrink-0 bg-bg-chat cursor-default
+          ${(!sidebarOpen || isFilePreviewMode)
+            ? 'grid-cols-[max(24px,calc((100%-42rem)/2))_minmax(0,1fr)_max-content]'
+            : 'grid-cols-[max(0px,calc((100%-42rem)/2))_minmax(0,1fr)_max-content]'}`}>
+        <div className="flex items-center -ml-1.5">
+          {(!sidebarOpen || isFilePreviewMode) && (
+            <button onClick={toggleSidebar}
+              className="p-1 rounded-lg hover:bg-bg-tertiary text-text-tertiary transition-smooth"
+              title={t('chat.showSidebar')}>
+              <List size={14} weight="light" />
+            </button>
+          )}
         </div>
-        <div className="relative z-10 ml-auto flex items-center">
+        <div className="relative flex items-center min-w-0 max-w-2xl">
+          {workingDirectory && sessionStatus !== 'idle' && (
+            <span className={`absolute -left-3 w-1.5 h-1.5 rounded-full shrink-0
+              ${sessionStatus === 'running'
+                ? 'bg-success'
+                : sessionStatus === 'error'
+                  ? 'bg-error'
+                  : 'bg-transparent'}`} />
+          )}
+          <ConversationMenu />
+        </div>
+        <div className="flex items-center justify-end pl-2">
           <UpdateButton />
           <ReportProblemButton />
         </div>

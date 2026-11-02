@@ -51,7 +51,7 @@ export function ConversationMenu() {
 
   return (
     <div className="flex items-center gap-1 min-w-0 flex-1">
-      <div ref={ref} className="relative min-w-0">
+      <div ref={ref} className="relative flex min-w-0">
         <button
           onClick={() => setOpen(!open)}
           disabled={history.length === 0}
