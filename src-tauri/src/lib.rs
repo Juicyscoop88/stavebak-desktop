@@ -1,6 +1,7 @@
 #![allow(unexpected_cfgs)]
 
 mod codex_bridge;
+mod mcp_bridge;
 mod commands;
 mod openai_auth;
 mod preview_cache;
@@ -1063,30 +1064,130 @@ fn get_stavebak_mcp() -> StavebakMcpTarget {
 /// (`mcp__stavebak__*`) are the same against local and production.
 ///
 /// Writes `~/.stavebak/mcp-session-<stdin_id>.json`. Returns `None` on I/O error.
-fn build_mcp_scratch_config(stdin_id: &str, token: Option<&str>) -> Option<std::path::PathBuf> {
+fn build_mcp_scratch_config(stdin_id: &str, access: &mcp_bridge::McpAccess) -> Option<std::path::PathBuf> {
     let home = dirs::home_dir()?;
     let target = stavebak_mcp_target();
     let dir = home.join(".stavebak");
     std::fs::create_dir_all(&dir).ok()?;
     let path = dir.join(format!("mcp-session-{}.json", safe_stdin_for_path(stdin_id)));
-    std::fs::write(&path, mcp_session_config(&target, token).to_string()).ok()?;
-    // Soubor může nést přístupový token: číst ho smí jen uživatel
+    std::fs::write(&path, mcp_session_config(access).to_string()).ok()?;
+    // Soubor nese klíč mostu (v záloze i token): číst ho smí jen uživatel
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
     }
-    eprintln!("[Stavebak] MCP: {} ({})", target.url, target.env);
+    eprintln!("[Stavebak] MCP: {} ({}) přes {:?}", target.url, target.env, access);
     Some(path)
 }
 
-/// S přihlášením (stavebak_auth) nese session token v hlavičce, takže model jde pod stejným účtem jako panely.
-fn mcp_session_config(target: &StavebakMcpTarget, token: Option<&str>) -> serde_json::Value {
-    let mut server = serde_json::json!({ "type": "http", "url": target.url });
-    if let Some(token) = token {
-        server["headers"] = serde_json::json!({ "Authorization": format!("Bearer {}", token) });
+/// Session mluví s mostem (`mcp_bridge`), který přidává platný token, takže model jde pod stejným
+/// účtem jako panely a po vypršení tokenu se neodpojí.
+fn mcp_session_config(access: &mcp_bridge::McpAccess) -> serde_json::Value {
+    let mut server = serde_json::json!({ "type": "http", "url": access.url() });
+    match access {
+        mcp_bridge::McpAccess::Bridge { key, .. } => {
+            server["headers"] = serde_json::json!({ mcp_bridge::KEY_HEADER: key });
+        }
+        mcp_bridge::McpAccess::Direct { token: Some(token), .. } => {
+            server["headers"] = serde_json::json!({ "Authorization": format!("Bearer {}", token) });
+        }
+        mcp_bridge::McpAccess::Direct { token: None, .. } => {}
     }
     serde_json::json!({ "mcpServers": { STAVEBAK_MCP_SERVER: server } })
+}
+
+/// `stavebak_auth` jako zdroj tokenů mostu.
+struct StavebakTokens {
+    url: String,
+}
+
+impl mcp_bridge::TokenSource for StavebakTokens {
+    fn current(&self) -> mcp_bridge::TokenFuture<'_> {
+        Box::pin(stavebak_auth::token(&self.url))
+    }
+    fn after_rejection<'a>(&'a self, rejected: &'a str) -> mcp_bridge::TokenFuture<'a> {
+        Box::pin(stavebak_auth::token_after_rejection(&self.url, rejected))
+    }
+}
+
+/// Událost pro UI: přihlášení ke Stavebáku chybí nebo ho server odmítl (UI nabídne přihlášení).
+const STAVEBAK_AUTH_REQUIRED_EVENT: &str = "stavebak-auth-required";
+
+static MCP_BRIDGE: tokio::sync::OnceCell<Option<mcp_bridge::Bridge>> = tokio::sync::OnceCell::const_new();
+
+/// Jak se nová session modelu připojí ke Stavebáku: přes most (spustí se jednou za běh aplikace),
+/// a jen když most nejde spustit, přímo s aktuálním tokenem.
+async fn stavebak_session_access(app: &AppHandle) -> mcp_bridge::McpAccess {
+    let target = stavebak_mcp_target();
+    let bridge = MCP_BRIDGE
+        .get_or_init(|| {
+            let app = app.clone();
+            let upstream = target.url.clone();
+            async move {
+                let started = mcp_bridge::start(mcp_bridge::Config {
+                    tokens: std::sync::Arc::new(StavebakTokens { url: upstream.clone() }),
+                    upstream,
+                    // Bez celkového limitu: odpověď nástroje může proudit dlouho (převod výkresu)
+                    client: Box::new(|| {
+                        Box::pin(build_smart_http_client(
+                            std::time::Duration::from_secs(10),
+                            std::time::Duration::from_secs(60 * 60),
+                        ))
+                    }),
+                    on_auth_required: Box::new(move || {
+                        let _ = app.emit(STAVEBAK_AUTH_REQUIRED_EVENT, ());
+                    }),
+                })
+                .await;
+                match started {
+                    Ok(b) => Some(b),
+                    Err(e) => {
+                        eprintln!("[Stavebak] {}; session půjde přímo na server", e);
+                        None
+                    }
+                }
+            }
+        })
+        .await;
+    match bridge {
+        Some(b) => mcp_bridge::McpAccess::Bridge { url: b.url.clone(), key: b.key.clone() },
+        None => mcp_bridge::McpAccess::Direct {
+            token: stavebak_auth::access_token(&target.url).await,
+            url: target.url,
+        },
+    }
+}
+
+/// Potomci (Claude Code, Codex) dostávají proxy uživatele z prostředí. Most na loopbacku přes ni jít
+/// nesmí, proto se 127.0.0.1 a localhost přidají do NO_PROXY, jakmile je nějaká proxy nastavená.
+fn with_loopback_no_proxy(env: &mut Vec<(String, String)>) {
+    let has_proxy = env.iter().any(|(k, _)| {
+        let k = k.to_lowercase();
+        k == "https_proxy" || k == "http_proxy" || k == "all_proxy"
+    }) || ["https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY", "all_proxy", "ALL_PROXY"]
+        .iter()
+        .any(|k| std::env::var(k).is_ok_and(|v| !v.is_empty()));
+    if !has_proxy {
+        return;
+    }
+    let existing = env
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("no_proxy"))
+        .map(|(_, v)| v.clone())
+        .or_else(|| std::env::var("NO_PROXY").ok())
+        .or_else(|| std::env::var("no_proxy").ok())
+        .unwrap_or_default();
+    let mut hosts: Vec<String> = existing.split(',').map(|h| h.trim().to_string()).filter(|h| !h.is_empty()).collect();
+    for h in ["127.0.0.1", "localhost"] {
+        if !hosts.iter().any(|x| x == h) {
+            hosts.push(h.to_string());
+        }
+    }
+    let value = hosts.join(",");
+    env.retain(|(k, _)| !k.eq_ignore_ascii_case("no_proxy"));
+    env.push(("NO_PROXY".into(), value.clone()));
+    env.push(("no_proxy".into(), value));
 }
 
 #[tauri::command]
@@ -1136,9 +1237,12 @@ mod stavebak_mcp_target_tests {
         assert_eq!(resolve_stavebak_mcp_target(Some("  ".into()), false).env, "prod");
     }
 
+    use super::with_loopback_no_proxy;
+    use crate::mcp_bridge::McpAccess;
+
     #[test]
     fn session_config_has_only_stavebak_under_fixed_name() {
-        let cfg = mcp_session_config(&resolve_stavebak_mcp_target(None, false), None);
+        let cfg = mcp_session_config(&McpAccess::Direct { url: STAVEBAK_MCP_PROD.into(), token: None });
         let servers = cfg["mcpServers"].as_object().unwrap();
         assert_eq!(servers.len(), 1);
         assert_eq!(servers["stavebak"]["url"], STAVEBAK_MCP_PROD);
@@ -1147,9 +1251,114 @@ mod stavebak_mcp_target_tests {
     }
 
     #[test]
-    fn signed_in_session_carries_bearer_token() {
-        let cfg = mcp_session_config(&resolve_stavebak_mcp_target(None, false), Some("tok"));
+    fn bridged_session_carries_only_bridge_key() {
+        let cfg = mcp_session_config(&McpAccess::Bridge { url: "http://127.0.0.1:4100/mcp".into(), key: "k".into() });
+        let server = &cfg["mcpServers"]["stavebak"];
+        assert_eq!(server["url"], "http://127.0.0.1:4100/mcp");
+        assert_eq!(server["headers"]["x-stavebak-bridge-key"], "k");
+        assert!(server["headers"].get("Authorization").is_none());
+    }
+
+    #[test]
+    fn fallback_session_carries_bearer_token() {
+        let cfg = mcp_session_config(&McpAccess::Direct { url: STAVEBAK_MCP_PROD.into(), token: Some("tok".into()) });
         assert_eq!(cfg["mcpServers"]["stavebak"]["headers"]["Authorization"], "Bearer tok");
+    }
+
+    #[test]
+    fn loopback_bypasses_user_proxy() {
+        let mut env = vec![
+            ("HTTPS_PROXY".to_string(), "http://proxy:8080".to_string()),
+            ("no_proxy".to_string(), "intranet.local, 127.0.0.1".to_string()),
+        ];
+        with_loopback_no_proxy(&mut env);
+        let get = |k: &str| env.iter().find(|(n, _)| n == k).map(|(_, v)| v.as_str());
+        assert_eq!(get("NO_PROXY"), Some("intranet.local,127.0.0.1,localhost"));
+        assert_eq!(get("no_proxy"), Some("intranet.local,127.0.0.1,localhost"));
+    }
+}
+
+/// E2E mostu se skutečným Claude Code proti lokálnímu serveru s OAUTH_DEV_LOGIN=1 (`node scripts/dev-env.mjs up`):
+/// `cargo test --lib -- --ignored bridge_e2e --nocapture`. Používá klíčenku pro localhost:3535 (dev účet).
+#[cfg(test)]
+mod bridge_e2e {
+    use super::*;
+
+    const URL: &str = "http://localhost:3535/mcp";
+
+    async fn login() {
+        let _ = stavebak_auth::logout(URL);
+        stavebak_auth::login(URL, |auth_url| {
+            let auth_url = auth_url.to_string();
+            tokio::spawn(async move { let _ = reqwest::get(auth_url).await; });
+            Ok(())
+        })
+        .await
+        .expect("login");
+    }
+
+    async fn bridge() -> mcp_bridge::Bridge {
+        mcp_bridge::start(mcp_bridge::Config {
+            upstream: URL.into(),
+            tokens: std::sync::Arc::new(StavebakTokens { url: URL.into() }),
+            client: Box::new(|| Box::pin(async { reqwest::Client::builder().no_proxy().build().unwrap() })),
+            on_auth_required: Box::new(|| eprintln!("[e2e] on_auth_required")),
+        })
+        .await
+        .unwrap()
+    }
+
+    /// Jeden dotaz Claude Code přes most, vrátí jeho výstup (JSON).
+    fn claude(bridge: &mcp_bridge::Bridge, prompt: &str) -> String {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = dir.path().join("mcp.json");
+        let access = mcp_bridge::McpAccess::Bridge { url: bridge.url.clone(), key: bridge.key.clone() };
+        std::fs::write(&cfg, mcp_session_config(&access).to_string()).unwrap();
+        let out = std::process::Command::new("claude")
+            .current_dir(dir.path())
+            .env_remove("CLAUDECODE")
+            .args(["-p", prompt, "--output-format", "json", "--max-turns", "4", "--strict-mcp-config", "--mcp-config"])
+            .arg(&cfg)
+            .args(["--allowedTools", "mcp__stavebak__account_status"])
+            .output()
+            .expect("claude");
+        let v: serde_json::Value = serde_json::from_slice(&out.stdout).expect("JSON z claude -p");
+        v["result"].as_str().unwrap_or_default().to_string()
+    }
+
+    const PROMPT: &str = "Zavolej nástroj mcp__stavebak__account_status bez argumentů. Odpověz jedním řádkem: \
+když nástroj uspěl, napiš OK a hodnotu plan; když vrátil chybu, napiš CHYBA a doslova první větu chyby.";
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn bridge_e2e() {
+        login().await;
+        let bridge = bridge().await;
+
+        // 1. Server token odmítne, i když podle hodin platí (restart serveru, odvolání): most obnoví a zopakuje
+        stavebak_auth::set_access_for_test(URL, "odvolany-token", u64::MAX / 2);
+        let out = claude(&bridge, PROMPT);
+        println!("[e2e] odmítnutý token: {}", out);
+        assert!(out.starts_with("OK"), "{}", out);
+        assert_ne!(stavebak_auth::stored_access_for_test(URL).as_deref(), Some("odvolany-token"));
+
+        // 2. Token vypršel (session běží přes víkend): obnoví se před požadavkem
+        stavebak_auth::set_access_for_test(URL, "vyprsely-token", 0);
+        let out = claude(&bridge, PROMPT);
+        println!("[e2e] vypršelý token: {}", out);
+        assert!(out.starts_with("OK"), "{}", out);
+
+        // 3. Odhlášen: model dostane návod k přihlášení v aplikaci, ne /mcp
+        stavebak_auth::logout(URL).unwrap();
+        let out = claude(&bridge, PROMPT);
+        println!("[e2e] odhlášen: {}", out);
+        assert!(out.starts_with("CHYBA") && out.contains("vyžaduje přihlášení"), "{}", out);
+
+        // 4. Přihlášení v aplikaci během běhu: další volání projde bez restartu mostu ani session
+        login().await;
+        let out = claude(&bridge, PROMPT);
+        println!("[e2e] po přihlášení: {}", out);
+        assert!(out.starts_with("OK"), "{}", out);
     }
 }
 
@@ -1240,9 +1449,9 @@ async fn start_claude_session(
     // (see stavebak_mcp_target), in ~/.stavebak/mcp-session-<id>.json via
     // --mcp-config. Cleaned up on process exit.
     perf!("args_built");
-    // Čerstvý token (obnoví se, pokud brzy vyprší); bez přihlášení session běží anonymně
-    let stavebak_token = stavebak_auth::access_token(&stavebak_mcp_target().url).await;
-    let mcp_scratch_path = build_mcp_scratch_config(&session_id, stavebak_token.as_deref());
+    // Session jde přes most, který ke každému požadavku přidá platný token (ADR 0003)
+    let mcp_access = stavebak_session_access(&app).await;
+    let mcp_scratch_path = build_mcp_scratch_config(&session_id, &mcp_access);
     perf!("mcp_scratch");
     if let Some(ref scratch) = mcp_scratch_path {
         args.push("--mcp-config".to_string());
@@ -1436,6 +1645,13 @@ async fn start_claude_session(
                 }
             }
         }
+    }
+
+    // Most MCP na loopbacku nesmí jít přes proxy uživatele
+    {
+        let mut env: Vec<(String, String)> = resolved_env.drain().collect();
+        with_loopback_no_proxy(&mut env);
+        resolved_env.extend(env);
     }
 
     perf!("pre_spawn");
@@ -2029,16 +2245,14 @@ async fn start_codex_session(
             None => return Err("Pro práci s ChatGPT se nejdřív přihlaste v Nastavení → Účty.".into()),
         },
     };
-    let target = stavebak_mcp_target();
-    let stavebak_token = stavebak_auth::access_token(&target.url).await;
+    let mcp_access = stavebak_session_access(&app).await;
     let codex_home = codex_bridge::codex_home().ok_or("Nelze vytvořit ~/.stavebak/codex")?;
     let catalog = codex_home.join("models-no-tool-search.json");
     let launch = codex_bridge::LaunchConfig {
         auth,
         codex_home,
         mcp_server: STAVEBAK_MCP_SERVER.to_string(),
-        mcp_url: target.url.clone(),
-        stavebak_token,
+        mcp: mcp_access,
         model_catalog: catalog.is_file().then_some(catalog),
     };
 
@@ -2058,6 +2272,7 @@ async fn start_codex_session(
             }
         }
     }
+    with_loopback_no_proxy(&mut extra_env);
 
     let mode = params.permission_mode.clone().unwrap_or_else(|| "acceptEdits".into());
     codex_bridge::spawn_session(
@@ -3529,15 +3744,23 @@ async fn mcp_rpc(
     )
     .await;
     let body = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params });
-    let mut req = client.post(url).header("Accept", "application/json, text/event-stream").json(&body);
-    // Panely jdou pod stejným účtem jako model
-    if let Some(token) = stavebak_auth::access_token(url).await {
-        req = req.bearer_auth(token);
+    let send = |token: Option<String>| {
+        let mut req = client.post(url).header("Accept", "application/json, text/event-stream").json(&body);
+        if let Some(token) = token {
+            req = req.bearer_auth(token);
+        }
+        req.send()
+    };
+    // Panely jdou pod stejným účtem jako model; odmítnutý token obnovit a zkusit jednou znovu (jako most)
+    let token = stavebak_auth::access_token(url).await;
+    let mut resp = send(token.clone()).await.map_err(|e| format!("MCP server není dostupný: {}", e))?;
+    if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+        if let Some(rejected) = token {
+            if let stavebak_auth::TokenState::Valid(fresh) = stavebak_auth::token_after_rejection(url, &rejected).await {
+                resp = send(Some(fresh)).await.map_err(|e| format!("MCP server není dostupný: {}", e))?;
+            }
+        }
     }
-    let resp = req
-        .send()
-        .await
-        .map_err(|e| format!("MCP server není dostupný: {}", e))?;
     let status = resp.status();
     let text = resp.text().await.map_err(|e| e.to_string())?;
     // Streamable HTTP may answer as SSE ("data: {...}") or as plain JSON
@@ -7580,6 +7803,12 @@ pub fn run() {
 
             // One-time cleanup: purge desk_* entries from tracked_sessions.txt
             cleanup_tracked_sessions();
+
+            // Server přihlášení odmítl (odvolaný refresh token): UI nabídne nové přihlášení
+            let handle = app.handle().clone();
+            stavebak_auth::set_on_signed_out(move || {
+                let _ = handle.emit(STAVEBAK_AUTH_REQUIRED_EVENT, ());
+            });
 
             // OPT-2: Warm shell caches in parallel background threads.
             // login_shell_extra_path() is OnceLock-cached — warming it here

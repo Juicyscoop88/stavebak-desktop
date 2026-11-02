@@ -14,6 +14,8 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 
+use crate::mcp_bridge::{self, McpAccess};
+
 /// Připnutá verze `codex-app-server` (GitHub release `rust-v<verze>` v openai/codex).
 pub const CODEX_VERSION: &str = "0.164.0";
 /// Jméno aplikace pro OpenAI: `clientInfo.name` i `agent_name_hint` při registraci SIWC (Terms §1).
@@ -21,6 +23,7 @@ pub const CLIENT_NAME: &str = "Stavebak Desktop";
 pub const ACCESS_TOKEN_ENV: &str = "ACCESS_TOKEN";
 pub const API_KEY_ENV: &str = "OPENAI_API_KEY";
 pub const STAVEBAK_TOKEN_ENV: &str = "STAVEBAK_TOKEN";
+pub const STAVEBAK_BRIDGE_KEY_ENV: &str = "STAVEBAK_BRIDGE_KEY";
 /// Prefix `request_id` schválení, aby se odpověď z UI dala poznat a vrátit Codexu.
 const APPROVAL_PREFIX: &str = "codex:";
 const MANAGE_USAGE_URL: &str = "https://chatgpt.com/settings/usage";
@@ -47,8 +50,7 @@ pub struct LaunchConfig {
     pub auth: CodexAuth,
     pub codex_home: PathBuf,
     pub mcp_server: String,
-    pub mcp_url: String,
-    pub stavebak_token: Option<String>,
+    pub mcp: McpAccess,
     /// Katalog modelů se `supports_search_tool=false` (Responses `tool_search` SIWC odmítá).
     pub model_catalog: Option<PathBuf>,
 }
@@ -73,29 +75,38 @@ pub fn launch_args(cfg: &LaunchConfig) -> Vec<String> {
         format!("{p}.wire_api={}", toml_str("responses")),
         format!("{p}.requires_openai_auth=false"),
         format!("{p}.supports_websockets=false"),
-        format!("mcp_servers.{}.url={}", cfg.mcp_server, toml_str(&cfg.mcp_url)),
+        format!("mcp_servers.{}.url={}", cfg.mcp_server, toml_str(cfg.mcp.url())),
         // Nástroje Stavebáku neschvalovat jeden po druhém: čtecí jsou bezpečné, zápisy
         // jdou jen do projektu uživatele na serveru (stejně jako u Claude).
         format!("mcp_servers.{}.default_tools_approval_mode=\"approve\"", cfg.mcp_server),
         // Tokeny z prostředí app-serveru nesmí zdědit příkazy, které spouští model
         // (výchozí shell_environment_policy předává celé prostředí).
         format!(
-            "shell_environment_policy.exclude=[{},{},{}]",
+            "shell_environment_policy.exclude=[{},{},{},{}]",
             toml_str(ACCESS_TOKEN_ENV),
             toml_str(API_KEY_ENV),
-            toml_str(STAVEBAK_TOKEN_ENV)
+            toml_str(STAVEBAK_TOKEN_ENV),
+            toml_str(STAVEBAK_BRIDGE_KEY_ENV)
         ),
         "shell_environment_policy.ignore_default_excludes=false".to_string(),
         // Síť v příkazech modelu jako u Claude Code: stažení výsledků nástrojů (náhled výkresu,
         // převod DWG) jde přes odkazy ze serveru. Tokeny jsou z prostředí příkazů vyřazené výše.
         "sandbox_workspace_write.network_access=true".to_string(),
     ];
-    if cfg.stavebak_token.is_some() {
-        overrides.push(format!(
+    match &cfg.mcp {
+        // Most přidá platný token sám, Codex posílá jen klíč mostu
+        McpAccess::Bridge { .. } => overrides.push(format!(
+            "mcp_servers.{}.env_http_headers={{{}={}}}",
+            cfg.mcp_server,
+            toml_str(mcp_bridge::KEY_HEADER),
+            toml_str(STAVEBAK_BRIDGE_KEY_ENV)
+        )),
+        McpAccess::Direct { token: Some(_), .. } => overrides.push(format!(
             "mcp_servers.{}.bearer_token_env_var={}",
             cfg.mcp_server,
             toml_str(STAVEBAK_TOKEN_ENV)
-        ));
+        )),
+        McpAccess::Direct { token: None, .. } => {}
     }
     if let Some(catalog) = &cfg.model_catalog {
         overrides.push(format!(
@@ -121,8 +132,10 @@ pub fn launch_env(cfg: &LaunchConfig) -> Vec<(String, String)> {
         CodexAuth::ChatgptPlan(t) => env.push((ACCESS_TOKEN_ENV.into(), t.clone())),
         CodexAuth::ApiKey(k) => env.push((API_KEY_ENV.into(), k.clone())),
     }
-    if let Some(t) = &cfg.stavebak_token {
-        env.push((STAVEBAK_TOKEN_ENV.into(), t.clone()));
+    match &cfg.mcp {
+        McpAccess::Bridge { key, .. } => env.push((STAVEBAK_BRIDGE_KEY_ENV.into(), key.clone())),
+        McpAccess::Direct { token: Some(t), .. } => env.push((STAVEBAK_TOKEN_ENV.into(), t.clone())),
+        McpAccess::Direct { token: None, .. } => {}
     }
     env
 }
@@ -1086,12 +1099,15 @@ mod tests {
     use super::*;
 
     fn cfg(auth: CodexAuth, token: Option<&str>) -> LaunchConfig {
+        cfg_with(auth, McpAccess::Direct { url: "http://localhost:3535/mcp".into(), token: token.map(String::from) })
+    }
+
+    fn cfg_with(auth: CodexAuth, mcp: McpAccess) -> LaunchConfig {
         LaunchConfig {
             auth,
             codex_home: PathBuf::from("/tmp/codex-home"),
             mcp_server: "stavebak".into(),
-            mcp_url: "http://localhost:3535/mcp".into(),
-            stavebak_token: token.map(String::from),
+            mcp,
             model_catalog: None,
         }
     }
@@ -1118,13 +1134,30 @@ mod tests {
         assert!(!args.contains("SECRET"));
         assert!(args.contains("env_key=\"ACCESS_TOKEN\""));
         assert!(args.contains("bearer_token_env_var=\"STAVEBAK_TOKEN\""));
-        assert!(args.contains("shell_environment_policy.exclude=[\"ACCESS_TOKEN\",\"OPENAI_API_KEY\",\"STAVEBAK_TOKEN\"]"));
+        assert!(args.contains("shell_environment_policy.exclude=[\"ACCESS_TOKEN\",\"OPENAI_API_KEY\",\"STAVEBAK_TOKEN\",\"STAVEBAK_BRIDGE_KEY\"]"));
         assert!(args.contains("requires_openai_auth=false"));
         assert!(args.contains("sandbox_workspace_write.network_access=true"));
         let env = launch_env(&c);
         assert!(env.contains(&("ACCESS_TOKEN".into(), "SECRET-ACCESS".into())));
         assert!(env.contains(&("CODEX_HOME".into(), "/tmp/codex-home".into())));
-        assert!(!format!("{:?}", c).contains("SECRET-ACCESS"));
+        assert!(!format!("{:?}", c).contains("SECRET"));
+    }
+
+    #[test]
+    fn pres_most_jen_klic_v_prostredi_bez_tokenu() {
+        let c = cfg_with(
+            CodexAuth::ChatgptPlan("SECRET-ACCESS".into()),
+            McpAccess::Bridge { url: "http://127.0.0.1:4100/mcp".into(), key: "SECRET-KEY".into() },
+        );
+        let args = launch_args(&c).join(" ");
+        assert!(!args.contains("SECRET"));
+        assert!(args.contains("mcp_servers.stavebak.url=\"http://127.0.0.1:4100/mcp\""));
+        assert!(args.contains("mcp_servers.stavebak.env_http_headers={\"x-stavebak-bridge-key\"=\"STAVEBAK_BRIDGE_KEY\"}"));
+        assert!(!args.contains("bearer_token_env_var"));
+        let env = launch_env(&c);
+        assert!(env.contains(&("STAVEBAK_BRIDGE_KEY".into(), "SECRET-KEY".into())));
+        assert!(!env.iter().any(|(k, _)| k == "STAVEBAK_TOKEN"));
+        assert!(!format!("{:?}", c).contains("SECRET"));
     }
 
     #[test]

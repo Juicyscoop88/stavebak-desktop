@@ -1,8 +1,13 @@
 //! Přihlášení ke Stavebáku (spec 096 část 3 v repu serveru). Aplikace je běžný MCP OAuth klient:
 //! discovery, dynamická registrace, PKCE, návrat přes loopback `http://127.0.0.1:<port>/callback`.
 //! Tokeny jsou v klíčence systému, klíčem je origin MCP serveru (lokální a produkční účet se nepletou).
-//! Model (session Claude Code) i panely UI posílají stejný token, takže jdou pod stejným účtem.
-//! Bez přihlášení vše funguje dál anonymně.
+//! Model (session Claude Code i Codex) jde přes most `mcp_bridge`, panely UI přes `mcp_rpc`; oba berou
+//! token odsud, takže jdou pod stejným účtem. Bez přihlášení vše funguje dál anonymně.
+//!
+//! Obnova: přístupový token platí krátce (server: hodina), refresh token rotuje a starý po použití
+//! přestane platit. Proto obnovuje vždy jen jeden požadavek najednou (`REFRESH_LOCK`) a ostatní
+//! po něm převezmou nový token. Odhlásí se jen tehdy, když server refresh token odmítne
+//! (`invalid_grant`), ne při výpadku sítě.
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use rand::RngCore;
@@ -65,6 +70,20 @@ fn save(mcp_url: &str, tokens: &StoredTokens) -> Result<(), String> {
     entry(mcp_url)?.set_password(&json).map_err(|e| format!("Klíčenka: {}", e))
 }
 
+/// Pro e2e test mostu: nasimuluje odvolaný nebo vypršelý přístupový token.
+#[cfg(test)]
+pub(crate) fn set_access_for_test(mcp_url: &str, access_token: &str, expires_at: u64) {
+    let mut t = load(mcp_url).expect("přihlášen");
+    t.access_token = access_token.to_string();
+    t.expires_at = expires_at;
+    save(mcp_url, &t).unwrap();
+}
+
+#[cfg(test)]
+pub(crate) fn stored_access_for_test(mcp_url: &str) -> Option<String> {
+    load(mcp_url).map(|t| t.access_token)
+}
+
 pub fn logout(mcp_url: &str) -> Result<(), String> {
     match entry(mcp_url)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
@@ -89,14 +108,50 @@ fn http() -> reqwest::Client {
         .unwrap_or_default()
 }
 
-async fn token_request(endpoint: &str, form: &[(&str, &str)]) -> Result<TokenResponse, String> {
-    let res = http().post(endpoint).form(form).send().await.map_err(|e| format!("Server není dostupný: {}", e))?;
+async fn token_request(endpoint: &str, form: &[(&str, &str)]) -> Result<TokenResponse, TokenError> {
+    let res = http()
+        .post(endpoint)
+        .form(form)
+        .send()
+        .await
+        .map_err(|e| TokenError::Unavailable(format!("Server není dostupný: {}", e)))?;
     let status = res.status();
-    let body = res.text().await.map_err(|e| e.to_string())?;
+    let body = res.text().await.map_err(|e| TokenError::Unavailable(e.to_string()))?;
     if !status.is_success() {
-        return Err(format!("Přihlášení se nezdařilo ({}): {}", status.as_u16(), body.chars().take(200).collect::<String>()));
+        return Err(classify_token_error(status.as_u16(), &body));
     }
-    serde_json::from_str(&body).map_err(|e| e.to_string())
+    serde_json::from_str(&body).map_err(|e| TokenError::Unavailable(e.to_string()))
+}
+
+/// Chyba výměny tokenu: server přihlášení odmítl (trvalé), nebo nebyl dostupný (přechodné).
+#[derive(Debug)]
+enum TokenError {
+    Rejected(String),
+    Unavailable(String),
+}
+
+impl std::fmt::Display for TokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenError::Rejected(m) | TokenError::Unavailable(m) => f.write_str(m),
+        }
+    }
+}
+
+/// Podle RFC 6749 §5.2: 400/401 s `invalid_grant`, `invalid_client` nebo `unauthorized_client` znamená,
+/// že refresh token (nebo registrace aplikace) už neplatí. Cokoli jiného (5xx, 429, síť) je přechodné.
+fn classify_token_error(status: u16, body: &str) -> TokenError {
+    let code = serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(str::to_string));
+    let msg = format!("Přihlášení se nezdařilo ({}): {}", status, body.chars().take(200).collect::<String>());
+    let rejected = matches!(status, 400 | 401)
+        && matches!(code.as_deref(), Some("invalid_grant" | "invalid_client" | "unauthorized_client"));
+    if rejected {
+        TokenError::Rejected(msg)
+    } else {
+        TokenError::Unavailable(msg)
+    }
 }
 
 fn to_stored(t: TokenResponse, client_id: &str, token_endpoint: &str, prev_refresh: Option<String>) -> StoredTokens {
@@ -110,13 +165,68 @@ fn to_stored(t: TokenResponse, client_id: &str, token_endpoint: &str, prev_refre
     }
 }
 
-/// Platný přístupový token, případně obnovený. `None` = nepřihlášen (nebo obnova selhala, pak se odhlásí).
+/// Stav přihlášení pro jeden požadavek.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TokenState {
+    Valid(String),
+    /// Nepřihlášen, nebo server přihlášení odmítl (tokeny jsou smazané).
+    SignedOut,
+    /// Token vypršel a obnovit ho teď nejde (síť, výpadek serveru). Přihlášení zůstává.
+    Unavailable(String),
+}
+
+/// Jen jedna obnova najednou v celé aplikaci: refresh token rotuje, dvě souběžné obnovy
+/// by tu druhou odmítly a uživatel by se odhlásil.
+static REFRESH_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Zavolá se, když server přihlášení odmítne a aplikace uživatele odhlásí (UI to má ukázat).
+static ON_SIGNED_OUT: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>> = std::sync::OnceLock::new();
+
+pub fn set_on_signed_out(f: impl Fn() + Send + Sync + 'static) {
+    let _ = ON_SIGNED_OUT.set(Box::new(f));
+}
+
+/// Platný přístupový token, případně obnovený. `None` = nepřihlášen nebo teď nedostupný.
 pub async fn access_token(mcp_url: &str) -> Option<String> {
-    let tokens = load(mcp_url)?;
-    if tokens.expires_at > now() + REFRESH_MARGIN_SECS {
-        return Some(tokens.access_token);
+    match token(mcp_url).await {
+        TokenState::Valid(t) => Some(t),
+        _ => None,
     }
-    let refresh = tokens.refresh_token.clone()?;
+}
+
+/// Token pro požadavek: platný vrátí hned, krátce před vypršením ho obnoví.
+pub async fn token(mcp_url: &str) -> TokenState {
+    match load(mcp_url) {
+        None => return TokenState::SignedOut,
+        Some(t) if t.expires_at > now() + REFRESH_MARGIN_SECS => return TokenState::Valid(t.access_token),
+        Some(_) => {}
+    }
+    let _guard = REFRESH_LOCK.lock().await;
+    // Mezitím mohl obnovit jiný požadavek
+    match load(mcp_url) {
+        None => TokenState::SignedOut,
+        Some(t) if t.expires_at > now() + REFRESH_MARGIN_SECS => TokenState::Valid(t.access_token),
+        Some(t) => refresh_locked(mcp_url, t).await,
+    }
+}
+
+/// Server odmítl `rejected` (401), i když podle hodin ještě platil (odvolán, restart serveru, posun hodin).
+/// Když už mezitím přišel jiný token, vrátí ten, jinak obnoví.
+pub async fn token_after_rejection(mcp_url: &str, rejected: &str) -> TokenState {
+    let _guard = REFRESH_LOCK.lock().await;
+    match load(mcp_url) {
+        None => TokenState::SignedOut,
+        Some(t) if t.access_token != rejected => TokenState::Valid(t.access_token),
+        Some(t) => refresh_locked(mcp_url, t).await,
+    }
+}
+
+/// Volat jen pod `REFRESH_LOCK`.
+async fn refresh_locked(mcp_url: &str, tokens: StoredTokens) -> TokenState {
+    let Some(refresh) = tokens.refresh_token.clone() else {
+        sign_out(mcp_url, "chybí refresh token");
+        return TokenState::SignedOut;
+    };
     let res = token_request(
         &tokens.token_endpoint,
         &[
@@ -130,15 +240,28 @@ pub async fn access_token(mcp_url: &str) -> Option<String> {
     match res {
         Ok(t) => {
             let stored = to_stored(t, &tokens.client_id, &tokens.token_endpoint, Some(refresh));
-            let token = stored.access_token.clone();
-            let _ = save(mcp_url, &stored);
-            Some(token)
+            if let Err(e) = save(mcp_url, &stored) {
+                // Nový refresh token se neuložil a starý už neplatí: příští obnova selže a odhlásí
+                eprintln!("[Stavebak] nový token nejde uložit do klíčenky: {}", e);
+            }
+            TokenState::Valid(stored.access_token)
         }
-        Err(e) => {
-            eprintln!("[Stavebak] obnova tokenu selhala, odhlašuji: {}", e);
-            let _ = logout(mcp_url);
-            None
+        Err(TokenError::Rejected(e)) => {
+            sign_out(mcp_url, &e);
+            TokenState::SignedOut
         }
+        Err(TokenError::Unavailable(e)) => {
+            eprintln!("[Stavebak] obnova tokenu teď nejde, zkusím znovu: {}", e);
+            TokenState::Unavailable(e)
+        }
+    }
+}
+
+fn sign_out(mcp_url: &str, reason: &str) {
+    eprintln!("[Stavebak] server přihlášení odmítl, odhlašuji: {}", reason);
+    let _ = logout(mcp_url);
+    if let Some(f) = ON_SIGNED_OUT.get() {
+        f();
     }
 }
 
@@ -250,13 +373,26 @@ pub async fn login(mcp_url: &str, open_browser: impl FnOnce(&str) -> Result<(), 
             ("resource", mcp_url),
         ],
     )
-    .await?;
+    .await
+    .map_err(|e| e.to_string())?;
     save(mcp_url, &to_stored(tokens, &client.client_id, &meta.token_endpoint, None))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::origin;
+    use super::{classify_token_error, origin, TokenError};
+
+    #[test]
+    fn only_rejected_grant_signs_out() {
+        let rejected = |status, body| matches!(classify_token_error(status, body), TokenError::Rejected(_));
+        assert!(rejected(400, r#"{"error":"invalid_grant","error_description":"Neplatný refresh token."}"#));
+        assert!(rejected(401, r#"{"error":"invalid_client"}"#));
+        // Výpadek, limit nebo nečitelná odpověď přihlášení nemaže
+        assert!(!rejected(500, r#"{"error":"server_error"}"#));
+        assert!(!rejected(503, "Service Unavailable"));
+        assert!(!rejected(429, r#"{"error":"invalid_grant"}"#));
+        assert!(!rejected(400, "<html>proxy</html>"));
+    }
 
     #[test]
     fn origin_strips_path() {
