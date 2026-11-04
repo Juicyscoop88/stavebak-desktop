@@ -9,6 +9,7 @@ import { SettingsPanel } from './components/settings/SettingsPanel';
 import { NewProjectDialog } from './components/layout/NewProjectDialog';
 import { ImageLightbox } from './components/shared/ImageLightbox';
 import { ChangelogModal } from './components/shared/ChangelogModal';
+import { UpdateOverlay } from './components/shared/UpdateOverlay';
 import { Toast } from './components/shared/Toast';
 import { SetupWizard } from './components/setup/SetupWizard';
 import { useAccountRefresh } from './components/account/AccountBanner';
@@ -787,6 +788,7 @@ function App() {
       {settingsOpen && <SettingsPanel />}
       <NewProjectDialog />
       <ImageLightbox />
+      <UpdateOverlay />
       {showChangelog && currentAppVersion && (
         <ChangelogModal
           version={currentAppVersion}

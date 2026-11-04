@@ -216,7 +216,10 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # MIN_VERSION (proměnná repa) uvolní povinnou aktualizaci, prázdná = každá nová verze povinná.
       - name: latest.json pro updater
+        env:
+          MIN_VERSION: ${{ vars.MIN_VERSION }}
         run: |
           V="${GITHUB_REF_NAME#v}"
           node scripts/updater-manifest.mjs "$GITHUB_REF_NAME" dist/latest.json \

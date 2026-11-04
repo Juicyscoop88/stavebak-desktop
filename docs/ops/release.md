@@ -35,6 +35,20 @@ Release se dělá jen na výslovný pokyn.
 
 **Číslo verze musí být vyšší než 0.13.0.** Repo začíná čistou historií (2026-10-25), release v0.13.0 do něj byl přenesen i s artefakty, aby fungovaly aktualizace a odkazy ke stažení. Jeho tag ukazuje na výchozí commit, ne na zdroj buildu 0.13.0. Před bumpem ověřit `git ls-remote --tags origin vX.Y.Z`.
 
+## Povinná aktualizace
+
+Od verze 0.17.0 se aplikace aktualizuje sama (`src/hooks/useAutoUpdateCheck.ts`, politika v `src/lib/update-policy.ts`). Důvod: projektanti přehlíželi tlačítko s novou verzí a zůstávali na verzi s chybou spojení (desktop #54, #55).
+
+- Kontrola hned po startu a pak každých 10 minut. Nalezená verze se stáhne sama na pozadí.
+- **Povinná** je verze, když je nainstalovaná verze nižší než `min_version` v `latest.json`. Bez pole je povinná vždy.
+- Po startu, kdy ještě nic neběží, aplikace ukáže „Aktualizuji Stavebák“ a aktualizuje hned. Během práce počká, až Claude nic nedělá a nikde není rozepsaný text, příloha ani zpráva ve frontě, pak 10 s odpočet a restart. O rozepsanou práci restart nepřipraví.
+- Když stažení nebo instalace selže: Zkusit znovu, Stáhnout ručně (stránka posledního releasu), nebo Pokračovat ve staré verzi (do dalšího spuštění).
+- Ve vývojovém buildu se nenutí nikdy.
+
+`min_version` skládá `scripts/updater-manifest.mjs`. Výchozí je verze releasu, tedy **každá nová verze je povinná** (pilot, časté opravy). Volnější politika: proměnná repa `MIN_VERSION` (Settings → Variables), např. `0.17.0` znamená, že povinně se aktualizují jen verze pod 0.17.0 a novější dostanou jen tlačítko. Prázdná proměnná vrací výchozí chování.
+
+Důsledek: publikovaný release se do 10 minut nainstaluje všem, kdo mají aplikaci otevřenou. Před publikací draftu proto instalaci vyzkoušet (krok 3 výše). Verze starší než 0.17.0 mechanismus nemají a aktualizují se jednou ručně tlačítkem vpravo nahoře.
+
 ## Rollback
 
 Updater instaluje jen vyšší verzi, než je nainstalovaná. Z toho plyne:
