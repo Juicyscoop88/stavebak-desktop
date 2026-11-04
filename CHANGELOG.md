@@ -2,6 +2,14 @@
 
 Důležité změny Stavebák Desktop.
 
+## [0.17.0] - 2026-11-04
+
+### Přidáno
+- Aplikace se aktualizuje sama. Novou verzi stáhne na pozadí a po spuštění ji rovnou nainstaluje. Během práce počká, až asistent nic nedělá a nikde není rozepsaná zpráva, pak se po krátkém odpočtu restartuje. Projekty i konverzace zůstanou. Když aktualizace selže, jde ji zkusit znovu, stáhnout ručně, nebo zatím pokračovat ve staré verzi.
+
+### Opraveno
+- V užším okně (např. na půl monitoru) s otevřeným náhledem souboru nebo Postupem projektu zůstane chat čitelný. Panely se zúží a po roztažení okna se vrátí na původní šířku.
+
 ## [0.16.2] - 2026-11-02
 
 ### Opraveno
