@@ -4,6 +4,8 @@
 //   node scripts/updater-manifest.mjs v0.15.0 dist/latest.json \
 //     darwin-aarch64=dist/Stavebak_universal.app.tar.gz darwin-x86_64=dist/Stavebak_universal.app.tar.gz \
 //     windows-x86_64=dist/Stavebak_0.15.0_x64-setup.exe
+// min_version: verze pod ní se aktualizují povinně (src/lib/update-policy.ts). Výchozí je verze
+// releasu, tedy každá nová verze je povinná. Volnější politiku nastaví proměnná MIN_VERSION.
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
 
@@ -25,6 +27,11 @@ for (const pair of pairs) {
 const missing = REQUIRED.filter((p) => !platforms[p]);
 if (missing.length) throw new Error(`chybí platformy: ${missing.join(", ")}`);
 
-const json = { version: tag.replace(/^v/, ""), notes: process.env.NOTES || "", pub_date: new Date().toISOString(), platforms };
+const version = tag.replace(/^v/, "");
+const SEMVER = /^\d+\.\d+\.\d+$/;
+const minVersion = (process.env.MIN_VERSION || "").trim().replace(/^v/, "") || version;
+if (!SEMVER.test(minVersion)) throw new Error(`neplatné MIN_VERSION: ${minVersion}`);
+
+const json = { version, min_version: minVersion, notes: process.env.NOTES || "", pub_date: new Date().toISOString(), platforms };
 writeFileSync(out, JSON.stringify(json, null, 2));
-console.log("platformy:", Object.keys(platforms).join(", "));
+console.log("platformy:", Object.keys(platforms).join(", "), "| min_version:", minVersion);
