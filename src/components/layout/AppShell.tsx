@@ -2,6 +2,7 @@ import { useCallback, useRef, useEffect, useState } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useFileStore } from '../../stores/fileStore';
 import { FilePreview } from '../files/FilePreview';
+import { fitPanels } from '../../lib/panel-fit';
 
 interface AppShellProps {
   sidebar: React.ReactNode;
@@ -54,13 +55,35 @@ export function AppShell({ sidebar, main, secondary, bottomBar, forceCollapseSid
     prevPreviewMode.current = isFilePreviewMode;
   }, [isFilePreviewMode]);
 
-  // Refs to avoid re-registering global listeners when these values change
+  /* Šířka okna: panely se jí přizpůsobí, aby chat zůstal čitelný (desktop #53, lib/panel-fit). */
+  const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const showSidebar = sidebarOpen;
+  const showSecondary = !!secondary && secondaryPanelOpen && !isFilePreviewMode;
+  const fit = fitPanels({
+    windowWidth,
+    sidebar: showSidebar ? sidebarWidth : 0,
+    sidebarMin: MIN_SIDEBAR_WIDTH,
+    right: isFilePreviewMode ? previewWidth : showSecondary ? secondaryPanelWidth : 0,
+    rightMin: isFilePreviewMode ? MIN_PREVIEW_WIDTH : MIN_PANEL_WIDTH,
+  });
+  const effectiveSidebarWidth = fit.sidebar;
+  const effectivePreviewWidth = isFilePreviewMode ? fit.right : previewWidth;
+  const effectiveSecondaryWidth = showSecondary ? fit.right : secondaryPanelWidth;
+
+  // Refs to avoid re-registering global listeners when these values change.
+  // Tažení začíná od zobrazené šířky, ne od uložené, jinak by panel při úzkém okně poskočil.
   const isFilePreviewModeRef = useRef(isFilePreviewMode);
   isFilePreviewModeRef.current = isFilePreviewMode;
-  const secondaryPanelWidthRef = useRef(secondaryPanelWidth);
-  secondaryPanelWidthRef.current = secondaryPanelWidth;
-  const previewWidthRef = useRef(previewWidth);
-  previewWidthRef.current = previewWidth;
+  const secondaryPanelWidthRef = useRef(effectiveSecondaryWidth);
+  secondaryPanelWidthRef.current = effectiveSecondaryWidth;
+  const previewWidthRef = useRef(effectivePreviewWidth);
+  previewWidthRef.current = effectivePreviewWidth;
 
   const handleRightMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -131,8 +154,8 @@ export function AppShell({ sidebar, main, secondary, bottomBar, forceCollapseSid
   const sidebarStartX = useRef(0);
   const sidebarStartW = useRef(0);
 
-  const sidebarWidthRef = useRef(sidebarWidth);
-  sidebarWidthRef.current = sidebarWidth;
+  const sidebarWidthRef = useRef(effectiveSidebarWidth);
+  sidebarWidthRef.current = effectiveSidebarWidth;
 
   const handleSidebarMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -180,8 +203,7 @@ export function AppShell({ sidebar, main, secondary, bottomBar, forceCollapseSid
     };
   }, []);
 
-  const showSidebar = sidebarOpen;
-  const showSecondary = secondaryPanelOpen && !isFilePreviewMode;
+  const sidebarVisible = showSidebar && !fit.sidebarHidden;
 
   return (
     <div className="flex flex-col h-full w-full overflow-hidden gradient-bg">
@@ -200,17 +222,17 @@ export function AppShell({ sidebar, main, secondary, bottomBar, forceCollapseSid
             {/* Sidebar — animates to w-0 when hidden or preview mode */}
             <div
               className="flex-shrink-0 overflow-hidden"
-              style={{ width: showSidebar ? `${sidebarWidth}px` : '0px' }}
+              style={{ width: sidebarVisible ? `${effectiveSidebarWidth}px` : '0px' }}
             >
               <div
                 className="h-full overflow-hidden bg-bg-chat"
-                style={{ width: `${sidebarWidth}px` }}
+                style={{ width: `${sidebarVisible ? effectiveSidebarWidth : sidebarWidth}px` }}
               >
                 {sidebar}
               </div>
             </div>
             {/* Sidebar resize handle */}
-            {showSidebar && (
+            {sidebarVisible && (
               <div
                 onMouseDown={handleSidebarMouseDown}
                 className="w-px h-full flex-shrink-0 relative cursor-col-resize z-20
@@ -239,11 +261,11 @@ export function AppShell({ sidebar, main, secondary, bottomBar, forceCollapseSid
             {secondary && showSecondary && (
               <div
                 className="flex-shrink-0 overflow-hidden"
-                style={{ width: `${secondaryPanelWidth}px` }}
+                style={{ width: `${effectiveSecondaryWidth}px` }}
               >
                 <div
                   className="h-full overflow-y-auto overflow-x-hidden bg-bg-chat"
-                  style={{ width: `${secondaryPanelWidth}px` }}
+                  style={{ width: `${effectiveSecondaryWidth}px` }}
                 >
                   {secondary}
                 </div>
@@ -272,10 +294,10 @@ export function AppShell({ sidebar, main, secondary, bottomBar, forceCollapseSid
         {/* File Preview Panel — full height like sidebar */}
         <div
           className="flex-shrink-0 overflow-hidden"
-          style={{ width: isFilePreviewMode ? `${previewWidth}px` : '0px' }}
+          style={{ width: isFilePreviewMode ? `${effectivePreviewWidth}px` : '0px' }}
         >
           <div className="h-full overflow-hidden flex flex-col bg-bg-chat"
-            style={{ width: `${previewWidth}px` }}>
+            style={{ width: `${effectivePreviewWidth}px` }}>
             <FilePreview />
           </div>
         </div>
