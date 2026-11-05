@@ -22,15 +22,22 @@ export default function DxfPreview({ url }: { url: string }) {
     if (import.meta.env.DEV) (window as any).__dxfViewer = viewer;
     let cancelled = false;
     setState('loading');
+    // CSP aplikace nepovoluje fetch data: URL (connect-src), viewer by v produkci skončil „Load failed“.
+    // Data proto předáme jako blob: URL vytvořenou tady, bez fetch.
+    const objectUrl = url.startsWith('data:') ? dataUrlToObjectUrl(url) : null;
     viewer
-      .Load({ url, fonts: [fontLatin, fontLatinExt], workerFactory: null, progressCbk: null })
+      .Load({ url: objectUrl ?? url, fonts: [fontLatin, fontLatinExt], workerFactory: null, progressCbk: null })
       .then(() => {
         if (cancelled) return;
         fitMainCluster(viewer);
         setState('ready');
       })
       .catch((e: unknown) => { if (!cancelled) { setState('error'); setError(String(e)); } });
-    return () => { cancelled = true; viewer.Destroy(); };
+    return () => {
+      cancelled = true;
+      viewer.Destroy();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [url]);
 
   return (
@@ -44,6 +51,23 @@ export default function DxfPreview({ url }: { url: string }) {
       )}
     </div>
   );
+}
+
+/** data:[mime][;base64],… → blob: URL, bez fetch (CSP). */
+export function dataUrlToObjectUrl(dataUrl: string): string {
+  const comma = dataUrl.indexOf(',');
+  const meta = dataUrl.slice(5, comma);
+  const payload = dataUrl.slice(comma + 1);
+  const mime = meta.split(';')[0] || 'application/octet-stream';
+  let bytes: Uint8Array;
+  if (meta.endsWith(';base64')) {
+    const bin = atob(payload);
+    bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  } else {
+    bytes = new TextEncoder().encode(decodeURIComponent(payload));
+  }
+  return URL.createObjectURL(new Blob([bytes], { type: mime }));
 }
 
 /**
