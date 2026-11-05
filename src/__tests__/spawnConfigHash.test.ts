@@ -7,9 +7,15 @@
  * - hash MUST NOT react to sessionMode — mode changes go through the
  *   runtime `set_permission_mode` control protocol, not kill + respawn.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { spawnConfigHash } from '../lib/models';
 import { useSettingsStore } from '../stores/settingsStore';
+
+// Změna sessionMode spustí v settingsStore dynamický import tauri-bridge a chatStore. Bez načtení
+// předem doběhne na pomalém CI až po ukončení prostředí (EnvironmentTeardownError, falešně červené CI).
+beforeAll(async () => {
+  await Promise.all([import('../lib/tauri-bridge'), import('../stores/chatStore')]);
+});
 
 beforeEach(() => {
   // Reset settings relevant to the hash.
