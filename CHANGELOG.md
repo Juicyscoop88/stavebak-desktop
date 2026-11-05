@@ -2,6 +2,12 @@
 
 Důležité změny Stavebák Desktop.
 
+## [0.17.1] - 2026-11-05
+
+### Opraveno
+- Náhled výkresů DWG a DXF v aplikaci zase funguje (končil hláškou „Výkres nejde zobrazit. TypeError: Load failed“).
+- Aplikace se v Docku a v menu jmenuje Stavebák.
+
 ## [0.17.0] - 2026-11-04
 
 ### Přidáno
