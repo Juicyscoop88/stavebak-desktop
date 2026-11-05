@@ -41,7 +41,8 @@
     ],
     "createUpdaterArtifacts": true,
     "resources": {
-      "resources/en.lproj": "en.lproj"
+      "resources/en.lproj": "en.lproj",
+      "resources/cs.lproj": "cs.lproj"
     },
     "macOS": {
       "entitlements": "entitlements.plist",

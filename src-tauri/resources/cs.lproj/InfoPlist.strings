@@ -1,0 +1,3 @@
+/* Název aplikace v Docku a v menu (macOS) */
+"CFBundleName" = "Stavebák";
+"CFBundleDisplayName" = "Stavebák";
