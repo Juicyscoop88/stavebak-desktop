@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { UploadSimple, ChatCircleText } from '@phosphor-icons/react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import {
-  fetchParameterDictionary, saveParameters, importDocuments, runAction, actionTitle,
+  fetchParameterDictionary, saveParameters, importDocuments, runAction, prefillChat, actionTitle,
   type NextAction, type ParameterDef, type SaveResult,
 } from './store'
 
@@ -63,7 +63,7 @@ export function ActionForm({ action, onDone }: { action: NextAction; onDone: () 
           }}>
             <UploadSimple size={13} /> Nahrát zadání od investora
           </SecondaryButton>
-          <SecondaryButton onClick={() => runAction(`Připrav dotazník pro investora: ${actionTitle(action)}`)}>
+          <SecondaryButton onClick={() => prefillChat(`Připrav dotazník pro investora: ${actionTitle(action)}`)}>
             <ChatCircleText size={13} /> Připravit dotazník pro investora
           </SecondaryButton>
         </div>

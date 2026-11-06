@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CheckCircle, Circle, CircleDashed, Warning, ArrowRight, CaretUp } from '@phosphor-icons/react'
-import { useStavebakStore, phaseLabel, runAction, nextStepAction, MIGRATE_ACTION, type GuideStep, type NextAction, actionTitle } from './store'
+import { useStavebakStore, phaseLabel, prefillChat, nextStepAction, MIGRATE_ACTION, type GuideStep, type NextAction, actionTitle } from './store'
 import { ActionForm, FORM_KINDS } from './ActionForm'
 
 const czk = (n: number) => `${n.toLocaleString('cs-CZ')} Kč`
@@ -51,7 +51,7 @@ export default function ProjectOverview() {
               Projekt je uložený ve starším formátu. Stavebák z něj nepozná všechno, co už je hotové, takže skutečný stav může být dál.
             </div>
             <button
-              onClick={() => runAction(MIGRATE_ACTION)}
+              onClick={() => prefillChat(MIGRATE_ACTION)}
               title="Pošle Claudovi pokyn v chatu"
               className="flex-shrink-0 px-2 py-1 rounded-md text-xs text-text-primary border border-border hover:bg-bg-secondary cursor-pointer"
             >
@@ -128,7 +128,7 @@ export default function ProjectOverview() {
 
 /**
  * One guide action. Values a person knows open a form right here (set_parameters, same as Claude);
- * anything else is handed to Claude in the chat.
+ * anything else goes into the chat input as a prepared instruction; the user sends it.
  */
 function NextActionCard({ action, primary = false }: { action: NextAction; primary?: boolean }) {
   const [open, setOpen] = useState(false)
@@ -137,7 +137,7 @@ function NextActionCard({ action, primary = false }: { action: NextAction; prima
   const button = hasForm
     ? (open ? <>Skrýt <CaretUp size={11} /></> : <>Vyplnit{missing ? ` (${missing})` : ''} <ArrowRight size={11} /></>)
     : <>Pokračovat <ArrowRight size={11} /></>
-  const onClick = () => (hasForm ? setOpen(!open) : runAction(nextStepAction(actionTitle(action))))
+  const onClick = () => (hasForm ? setOpen(!open) : prefillChat(nextStepAction(actionTitle(action))))
 
   return (
     <div className={primary ? 'rounded-xl border border-border bg-bg-card p-4' : 'py-3'}>
@@ -149,7 +149,7 @@ function NextActionCard({ action, primary = false }: { action: NextAction; prima
           {action.leadTime && <div className="text-xs text-text-tertiary mt-1">Dodání: {action.leadTime}</div>}
         </div>
         <button onClick={onClick}
-          title={hasForm ? 'Vyplnit chybějící údaje' : 'Pošle Claudovi pokyn v chatu'}
+          title={hasForm ? 'Vyplnit chybějící údaje' : 'Vloží pokyn do pole zprávy, odešlete ho sami'}
           className={`self-start flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm flex-shrink-0 cursor-pointer ${primary && !open
             ? 'bg-text-primary text-text-inverse'
             : 'text-text-primary border border-border hover:bg-bg-secondary'}`}>

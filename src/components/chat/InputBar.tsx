@@ -68,6 +68,20 @@ export function InputBar() {
     }
   }, [selectedSessionId, setInputDraftStore]);
   const textareaRef = useRef<TiptapEditorHandle>(null);
+  /** Increments on each prefill from a panel; restarts the hint (key) and the glow (class on the shell). */
+  const [prefillPulse, setPrefillPulse] = useState(0);
+  const inputShellRef = useRef<HTMLDivElement>(null);
+  // Glow restarted on the existing element: a key would remount the editor and drop the text
+  useEffect(() => {
+    const el = inputShellRef.current;
+    if (!prefillPulse || !el) return;
+    el.classList.remove('animate-prefill-glow');
+    void el.offsetWidth;
+    el.classList.add('animate-prefill-glow');
+    const done = () => el.classList.remove('animate-prefill-glow');
+    el.addEventListener('animationend', done, { once: true });
+    return () => el.removeEventListener('animationend', done);
+  }, [prefillPulse]);
   const latestFilesRef = useRef<FileAttachment[]>([]);
   const previousSessionIdRef = useRef<string | null>(selectedSessionId);
   /** Sync both the Zustand store and the tiptap editor.
@@ -247,12 +261,15 @@ export function InputBar() {
       textareaRef.current.setText(text);
       handleSubmitRef.current();
     };
-    // A suggestion fills the input for the user to finish (e.g. add the region), never sends
+    // A suggestion fills the input for the user to finish (e.g. add the region), never sends.
+    // The input glows and shows a hint, the chat scrolls down so the user sees where the text went.
     const onPrefill = (e: Event) => {
       const text = (e as CustomEvent<string>).detail;
       if (!text || !textareaRef.current) return;
       textareaRef.current.setText(text);
       textareaRef.current.focus();
+      setPrefillPulse((n) => n + 1);
+      window.dispatchEvent(new CustomEvent('stavebak:scroll-bottom'));
     };
     window.addEventListener('stavebak:send', onSend);
     window.addEventListener('stavebak:prefill', onPrefill);
@@ -1323,6 +1340,11 @@ export function InputBar() {
 
         {/* Main input area */}
         <div className="relative">
+          {prefillPulse > 0 && (
+            <div key={`hint-${prefillPulse}`} className="animate-prefill-hint pointer-events-none absolute -top-7 right-4 text-xs text-accent">
+              {t('input.prefillHint')}
+            </div>
+          )}
           <SlashCommandPopover
             query={slashQuery}
             visible={slashVisible}
@@ -1331,6 +1353,7 @@ export function InputBar() {
             onClose={() => setSlashVisible(false)}
           />
           <div
+            ref={inputShellRef}
             className={`flex items-center gap-2 bg-bg-secondary/50 border px-5 py-3
               focus-within:border-border-focus/40 focus-within:bg-bg-input focus-within:shadow-md
               transition-all duration-200 group/input

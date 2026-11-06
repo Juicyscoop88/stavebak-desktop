@@ -407,6 +407,18 @@ export function ChatPanel() {
     }
   }, []);
 
+  // Pokyn vložený z panelu (Postup projektu): chat sjede dolů k poli zprávy, kam text přišel
+  useEffect(() => {
+    const onScrollBottom = () => {
+      const el = scrollRef.current;
+      if (!el) return;
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      userScrollingUpRef.current = false;
+    };
+    window.addEventListener('stavebak:scroll-bottom', onScrollBottom);
+    return () => window.removeEventListener('stavebak:scroll-bottom', onScrollBottom);
+  }, []);
+
   // Detect intentional upward scroll via wheel event
   useEffect(() => {
     const el = scrollRef.current;

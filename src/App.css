@@ -536,6 +536,23 @@ input, textarea, [contenteditable="true"],
   /* instant */
 }
 
+/* Pokyn z panelu vložený do pole zprávy: jemné zazáření, ať je vidět, kam text přišel a že čeká na odeslání */
+@keyframes prefill-glow {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  35% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 35%, transparent), 0 0 20px color-mix(in srgb, var(--color-accent) 25%, transparent); }
+}
+.animate-prefill-glow {
+  animation: prefill-glow 0.9s ease-in-out 2;
+}
+@keyframes prefill-hint {
+  0% { opacity: 0; transform: translateY(4px); }
+  12%, 85% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+.animate-prefill-hint {
+  animation: prefill-hint 3.2s ease-out forwards;
+}
+
 /* Title update animation (AI-generated title) */
 @keyframes title-update {
   0% { opacity: 0.3; transform: translateY(4px); }

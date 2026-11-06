@@ -3,7 +3,7 @@ import { ArrowRight, Warning } from '@phosphor-icons/react'
 import { onFileChange } from '../../lib/tauri-bridge'
 import { useFileStore } from '../../stores/fileStore'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { useStavebakStore, PROJECT_FILE, phaseLabel, runAction, MIGRATE_ACTION, actionTitle } from './store'
+import { useStavebakStore, PROJECT_FILE, phaseLabel, prefillChat, MIGRATE_ACTION, actionTitle } from './store'
 
 /** Pinned summary above the file tree: phase, progress, next step, expiring permits. */
 export default function ProjectOverviewCard() {
@@ -118,7 +118,7 @@ function Card({ dir }: { dir: string }) {
       {guide.format?.hint && (
         <div
           role="button"
-          onClick={(e) => { e.stopPropagation(); runAction(MIGRATE_ACTION) }}
+          onClick={(e) => { e.stopPropagation(); prefillChat(MIGRATE_ACTION) }}
           className="text-xs text-text-muted mt-2 underline decoration-border underline-offset-2 hover:text-text-primary"
         >
           Starší formát, stav nemusí sedět. Převést
