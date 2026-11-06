@@ -2,6 +2,11 @@
 
 Důležité změny Stavebák Desktop.
 
+## [0.17.2] - 2026-11-06
+
+### Změněno
+- Tlačítka v Postupu projektu (Pokračovat, Převést soubor, Připravit dotazník) pokyn neodešlou hned. Vloží ho do pole zprávy, kde ho můžete upravit a odeslat Enterem. Pole krátce zazáří a chat sjede dolů.
+
 ## [0.17.1] - 2026-11-05
 
 ### Opraveno
