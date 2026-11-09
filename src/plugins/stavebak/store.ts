@@ -20,6 +20,8 @@ export interface GuideStep {
   status: StepStatus
   duration: string
   optional?: boolean
+  /** how much of what closes the step is already known (older server: absent) */
+  completion?: { known: number; total: number }
   missingFacts: Record<string, string>
 }
 
@@ -59,7 +61,8 @@ export interface GuideResult {
   format?: { current: boolean; unmapped: string[]; unknownChecklist: string[]; hint?: string }
   buildingType: { id: string; label: string }
   category: { label: string; authorityDeadlineDays?: number; feeCzk?: number }
-  progress: { done: number; total: number }
+  /** percent and started come from newer servers: rendered with a fallback */
+  progress: { done: number; total: number; percent?: number; started?: number }
   currentPhase: string
   phases?: { id: string; label: string }[]
   suggestions?: string[]
@@ -198,6 +201,8 @@ function serverUrl(): string | null {
   return useMcpStore.getState().servers.find((s) => s.name === SERVER)?.config.url ?? null
 }
 
+let loadSeq = 0
+
 export const useStavebakStore = create<StavebakState>((set, get) => ({
   dir: null,
   status: 'idle',
@@ -207,25 +212,28 @@ export const useStavebakStore = create<StavebakState>((set, get) => ({
   load: async (dir) => {
     // Keep the previous result visible while refreshing the same project
     if (get().dir !== dir) set({ dir, status: 'loading', guide: null, error: null })
+    // Only the newest load may write: a slower older answer must not bring back a stale state
+    const seq = ++loadSeq
+    const current = () => seq === loadSeq && get().dir === dir
 
     let project: Record<string, unknown>
     try {
       project = JSON.parse(await bridge.readFileContent(`${dir}/${PROJECT_FILE}`))
     } catch {
-      if (get().dir === dir) set({ status: 'missing', guide: null })
+      if (current()) set({ status: 'missing', guide: null })
       return
     }
 
     const url = serverUrl()
     if (!url) {
-      if (get().dir === dir) set({ status: 'error', error: 'Stavebák MCP není nastavený.' })
+      if (current()) set({ status: 'error', error: 'Stavebák MCP není nastavený.' })
       return
     }
     try {
       const guide = await bridge.callMcpTool<GuideResult>(url, 'guide', { project })
-      if (get().dir === dir) set({ status: 'ready', guide, error: null })
+      if (current()) set({ status: 'ready', guide, error: null })
     } catch (e) {
-      if (get().dir === dir) set({ status: 'error', error: String(e) })
+      if (current()) set({ status: 'error', error: String(e) })
     }
   },
 }))

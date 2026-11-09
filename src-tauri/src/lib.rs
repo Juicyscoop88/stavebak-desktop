@@ -1114,43 +1114,38 @@ impl mcp_bridge::TokenSource for StavebakTokens {
 /// Událost pro UI: přihlášení ke Stavebáku chybí nebo ho server odmítl (UI nabídne přihlášení).
 const STAVEBAK_AUTH_REQUIRED_EVENT: &str = "stavebak-auth-required";
 
-static MCP_BRIDGE: tokio::sync::OnceCell<Option<mcp_bridge::Bridge>> = tokio::sync::OnceCell::const_new();
+static MCP_BRIDGE: tokio::sync::Mutex<Option<mcp_bridge::Bridge>> = tokio::sync::Mutex::const_new(None);
 
 /// Jak se nová session modelu připojí ke Stavebáku: přes most (spustí se jednou za běh aplikace),
 /// a jen když most nejde spustit, přímo s aktuálním tokenem.
 async fn stavebak_session_access(app: &AppHandle) -> mcp_bridge::McpAccess {
     let target = stavebak_mcp_target();
-    let bridge = MCP_BRIDGE
-        .get_or_init(|| {
-            let app = app.clone();
-            let upstream = target.url.clone();
-            async move {
-                let started = mcp_bridge::start(mcp_bridge::Config {
-                    tokens: std::sync::Arc::new(StavebakTokens { url: upstream.clone() }),
-                    upstream,
-                    // Bez celkového limitu: odpověď nástroje může proudit dlouho (převod výkresu)
-                    client: Box::new(|| {
-                        Box::pin(build_smart_http_client(
-                            std::time::Duration::from_secs(10),
-                            std::time::Duration::from_secs(60 * 60),
-                        ))
-                    }),
-                    on_auth_required: Box::new(move || {
-                        let _ = app.emit(STAVEBAK_AUTH_REQUIRED_EVENT, ());
-                    }),
-                })
-                .await;
-                match started {
-                    Ok(b) => Some(b),
-                    Err(e) => {
-                        eprintln!("[Stavebak] {}; session půjde přímo na server", e);
-                        None
-                    }
-                }
-            }
+    // Selhání se nedrží do restartu aplikace: další session zkusí most znovu. Záložní cesta nese token
+    // natvrdo v konfiguraci, ten po hodině vyprší a Claude Code u něj obnovu přihlášení vypne.
+    let mut bridge = MCP_BRIDGE.lock().await;
+    if bridge.is_none() {
+        let notify = app.clone();
+        let started = mcp_bridge::start(mcp_bridge::Config {
+            tokens: std::sync::Arc::new(StavebakTokens { url: target.url.clone() }),
+            upstream: target.url.clone(),
+            // Bez celkového limitu: odpověď nástroje může proudit dlouho (převod výkresu)
+            client: Box::new(|| {
+                Box::pin(build_smart_http_client(
+                    std::time::Duration::from_secs(10),
+                    std::time::Duration::from_secs(60 * 60),
+                ))
+            }),
+            on_auth_required: Box::new(move || {
+                let _ = notify.emit(STAVEBAK_AUTH_REQUIRED_EVENT, ());
+            }),
         })
         .await;
-    match bridge {
+        match started {
+            Ok(b) => *bridge = Some(b),
+            Err(e) => eprintln!("[Stavebak] {}; session půjde přímo na server, příští zkusí most znovu", e),
+        }
+    }
+    match bridge.as_ref() {
         Some(b) => mcp_bridge::McpAccess::Bridge { url: b.url.clone(), key: b.key.clone() },
         None => mcp_bridge::McpAccess::Direct {
             token: stavebak_auth::access_token(&target.url).await,
@@ -8207,6 +8202,34 @@ mod trash_tests {
 
     fn rt() -> tokio::runtime::Runtime {
         tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap()
+    }
+
+    /// #71: karta projektu pozná stavebak.json podle cesty z hlídače. Na Windows přijde se zpětnými
+    /// lomítky (viz isProjectFile v guide-progress.ts), test běží v CI i na windows-latest.
+    #[test]
+    fn watcher_reports_project_file_in_platform_format() {
+        let dir = populated_project();
+        let root = project_path(&dir);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+            if let Ok(event) = res {
+                let _ = tx.send(event.paths);
+            }
+        })
+        .unwrap();
+        watcher.watch(&root, RecursiveMode::Recursive).unwrap();
+        std::thread::sleep(Duration::from_millis(300));
+        std::fs::write(root.join("stavebak.json"), "{\"zmena\":true}").unwrap();
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        let mut seen = None;
+        while seen.is_none() && std::time::Instant::now() < deadline {
+            if let Ok(paths) = rx.recv_timeout(Duration::from_millis(500)) {
+                seen = paths.iter().map(|p| p.to_string_lossy().to_string()).find(|p| p.ends_with("stavebak.json"));
+            }
+        }
+        let path = seen.expect("hlídač nenahlásil změnu stavebak.json");
+        assert_eq!(path.contains('\\'), cfg!(windows), "formát cesty z hlídače: {path}");
     }
 
     #[test]
