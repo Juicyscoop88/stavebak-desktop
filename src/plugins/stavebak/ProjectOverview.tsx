@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CheckCircle, Circle, CircleDashed, Warning, ArrowRight, CaretUp } from '@phosphor-icons/react'
 import { useStavebakStore, phaseLabel, prefillChat, nextStepAction, MIGRATE_ACTION, type GuideStep, type NextAction, actionTitle } from './store'
 import { ActionForm, FORM_KINDS } from './ActionForm'
+import { overallPercent, progressText } from './guide-progress'
 
 const czk = (n: number) => `${n.toLocaleString('cs-CZ')} Kč`
 
@@ -23,7 +24,7 @@ export default function ProjectOverview() {
     )
   }
 
-  const { done, total } = guide.progress
+  const percent = overallPercent(guide)
   const phases = guide.phases?.map((p) => p.id) ?? [...new Set(guide.steps.map((s) => s.phase))]
   const facts = [
     guide.category.label,
@@ -39,9 +40,9 @@ export default function ProjectOverview() {
           <p className="text-sm text-text-muted mt-0.5">{guide.buildingType.label} · {facts.join(' · ')}</p>
           <div className="flex items-center gap-3 mt-3">
             <div className="flex-1 h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
-              <div className="h-full bg-text-primary" style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
+              <div className="h-full bg-text-primary" style={{ width: `${percent}%` }} />
             </div>
-            <span className="text-xs text-text-muted tabular-nums">{done} z {total} kroků</span>
+            <span className="text-xs text-text-muted tabular-nums">{progressText(guide)}</span>
           </div>
         </header>
 

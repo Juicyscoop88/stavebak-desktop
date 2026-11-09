@@ -4,6 +4,7 @@ import { onFileChange } from '../../lib/tauri-bridge'
 import { useFileStore } from '../../stores/fileStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useStavebakStore, PROJECT_FILE, phaseLabel, prefillChat, MIGRATE_ACTION, actionTitle } from './store'
+import { isProjectFile, stepFraction } from './guide-progress'
 
 /** Pinned summary above the file tree: phase, progress, next step, expiring permits. */
 export default function ProjectOverviewCard() {
@@ -20,10 +21,14 @@ function Card({ dir }: { dir: string }) {
 
   useEffect(() => {
     load(dir)
+    // Jeden zápis může vyvolat víc událostí (Windows hlásí i zkrácení a zápis zvlášť), načte se jednou
+    let timer: ReturnType<typeof setTimeout> | undefined
     const unlisten = onFileChange((event) => {
-      if (event.paths.some((p) => p.endsWith(`/${PROJECT_FILE}`))) load(dir)
+      if (!event.paths.some((p) => isProjectFile(p, dir))) return
+      clearTimeout(timer)
+      timer = setTimeout(() => load(dir), 250)
     })
-    return () => { unlisten.then((fn) => fn()) }
+    return () => { clearTimeout(timer); unlisten.then((fn) => fn()) }
   }, [dir, load])
 
   if (status === 'idle' || (status === 'loading' && !guide)) {
@@ -77,7 +82,7 @@ function Card({ dir }: { dir: string }) {
         {phases.map((p, i) => {
           const steps = stepsOf(p.id)
           const fill = i < phaseIndex ? 1 : i > phaseIndex ? 0
-            : steps.length ? steps.filter((s) => s.status === 'done').length / steps.length : 0
+            : steps.length ? steps.reduce((sum, s) => sum + stepFraction(s), 0) / steps.length : 0
           return (
             <div key={p.id} title={p.label}
               className={`flex-1 h-1 rounded-full overflow-hidden ${i === phaseIndex ? 'bg-accent/25' : 'bg-bg-tertiary'}`}>
