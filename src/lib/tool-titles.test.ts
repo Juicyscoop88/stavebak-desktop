@@ -15,3 +15,10 @@ describe('názvy nástrojů', () => {
     expect(isHiddenTool('Read')).toBe(false);
   });
 });
+
+describe('ovládání aplikací', () => {
+  it('nástroje lokálního serveru mají český název bez načtení ze serveru', () => {
+    expect(stavebakToolTitle('mcp__stavebak-computer__computer_click')).toBe('Kliknutí v aplikaci');
+    expect(stavebakToolTitle('mcp__stavebak-computer__neznamy')).toBe('Ovládání aplikace');
+  });
+});

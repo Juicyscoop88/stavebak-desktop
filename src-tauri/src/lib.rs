@@ -1,6 +1,9 @@
 #![allow(unexpected_cfgs)]
 
 mod codex_bridge;
+mod computer_use;
+mod computer_use_native;
+mod computer_use_server;
 mod mcp_bridge;
 mod commands;
 mod openai_auth;
@@ -1064,13 +1067,17 @@ fn get_stavebak_mcp() -> StavebakMcpTarget {
 /// (`mcp__stavebak__*`) are the same against local and production.
 ///
 /// Writes `~/.stavebak/mcp-session-<stdin_id>.json`. Returns `None` on I/O error.
-fn build_mcp_scratch_config(stdin_id: &str, access: &mcp_bridge::McpAccess) -> Option<std::path::PathBuf> {
+fn build_mcp_scratch_config(stdin_id: &str, access: &mcp_bridge::McpAccess, computer: Option<&mcp_bridge::Bridge>) -> Option<std::path::PathBuf> {
     let home = dirs::home_dir()?;
     let target = stavebak_mcp_target();
     let dir = home.join(".stavebak");
     std::fs::create_dir_all(&dir).ok()?;
     let path = dir.join(format!("mcp-session-{}.json", safe_stdin_for_path(stdin_id)));
-    std::fs::write(&path, mcp_session_config(access).to_string()).ok()?;
+    let mut config = mcp_session_config(access);
+    if let Some(c) = computer {
+        config["mcpServers"][COMPUTER_MCP_SERVER] = serde_json::json!({ "type": "http", "url": c.url, "headers": { mcp_bridge::KEY_HEADER: c.key } });
+    }
+    std::fs::write(&path, config.to_string()).ok()?;
     // Soubor nese klíč mostu (v záloze i token): číst ho smí jen uživatel
     #[cfg(unix)]
     {
@@ -1154,6 +1161,93 @@ async fn stavebak_session_access(app: &AppHandle) -> mcp_bridge::McpAccess {
     }
 }
 
+static COMPUTER_SERVER: tokio::sync::Mutex<Option<mcp_bridge::Bridge>> = tokio::sync::Mutex::const_new(None);
+/// Zastaví ovládání aplikací odkudkoli, i když je Stavebák na pozadí.
+const COMPUTER_STOP_SHORTCUT: &str = "ctrl+alt+Escape";
+static COMPUTER_ENGINE: std::sync::OnceLock<std::sync::Arc<computer_use::ComputerUse>> = std::sync::OnceLock::new();
+static COMPUTER_STOP_READY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Zkratka se musí registrovat na hlavním vlákně (Windows ji jinak odmítne), proto při startu aplikace.
+fn register_computer_stop_shortcut(app: &AppHandle) {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+    let plugin = tauri_plugin_global_shortcut::Builder::new()
+        .with_handler(|_app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                if let Some(engine) = COMPUTER_ENGINE.get() {
+                    engine.stop();
+                }
+            }
+        })
+        .build();
+    match app.plugin(plugin).map_err(|e| e.to_string()).and_then(|_| app.global_shortcut().register(COMPUTER_STOP_SHORTCUT).map_err(|e| e.to_string())) {
+        Ok(()) => COMPUTER_STOP_READY.store(true, std::sync::atomic::Ordering::SeqCst),
+        Err(e) => eprintln!("[Stavebak] Zkratku pro zastavení ovládání nejde zaregistrovat, ovládání aplikací bude vypnuté: {e}"),
+    }
+}
+
+/// Souhlas uživatele nativním dialogem aplikace, model ho odkliknout nemůže (Stavebák je zakázaná aplikace).
+struct DialogConsent {
+    app: AppHandle,
+}
+
+impl computer_use::Consent for DialogConsent {
+    fn ask(&self, apps: &[String], read_only: &[String], reason: &str) -> bool {
+        use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+        let list = apps
+            .iter()
+            .map(|a| if read_only.contains(a) { format!("• {a} (jen čtení)") } else { format!("• {a}") })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let text = format!(
+            "Asistent chce ovládat tyto aplikace ve vašem počítači:\n\n{list}\n\nDůvod: {reason}\n\n\
+Uvidí jejich okna a bude do nich klikat a psát, může přitom udělat chybu. Povolení platí 30 minut. \
+Zastavíte ho pohybem myši nebo zkratkou Ctrl+Alt+Esc. Pracujte s kopií důležitých souborů."
+        );
+        self.app
+            .dialog()
+            .message(text)
+            .title("Povolit ovládání aplikací?")
+            .kind(MessageDialogKind::Warning)
+            .buttons(MessageDialogButtons::OkCancelCustom("Povolit".to_string(), "Nepovolit".to_string()))
+            .blocking_show()
+    }
+}
+
+/// Záznam akcí pro uživatele, jen lokálně. Psaný text se nezapisuje, jen jeho délka.
+fn computer_use_log(action: &str, detail: &serde_json::Value) {
+    use std::io::Write;
+    let Some(home) = dirs::home_dir() else { return };
+    let dir = home.join(".stavebak");
+    let _ = std::fs::create_dir_all(&dir);
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("computer-use.log")) {
+        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let _ = writeln!(f, "{}", serde_json::json!({ "ts": ts, "action": action, "detail": detail }));
+    }
+}
+
+/// Lokální server ovládání aplikací: spustí se s první session. Bez souhlasu uživatele nic neudělá.
+async fn computer_use_access(app: &AppHandle) -> Option<mcp_bridge::Bridge> {
+    // Bez zkratky ovládání nespouštět: uživatel by neměl jak ho zastavit z jiné aplikace
+    if !COMPUTER_STOP_READY.load(std::sync::atomic::Ordering::SeqCst) {
+        return None;
+    }
+    let mut server = COMPUTER_SERVER.lock().await;
+    if server.is_none() {
+        let engine = std::sync::Arc::new(computer_use::ComputerUse::new(
+            std::sync::Arc::new(computer_use_native::NativeDesktop),
+            std::sync::Arc::new(DialogConsent { app: app.clone() }),
+            computer_use::GRANT_TTL,
+            Box::new(computer_use_log),
+        ));
+        let _ = COMPUTER_ENGINE.set(engine.clone());
+        match computer_use_server::start(engine).await {
+            Ok(b) => *server = Some(b),
+            Err(e) => eprintln!("[Stavebak] {e}"),
+        }
+    }
+    server.clone()
+}
+
 /// Potomci (Claude Code, Codex) dostávají proxy uživatele z prostředí. Most na loopbacku přes ni jít
 /// nesmí, proto se 127.0.0.1 a localhost přidají do NO_PROXY, jakmile je nějaká proxy nastavená.
 fn with_loopback_no_proxy(env: &mut Vec<(String, String)>) {
@@ -1206,6 +1300,7 @@ fn stavebak_auth_status() -> bool {
 }
 
 const STAVEBAK_MCP_SERVER: &str = "stavebak";
+const COMPUTER_MCP_SERVER: &str = "stavebak-computer";
 
 #[cfg(test)]
 mod stavebak_mcp_target_tests {
@@ -1446,7 +1541,8 @@ async fn start_claude_session(
     perf!("args_built");
     // Session jde přes most, který ke každému požadavku přidá platný token (ADR 0003)
     let mcp_access = stavebak_session_access(&app).await;
-    let mcp_scratch_path = build_mcp_scratch_config(&session_id, &mcp_access);
+    let computer_access = computer_use_access(&app).await;
+    let mcp_scratch_path = build_mcp_scratch_config(&session_id, &mcp_access, computer_access.as_ref());
     perf!("mcp_scratch");
     if let Some(ref scratch) = mcp_scratch_path {
         args.push("--mcp-config".to_string());
@@ -1487,6 +1583,14 @@ async fn start_claude_session(
         for tool in tools {
             args.push("--allowedTools".to_string());
             args.push(tool.clone());
+        }
+    }
+
+    // Ovládání aplikací má vlastní souhlas po aplikacích, dotaz CLI u každého kliknutí by ho jen rušil
+    if computer_access.is_some() {
+        for tool in computer_use::tool_definitions().as_array().into_iter().flatten().filter_map(|t| t["name"].as_str()) {
+            args.push("--allowedTools".to_string());
+            args.push(format!("mcp__{}__{}", COMPUTER_MCP_SERVER, tool));
         }
     }
 
@@ -7865,6 +7969,9 @@ pub fn run() {
             #[cfg(desktop)]
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
+
+            #[cfg(desktop)]
+            register_computer_stop_shortcut(app.handle());
 
             // GUI test harness for scripts/stavebak-cli.mjs (debug builds only)
             #[cfg(debug_assertions)]
