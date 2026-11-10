@@ -2,6 +2,13 @@
 
 Důležité změny Stavebák Desktop.
 
+## [0.17.3] - 2026-11-10
+
+### Opraveno
+- Přehled projektu se na Windows po změně údajů obnoví sám, karta už nezůstává u starého stavu.
+- Postup projektu ukazuje i rozpracované kroky a procenta, neukazuje jen uzavřené kroky.
+- Když se při startu nepodaří připojení ke Stavebáku, další konverzace ho zkusí znovu. Dřív bylo potřeba restartovat aplikaci.
+
 ## [0.17.2] - 2026-11-06
 
 ### Změněno
