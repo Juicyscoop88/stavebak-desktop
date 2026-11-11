@@ -66,9 +66,9 @@ Celá aplikace v debug verzi se skutečným modelem v chatu: model si vyžádal 
 
 Nalezeno a opraveno: výchozí tlačítko dialogu bylo Povolit, vstup nebyl během otevřeného dialogu blokovaný.
 
-## Co chybí před vydáním
+## Vydání
 
-1. Potvrzení souladu s podmínkami poskytovatele před vydáním projektantům.
+Soulad s podmínkami poskytovatele potvrdil vlastník produktu 2026-11-11, vydává se ve v0.18.0 (jen Windows).
 
 ## Další kroky (vydání neblokují)
 
