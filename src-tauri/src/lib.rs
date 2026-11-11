@@ -1163,11 +1163,13 @@ async fn stavebak_session_access(app: &AppHandle) -> mcp_bridge::McpAccess {
 
 static COMPUTER_SERVER: tokio::sync::Mutex<Option<mcp_bridge::Bridge>> = tokio::sync::Mutex::const_new(None);
 /// Zastaví ovládání aplikací odkudkoli, i když je Stavebák na pozadí.
+#[cfg(windows)]
 const COMPUTER_STOP_SHORTCUT: &str = "ctrl+alt+Escape";
 static COMPUTER_ENGINE: std::sync::OnceLock<std::sync::Arc<computer_use::ComputerUse>> = std::sync::OnceLock::new();
 static COMPUTER_STOP_READY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Zkratka se musí registrovat na hlavním vlákně (Windows ji jinak odmítne), proto při startu aplikace.
+#[cfg(windows)]
 fn register_computer_stop_shortcut(app: &AppHandle) {
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
     let plugin = tauri_plugin_global_shortcut::Builder::new()
@@ -1192,7 +1194,8 @@ struct DialogConsent {
 
 impl computer_use::Consent for DialogConsent {
     fn ask(&self, apps: &[String], read_only: &[String], reason: &str) -> bool {
-        use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+        use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult};
+        const ALLOW: &str = "Povolit";
         let list = apps
             .iter()
             .map(|a| if read_only.contains(a) { format!("• {a} (jen čtení)") } else { format!("• {a}") })
@@ -1203,13 +1206,17 @@ impl computer_use::Consent for DialogConsent {
 Uvidí jejich okna a bude do nich klikat a psát, může přitom udělat chybu. Povolení platí 30 minut. \
 Zastavíte ho pohybem myši nebo zkratkou Ctrl+Alt+Esc. Pracujte s kopií důležitých souborů."
         );
-        self.app
+        // Výchozí tlačítko je první: Nepovolit, aby Enter nebo mezerník psaný do jiného okna ve chvíli,
+        // kdy dialog vyskočí do popředí, nic nepovolil. Povoleno je jen tlačítko Povolit, Esc i křížek zamítnou.
+        let result = self
+            .app
             .dialog()
             .message(text)
             .title("Povolit ovládání aplikací?")
             .kind(MessageDialogKind::Warning)
-            .buttons(MessageDialogButtons::OkCancelCustom("Povolit".to_string(), "Nepovolit".to_string()))
-            .blocking_show()
+            .buttons(MessageDialogButtons::OkCancelCustom("Nepovolit".to_string(), ALLOW.to_string()))
+            .blocking_show_with_result();
+        matches!(result, MessageDialogResult::Custom(ref label) if label == ALLOW)
     }
 }
 
@@ -1227,6 +1234,11 @@ fn computer_use_log(action: &str, detail: &serde_json::Value) {
 
 /// Lokální server ovládání aplikací: spustí se s první session. Bez souhlasu uživatele nic neudělá.
 async fn computer_use_access(app: &AppHandle) -> Option<mcp_bridge::Bridge> {
+    // Zatím jen Windows: na macOS aplikace nežádá o Zpřístupnění a Nahrávání obrazovky a chybí kontrola
+    // viditelnosti bodu (docs/spec-ovladani-pocitace.md). Bez serveru model nástroje vůbec neuvidí.
+    if !cfg!(windows) {
+        return None;
+    }
     // Bez zkratky ovládání nespouštět: uživatel by neměl jak ho zastavit z jiné aplikace
     if !COMPUTER_STOP_READY.load(std::sync::atomic::Ordering::SeqCst) {
         return None;
@@ -7970,7 +7982,7 @@ pub fn run() {
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
 
-            #[cfg(desktop)]
+            #[cfg(windows)]
             register_computer_stop_shortcut(app.handle());
 
             // GUI test harness for scripts/stavebak-cli.mjs (debug builds only)

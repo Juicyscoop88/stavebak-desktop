@@ -24,14 +24,20 @@ Windows binárka Claude Code 2.1.319 obsahuje `throw Error("@ant/computer-use-sw
 
 Nástroje: `computer_list_apps`, `computer_request_access`, `computer_screenshot`, `computer_click`, `computer_type`, `computer_key`, `computer_scroll`.
 
+## Platformy
+
+Zatím jen Windows. Na macOS se server nespustí a zkratka se neregistruje: aplikace tam nežádá o povolení Zpřístupnění a Nahrávání obrazovky a chybí kontrola viditelnosti bodu. Aktualizace jsou povinné pro všechny, proto je funkce na macOS vypnutá, ne napůl hotová.
+
 ## Ochrany
 
 - Bez souhlasu v nativním dialogu aplikace nic nefunguje, souhlas je po aplikacích a platí 30 minut.
+- Výchozí tlačítko dialogu je Nepovolit: Enter nebo mezerník psaný do jiného okna ve chvíli, kdy dialog vyskočí, nic nepovolí. Esc a křížek zamítnou.
+- Dokud je dialog otevřený, jádro odmítne všechen vstup i další žádost, model si tak dialog nemůže potvrdit sám.
 - Zakázané: terminály, systémová nastavení, správci hesel, bankovnictví, Stavebák a Claude. Prohlížeče jen ke čtení.
 - Snímek jen z okna povolené aplikace. Vstup jen do okna, které je ověřeně v popředí.
 - Pohyb myší uživatele nebo Ctrl+Alt+Esc ovládání zastaví a zruší povolení.
 - V CAD se odmítají příkazy spouštějící programy (`SHELL`, `STARTAPP`, `vlax-`). Je to pojistka, ne hranice.
-- Klávesa Windows je zakázaná. Záznam akcí v `~/.stavebak/computer-use.log`, psaný text se nezapisuje.
+- Klávesa Windows je zakázaná. Záznam akcí v `~/.stavebak/computer-use.log`, psaný text se nezapisuje. Při převzetí řízení se zapíše, odkud kam se ukazatel posunul.
 
 ## Klienti
 
@@ -52,16 +58,29 @@ Přihlášená plocha v AWS, celá aplikace v debug verzi: skutečný dialog sou
 
 Nalezeno testem a opraveno: přenos okna do popředí, registrace zkratky na hlavním vlákně, přeházené znaky při rychlém psaní, klik mimo viditelnou část okna.
 
+## Ověřeno na Windows 10 (2026-11-11)
+
+Fyzický počítač se dvěma monitory (2560×1440 a 1920×1080 na záporných souřadnicích), rozložení CZ a US. Dvě čistá kola bez zásahu uživatele: Poznámkový blok (klik na druhém monitoru, diakritika, Ctrl+S, přepnutí z cizího okna, zastavení pohybem myši), Writer a Calc s kontrolou uloženého souboru. Dřívější pády (poškozený text ve Writeru, převzetí řízení po otevření cizího okna) způsobil skutečný vstup uživatele během testu.
+
+Celá aplikace v debug verzi se skutečným modelem v chatu: model si vyžádal přístup, po Povolit napsal a uložil text s diakritikou a ověřil ho snímkem. Enter do dialogu přístup zamítl a model skončil bez zásahu do souboru.
+
+Nalezeno a opraveno: výchozí tlačítko dialogu bylo Povolit, vstup nebyl během otevřeného dialogu blokovaný.
+
 ## Co chybí před vydáním
 
-1. BricsCAD V23 Lite: potřebuje účet Bricsys. LibreCAD ho nenahrazuje. Word a Excel na testovacím stroji nejsou, potřebují licenci.
-2. Skutečný model na skutečné ploše Windows: na testovacím stroji není přihlášený Claude. Falešná plocha a skutečný model zatím odděleně.
+1. Potvrzení souladu s podmínkami poskytovatele před vydáním projektantům.
+
+## Další kroky (vydání neblokují)
+
+1. BricsCAD: potřebuje účet Bricsys, LibreCAD ho nenahrazuje. Word a Excel nevyzkoušené.
+2. macOS: povolení Zpřístupnění a Nahrávání obrazovky, kontrola viditelnosti bodu, pak funkci zapnout.
 3. Strom ovládacích prvků (UI Automation), aby model klikal na prvky místo souřadnic.
-4. Potvrzení souladu s podmínkami poskytovatele před vydáním projektantům.
-5. macOS: povolení Zpřístupnění a Nahrávání obrazovky, aplikace o ně zatím nežádá, a kontrola viditelnosti bodu zatím jen na Windows.
-6. Měření úspěšnosti na reálných úkonech.
-7. Název aplikace může být celá cesta k programu (LibreCAD), pokud program nemá popis.
-8. Nástroj pro tažení myší zatím není, kreslit nebo vybírat tažením model neumí.
+4. Měření úspěšnosti na reálných úkonech.
+5. Název aplikace může být celá cesta k programu (LibreCAD), pokud program nemá popis.
+6. Nástroj pro tažení myší zatím není, kreslit nebo vybírat tažením model neumí.
+7. Seznam aplikací posílá modelu titulky všech dostupných oken (např. počet nepřečtených e-mailů). Zvážit, jestli titulky ukazovat jen u povolených aplikací.
+8. Povolení platí pro aplikaci 30 minut napříč konverzacemi, ne jen v té, která o něj požádala.
+9. Malování na vývojovém počítači neotevře .bmp ani ručně, test Malování tam neběží (s ovládáním nesouvisí).
 
 ## Podmínky Anthropicu
 

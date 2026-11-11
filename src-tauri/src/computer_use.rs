@@ -167,13 +167,18 @@ struct State {
     last_pointer: Option<(i32, i32)>,
 }
 
+/// Záznam akcí: název akce a podrobnosti (bez psaného textu).
+pub type ActionLog = Box<dyn Fn(&str, &Value) + Send + Sync>;
+
 pub struct ComputerUse {
     desktop: Arc<dyn Desktop>,
     consent: Arc<dyn Consent>,
     grant_ttl: Duration,
     stopped: AtomicBool,
+    /// Je otevřený dialog souhlasu. Vstup by mohl skončit v něm a povolit sám sebe.
+    asking: AtomicBool,
     state: Mutex<State>,
-    log: Box<dyn Fn(&str, &Value) + Send + Sync>,
+    log: ActionLog,
 }
 
 /// Výsledek nástroje pro model.
@@ -185,8 +190,8 @@ pub enum Output {
 }
 
 impl ComputerUse {
-    pub fn new(desktop: Arc<dyn Desktop>, consent: Arc<dyn Consent>, grant_ttl: Duration, log: Box<dyn Fn(&str, &Value) + Send + Sync>) -> Self {
-        Self { desktop, consent, grant_ttl, stopped: AtomicBool::new(false), state: Mutex::new(State::default()), log }
+    pub fn new(desktop: Arc<dyn Desktop>, consent: Arc<dyn Consent>, grant_ttl: Duration, log: ActionLog) -> Self {
+        Self { desktop, consent, grant_ttl, stopped: AtomicBool::new(false), asking: AtomicBool::new(false), state: Mutex::new(State::default()), log }
     }
 
     /// Zastavení z klávesové zkratky: další akce se odmítnou, dokud uživatel znovu nepovolí aplikaci.
@@ -215,6 +220,9 @@ impl ComputerUse {
         if self.stopped.load(Ordering::SeqCst) {
             return Err("Uživatel ovládání zastavil. Neopakuj akci, zeptej se ho, jestli pokračovat, a pak znovu computer_request_access.".into());
         }
+        if self.asking.load(Ordering::SeqCst) {
+            return Err("Uživatel právě rozhoduje o povolení. Počkej na výsledek computer_request_access, pak pokračuj.".into());
+        }
         Ok(())
     }
 
@@ -224,6 +232,7 @@ impl ComputerUse {
         if let Some((lx, ly)) = last {
             let (x, y) = self.desktop.pointer()?;
             if (x - lx).abs() > TAKEOVER_TOLERANCE_PX || (y - ly).abs() > TAKEOVER_TOLERANCE_PX {
+                (self.log)("takeover", &json!({ "from": [lx, ly], "to": [x, y] }));
                 self.stop();
                 return Err("Uživatel pohnul myší a převzal řízení, ovládání je zastavené. Zeptej se ho, jestli pokračovat, a pak znovu computer_request_access.".into());
             }
@@ -311,7 +320,12 @@ impl ComputerUse {
             return Output::Error(format!("Tyto aplikace ovládat nejde: {}. Jde o terminály, správce hesel, bankovnictví nebo Stavebák sám.", blocked.join(", ")));
         }
         let read_only: Vec<String> = apps.iter().filter(|a| tier_of(a) == Tier::ReadOnly).cloned().collect();
-        if !self.consent.ask(&apps, &read_only, reason) {
+        if self.asking.swap(true, Ordering::SeqCst) {
+            return Output::Error("Uživatel už rozhoduje o jiném povolení. Počkej na jeho výsledek.".into());
+        }
+        let allowed = self.consent.ask(&apps, &read_only, reason);
+        self.asking.store(false, Ordering::SeqCst);
+        if !allowed {
             (self.log)("access_denied", &json!({ "apps": apps }));
             return Output::Error("Uživatel přístup nepovolil. Neptej se znovu na totéž, pokračuj bez ovládání aplikace.".into());
         }
@@ -668,6 +682,38 @@ mod tests {
         assert!(matches!(cu.call("computer_request_access", &json!({ "apps": ["BricsCAD"], "reason": "dál" })), Output::Text(_)));
         shot(&cu);
         assert!(matches!(cu.call("computer_click", &json!({ "x": 20, "y": 20 })), Output::Text(_)));
+    }
+
+    /// Souhlas, který čeká, dokud ho test nepustí: jako otevřený dialog.
+    struct Pending(Mutex<std::sync::mpsc::Receiver<bool>>);
+    impl Consent for Pending {
+        fn ask(&self, _a: &[String], _r: &[String], _t: &str) -> bool {
+            self.0.lock().unwrap().recv().unwrap()
+        }
+    }
+
+    #[test]
+    fn no_input_while_consent_dialog_is_open() {
+        let fake = Arc::new(Fake::default());
+        *fake.focus_works.lock().unwrap() = true;
+        fake.windows.lock().unwrap().extend([win(1, "BricsCAD", true), win(2, "Word", false)]);
+        let (answer, rx) = std::sync::mpsc::channel();
+        let cu = Arc::new(ComputerUse::new(fake.clone(), Arc::new(Pending(Mutex::new(rx))), GRANT_TTL, Box::new(|_, _| {})));
+        answer.send(true).unwrap();
+        cu.call("computer_request_access", &json!({ "apps": ["BricsCAD"], "reason": "x" }));
+        shot(&cu);
+        // Model s platným povolením pro BricsCAD žádá o Word: dialog je otevřený
+        let asking = { let cu = cu.clone(); std::thread::spawn(move || cu.call("computer_request_access", &json!({ "apps": ["Word"], "reason": "y" }))) };
+        while !cu.asking.load(Ordering::SeqCst) {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        is_err(cu.call("computer_key", &json!({ "keys": "enter" })), "rozhoduje");
+        is_err(cu.call("computer_click", &json!({ "x": 10, "y": 10 })), "rozhoduje");
+        is_err(cu.call("computer_request_access", &json!({ "apps": ["Word"], "reason": "z" })), "rozhoduje");
+        assert!(fake.actions.lock().unwrap().is_empty());
+        answer.send(false).unwrap();
+        is_err(asking.join().unwrap(), "nepovolil");
+        assert!(matches!(cu.call("computer_key", &json!({ "keys": "enter" })), Output::Text(_)));
     }
 
     #[test]

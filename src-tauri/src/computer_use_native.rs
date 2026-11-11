@@ -326,7 +326,9 @@ mod tests {
         let r = cu.call("computer_key", &json!({ "keys": "end" }));
         assert!(matches!(r, Output::Text(_)), "přepnutí: {r:?}");
         assert!(desktop.windows().unwrap().iter().any(|w| w.app == app && w.focused), "Poznámkový blok není v popředí");
-        let _ = std::process::Command::new("taskkill").args(["/f", "/fi", "WINDOWTITLE eq Administrator:  CiziOkno*"]).status();
+        for title in ["CiziOkno", "Administrator:  CiziOkno*"] {
+            let _ = std::process::Command::new("taskkill").args(["/f", "/fi", &format!("WINDOWTITLE eq {title}")]).status();
+        }
         let _ = other.kill();
 
         // Uživatel pohne myší: ovládání se zastaví a nic dalšího se nenapíše
@@ -567,6 +569,7 @@ mod tests {
             let text = "Souhrnná technická zpráva: ěščřžýáíé ĚŠČŘŽ 123";
             ok(cu.call("computer_type", &json!({ "text": text })), "psaní");
             sleep(Duration::from_secs(1));
+            shot(&cu, &app, "writer-napsano.jpg");
             ok(cu.call("computer_key", &json!({ "keys": "ctrl+s" })), "uložení");
             sleep(Duration::from_secs(4));
             shot(&cu, &app, "writer2.jpg");
