@@ -109,7 +109,7 @@ struct Shared {
     port: u16,
 }
 
-type Body = BoxBody<Bytes, std::io::Error>;
+pub(crate) type Body = BoxBody<Bytes, std::io::Error>;
 
 pub async fn start(cfg: Config) -> Result<Bridge, String> {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -132,7 +132,7 @@ pub async fn start(cfg: Config) -> Result<Bridge, String> {
     Ok(Bridge { url: format!("http://127.0.0.1:{}/mcp", port), key })
 }
 
-fn random_key() -> String {
+pub(crate) fn random_key() -> String {
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
     use rand::RngCore;
     let mut buf = [0u8; 32];
@@ -145,7 +145,7 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 }
 
 /// Smí požadavek přes most? Vrací důvod odmítnutí.
-fn check_request<B>(req: &Request<B>, key: &str, port: u16) -> Result<(), (StatusCode, &'static str)> {
+pub(crate) fn check_request<B>(req: &Request<B>, key: &str, port: u16) -> Result<(), (StatusCode, &'static str)> {
     let header = |name: &str| req.headers().get(name).and_then(|v| v.to_str().ok());
     let host_ok = header("host").is_some_and(|h| h == format!("127.0.0.1:{}", port) || h == format!("localhost:{}", port));
     if !host_ok || req.headers().contains_key("origin") {
@@ -163,7 +163,7 @@ fn check_request<B>(req: &Request<B>, key: &str, port: u16) -> Result<(), (Statu
     Ok(())
 }
 
-fn full(status: StatusCode, content_type: &str, body: impl Into<Bytes>) -> Response<Body> {
+pub(crate) fn full(status: StatusCode, content_type: &str, body: impl Into<Bytes>) -> Response<Body> {
     let mut res = Response::new(Full::new(body.into()).map_err(|never| match never {}).boxed());
     *res.status_mut() = status;
     if let Ok(v) = content_type.parse() {
