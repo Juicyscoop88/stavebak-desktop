@@ -2,6 +2,15 @@
 
 Důležité změny Stavebák Desktop.
 
+## [0.17.4] - 2026-11-11
+
+### Přidáno
+- Náhled výkresu má lištu se zoomem: oddálit, přiblížit, procento, Přizpůsobit (i dvojklikem) a Celá obrazovka. Na celé obrazovce je vidět souřadnice kurzoru ve výkresu, Esc ji zavře.
+- Asistent nad výkresem: Označit oblast (tažením) a zeptat se na ni, Vyčíst údaje, Zkontrolovat. Pokyn se vloží do pole zprávy, odešlete ho Enterem.
+
+### Opraveno
+- Po přepnutí výkresu v náhledu nezůstávala skrytá vrstva, která mohla chytat myš.
+
 ## [0.17.3] - 2026-11-10
 
 ### Opraveno
