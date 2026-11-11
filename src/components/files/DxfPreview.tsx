@@ -5,6 +5,7 @@ import { CornersIn, CornersOut, FrameCorners, Minus, Plus, X } from '@phosphor-i
 import fontLatin from '@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff?url';
 import fontLatinExt from '@fontsource/noto-sans/files/noto-sans-latin-ext-400-normal.woff?url';
 import { formatCoord, viewScale, viewWidth, zoomedWidth, zoomPercent, ZOOM_STEP } from './dxf-view';
+import DrawingAssistant, { type ToDrawing } from './DrawingAssistant';
 
 /**
  * DXF drawing preview (WebGL): pan with drag, zoom with wheel or the toolbar, double click fits.
@@ -21,6 +22,16 @@ export default function DxfPreview({ url, name }: { url: string; name?: string }
   const [percent, setPercent] = useState(100);
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
   const [full, setFull] = useState(false);
+  // The assistant owns Escape while a region is being selected or asked about
+  const assistantBusyRef = useRef(false);
+  const onAssistantBusy = useCallback((busy: boolean) => { assistantBusyRef.current = busy; }, []);
+  const toDrawing = useCallback<ToDrawing>((x, y) => {
+    const viewer = viewerRef.current;
+    if (!viewer) return null;
+    const p = viewer.CanvasToSceneCoord(x, y);
+    const o = viewer.GetOrigin();
+    return { x: p.x + (o?.x ?? 0), y: p.y + (o?.y ?? 0) };
+  }, []);
   const percentRef = useRef(100);
   percentRef.current = percent;
   // A fitted drawing is refitted after switching full screen, a zoomed one keeps its scale
@@ -127,6 +138,7 @@ export default function DxfPreview({ url, name }: { url: string; name?: string }
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.key === 'Escape' && assistantBusyRef.current) return;
       const action =
         e.key === 'Escape' ? () => toggleFull(false)
         : e.key === 'f' || e.key === 'F' ? fitView
@@ -173,6 +185,9 @@ export default function DxfPreview({ url, name }: { url: string; name?: string }
           <div className="absolute inset-0 flex items-center justify-center text-sm text-text-muted">
             {state === 'loading' ? 'Načítám výkres…' : `Výkres nejde zobrazit. ${error}`}
           </div>
+        )}
+        {state === 'ready' && (
+          <DrawingAssistant name={name ?? 'výkres'} toDrawing={toDrawing} onAsked={() => toggleFull(false)} onBusyChange={onAssistantBusy} />
         )}
         {state === 'ready' && (
           <div

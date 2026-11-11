@@ -34,3 +34,14 @@ describe('DXF view math', () => {
     expect(formatCoord(-0.2)).toBe('0');
   });
 });
+
+describe('drawing assistant prompts', () => {
+  it('region from corners in any order, prompt carries file and whole drawing units', async () => {
+    const { regionFrom, regionPrompt } = await import('../dxf-view');
+    const r = regionFrom({ x: 3500.4, y: 100 }, { x: 1200, y: 2500.6 });
+    expect(r).toEqual({ minX: 1200, maxX: 3500.4, minY: 100, maxY: 2500.6 });
+    expect(regionPrompt(' Co je v téhle oblasti? ', 'pudorys.dxf', r)).toBe(
+      'Co je v téhle oblasti?\nVýkres pudorys.dxf, oblast X 1200 až 3500, Y 100 až 2501 (souřadnice výkresu).',
+    );
+  });
+});

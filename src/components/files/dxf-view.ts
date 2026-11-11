@@ -46,3 +46,27 @@ export function formatCoord(v: number): string {
   const rounded = Math.round(v);
   return (Object.is(rounded, -0) ? 0 : rounded).toLocaleString('cs-CZ', { maximumFractionDigits: 0 });
 }
+
+/** Rectangle in drawing coordinates. */
+export interface DrawingRegion { minX: number; minY: number; maxX: number; maxY: number }
+
+/** Two corners in any order → region with min and max. */
+export function regionFrom(a: { x: number; y: number }, b: { x: number; y: number }): DrawingRegion {
+  return { minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x), minY: Math.min(a.y, b.y), maxY: Math.max(a.y, b.y) };
+}
+
+/**
+ * Chat text for a question about part of the drawing. Only the user's intent and where: how to answer
+ * (upload, convert_drawing with region) comes from the server's instructions, like every other prefill.
+ */
+export function regionPrompt(question: string, name: string, r: DrawingRegion): string {
+  const round = (v: number) => Math.round(v);
+  return `${question.trim()}\nVýkres ${name}, oblast X ${round(r.minX)} až ${round(r.maxX)}, Y ${round(r.minY)} až ${round(r.maxY)} (souřadnice výkresu).`;
+}
+
+export const DRAWING_ACTIONS = {
+  extract: (name: string) => `Vyčti z výkresu ${name} údaje do projektu.`,
+  check: (name: string) => `Zkontroluj výkres ${name}: kóty, plochy a popisy proti údajům projektu.`,
+} as const;
+
+export const REGION_QUESTIONS = ['Co je v téhle oblasti?', 'Zkontroluj kóty a plochy v oblasti.', 'Vyčti z oblasti údaje do projektu.'] as const;
