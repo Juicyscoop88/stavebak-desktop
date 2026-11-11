@@ -2,6 +2,12 @@
 
 Důležité změny Stavebák Desktop.
 
+## [0.18.0] - 2026-11-11
+
+### Přidáno
+- Asistent může na Windows ovládat vaše aplikace: dělá snímky okna, kliká, píše a mačká klávesy. Nejdřív se zeptá dialogem, kterou aplikaci a proč chce ovládat, a bez vašeho Povolit neudělá nic. Povolení platí 30 minut. Zastavíte ho pohybem myši nebo zkratkou Ctrl+Alt+Esc. Terminály, správci hesel, bankovnictví a Stavebák sám jsou zakázané, prohlížeče jen ke čtení. Záznam akcí je v `~/.stavebak/computer-use.log`, psaný text se do něj nezapisuje.
+- Na macOS zatím ovládání aplikací není.
+
 ## [0.17.4] - 2026-11-11
 
 ### Přidáno
