@@ -66,7 +66,7 @@ export default function DwgPreview({ path }: { path: string }) {
     return () => { done = true; clearInterval(timer); };
   }, [path, attempt]);
 
-  if (url) return <Suspense fallback={null}><DxfPreview url={url} /></Suspense>;
+  if (url) return <Suspense fallback={null}><DxfPreview url={url} name={path.split(/[\\/]/).pop()} /></Suspense>;
 
   if (error) {
     return (
