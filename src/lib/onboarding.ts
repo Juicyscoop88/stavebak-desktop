@@ -1,27 +1,40 @@
 /**
  * Logika onboardingu a přístupu (spec 098 v repu serveru), bez UI, aby šla testovat i projít agentem.
- * Povinný je jen asistent (Claude, platí se Anthropicu). Účet Stavebák (30 dní zdarma, pak Pro) odemyká
+ * Povinný je jen asistent: Claude (platí se Anthropicu) nebo ChatGPT (platí se OpenAI). Účet Stavebák (30 dní zdarma, pak Pro) odemyká
  * nástroje Stavebáku a dá se přeskočit: chat nesmí být za naší platbou (podmínky Sign in with ChatGPT,
  * „No charge“), placené jsou jen nástroje, které bez účtu odmítne server.
  */
 
-export type OnboardingStep = 'checking' | 'welcome' | 'claude' | 'stavebak' | 'done';
+export type OnboardingStep = 'checking' | 'welcome' | 'assistant' | 'claude' | 'chatgpt' | 'stavebak' | 'done';
+
+/** Asistent, se kterým projektant pracuje: Claude (Claude Code) nebo ChatGPT (Codex). */
+export type Assistant = 'claude' | 'codex';
 
 export interface OnboardingFacts {
-  claudeOk: boolean;
+  /** Vybraný asistent je připravený: nainstalovaný a přihlášený */
+  assistantOk: boolean;
   stavebakOk: boolean;
 }
 
-/** Kam po startu: oba účty v pořádku → rovnou do aplikace (null), jinak úvod (účet Stavebák se tam nabídne). */
+/** Kam po startu: asistent i účet v pořádku → rovnou do aplikace (null), jinak úvod. */
 export function startStep(f: OnboardingFacts): OnboardingStep | null {
-  return f.claudeOk && f.stavebakOk ? null : 'welcome';
+  return f.assistantOk && f.stavebakOk ? null : 'welcome';
 }
 
-/** Další krok po úvodu nebo po dokončení kroku. Krok 'stavebak' jde přeskočit rovnou na 'done'. */
-export function nextStep(f: OnboardingFacts): OnboardingStep {
-  if (!f.claudeOk) return 'claude';
-  if (!f.stavebakOk) return 'stavebak';
-  return 'done';
+/** Po úvodu vždy volba asistenta: Claude, nebo ChatGPT. */
+export function afterWelcome(): OnboardingStep {
+  return 'assistant';
+}
+
+/** Po volbě asistenta: přihlásit ho, pokud ještě není připravený, jinak dál. */
+export function afterAssistant(chosen: Assistant, f: OnboardingFacts): OnboardingStep {
+  if (!f.assistantOk) return chosen === 'claude' ? 'claude' : 'chatgpt';
+  return afterSignIn(f);
+}
+
+/** Po přihlášení asistenta. Krok 'stavebak' jde přeskočit rovnou na 'done'. */
+export function afterSignIn(f: Pick<OnboardingFacts, 'stavebakOk'>): OnboardingStep {
+  return f.stavebakOk ? 'done' : 'stavebak';
 }
 
 export type Plan = 'trial' | 'free' | 'pro';

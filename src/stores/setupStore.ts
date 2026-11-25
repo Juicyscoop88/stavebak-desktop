@@ -4,12 +4,15 @@ import { create } from 'zustand';
 export type SetupStep =
   | 'checking'   // silent fast path: CLI + auth already fine → straight into the app
   | 'welcome'    // "you need two things"
+  | 'assistant'  // Claude or ChatGPT
   | 'claude'     // Claude subscription sign-in
+  | 'chatgpt'    // ChatGPT plan sign-in (Codex), or an OpenAI API key
   | 'stavebak'   // Stavebák account (UX mock until OAuth exists)
   | 'done';
 
 /** Background state of the Claude Code runtime the user never has to see. */
-export type CliState = 'checking' | 'installing' | 'ready' | 'failed';
+/** 'missing': not installed and not needed yet (installed only once the user picks Claude). */
+export type CliState = 'checking' | 'missing' | 'installing' | 'ready' | 'failed';
 
 interface SetupState {
   step: SetupStep;
