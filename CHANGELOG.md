@@ -2,6 +2,15 @@
 
 Důležité změny Stavebák Desktop.
 
+## [0.19.0] - 2026-11-25
+
+### Přidáno
+- Při prvním spuštění si vyberete asistenta: Claude, nebo ChatGPT. U ChatGPT se přihlásíte svým předplatným ChatGPT Go, Plus nebo Pro přes „Continue with ChatGPT“, případně API klíčem OpenAI. Stahuje se jen součást vybraného asistenta.
+- Konverzace s ChatGPT zůstávají v seznamu konverzací i po restartu aplikace a dá se v nich pokračovat.
+
+### Změněno
+- Stavebák je v betě zdarma: onboarding, lišta nad chatem ani Nastavení už neukazují zkušební měsíc ani cenu a nenabízejí platbu.
+
 ## [0.18.0] - 2026-11-11
 
 ### Přidáno
