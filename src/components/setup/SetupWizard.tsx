@@ -3,25 +3,28 @@ import { CheckCircle, Circle, SpinnerGap, ArrowSquareOut, GoogleLogo } from '@ph
 import { useSetupStore } from '../../stores/setupStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useMcpStore } from '../../stores/mcpStore';
+import { useOpenAiStore, codexReady } from '../../stores/openaiStore';
 import { useAccountStore } from '../../stores/accountStore';
 import { useT } from '../../lib/i18n';
 import { stripAnsi } from '../../lib/strip-ansi';
 import { AiAvatar } from '../shared/AiAvatar';
 import { bridge, onDownloadProgress } from '../../lib/tauri-bridge';
-import { startStep, nextStep } from '../../lib/onboarding';
+import { startStep, afterWelcome, afterAssistant, afterSignIn, type Assistant } from '../../lib/onboarding';
 
 const AUTH_POLL_MS = 2000;
 const CLAUDE_UPGRADE_URL = 'https://claude.ai/upgrade';
+const CHATGPT_PRICING_URL = 'https://chatgpt.com/pricing';
+const PRIVACY_URL = 'https://stavebak.cz/privacy';
 
 function openUrl(url: string) {
   import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url)).catch(() => {});
 }
 
 /**
- * First-run onboarding. The user sees the Claude subscription (required) and
- * the Stavebák account (offered, can be skipped); installing the Claude Code
- * runtime happens silently in the background and only surfaces on failure.
- * Users who already have everything never see a screen.
+ * First-run onboarding. The user picks the assistant (Claude or ChatGPT, required)
+ * and is offered the Stavebák account (can be skipped). Only the runtime of the
+ * chosen assistant is installed (Claude Code or Codex), in the background, and it
+ * only surfaces on failure. Users who already have everything never see a screen.
  */
 export function SetupWizard() {
   const t = useT();
@@ -33,6 +36,8 @@ export function SetupWizard() {
   const accountName = useSetupStore((s) => s.accountName);
   const stavebakDone = useSetupStore((s) => s.stavebakDone);
   const setSetupCompleted = useSettingsStore((s) => s.setSetupCompleted);
+  const aiProvider = useSettingsStore((s) => s.aiProvider);
+  const openai = useOpenAiStore();
 
   const [waitingForLogin, setWaitingForLogin] = useState(false);
   const [loginFailed, setLoginFailed] = useState(false);
@@ -109,10 +114,15 @@ export function SetupWizard() {
         s.setCli('ready');
         claudeOk = await checkAuth();
       } else {
-        install();
+        // Claude Code is downloaded only once the user picks Claude
+        s.setCli('missing');
       }
+      await useOpenAiStore.getState().refresh();
       if (cancelled) return;
-      const first = startStep({ claudeOk, stavebakOk });
+      const assistantOk = useSettingsStore.getState().aiProvider === 'codex'
+        ? codexReady(useOpenAiStore.getState())
+        : claudeOk;
+      const first = startStep({ assistantOk, stavebakOk });
       if (first === null) {
         await finish();
         return;
@@ -129,7 +139,8 @@ export function SetupWizard() {
     pollRef.current = setInterval(async () => {
       if (await checkAuth()) {
         setWaitingForLogin(false);
-        useSetupStore.getState().setStep(nextStep({ claudeOk: true, stavebakOk: useSetupStore.getState().stavebakDone }));
+        useSettingsStore.getState().setAiProvider('claude');
+        useSetupStore.getState().setStep(afterSignIn({ stavebakOk: useSetupStore.getState().stavebakDone }));
       }
     }, AUTH_POLL_MS);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -157,8 +168,28 @@ export function SetupWizard() {
   }, []);
 
   const goNextFromWelcome = () => {
-    useSetupStore.getState().setStep(nextStep({ claudeOk: authStatus === 'ok', stavebakOk: stavebakDone }));
+    useSetupStore.getState().setStep(afterWelcome());
   };
+
+  // The assistant is chosen: install its runtime if needed, then sign in or go on.
+  const chooseAssistant = async (chosen: Assistant) => {
+    if (chosen === 'codex' && !useOpenAiStore.getState().codex) await useOpenAiStore.getState().refresh();
+    const ready = chosen === 'claude' ? authStatus === 'ok' : codexReady(useOpenAiStore.getState());
+    if (ready) useSettingsStore.getState().setAiProvider(chosen);
+    if (chosen === 'claude' && ['missing', 'failed'].includes(useSetupStore.getState().cli)) install();
+    if (chosen === 'codex' && !useOpenAiStore.getState().codex?.installed && useOpenAiStore.getState().installPercent === null) {
+      useOpenAiStore.getState().installCodex();
+    }
+    useSetupStore.getState().setStep(afterAssistant(chosen, { assistantOk: ready, stavebakOk: stavebakDone }));
+  };
+
+  // ChatGPT: once Codex is installed and there is a way to pay (plan or API key), go on.
+  const chatgptReady = codexReady(openai);
+  useEffect(() => {
+    if (step !== 'chatgpt' || !chatgptReady) return;
+    useSettingsStore.getState().setAiProvider('codex');
+    useSetupStore.getState().setStep(afterSignIn({ stavebakOk: useSetupStore.getState().stavebakDone }));
+  }, [step, chatgptReady]);
 
   const loginStavebak = async () => {
     if (await useAccountStore.getState().login()) {
@@ -179,9 +210,47 @@ export function SetupWizard() {
         <>
           <Heading title={t('onb.welcome.title')} subtitle={t('onb.welcome.subtitle')} />
           <p className="text-xs text-text-tertiary mb-2">{t('onb.need')}</p>
-          <Checklist claudeDone={authStatus === 'ok'} stavebakDone={stavebakDone} />
+          <Checklist claudeDone={aiProvider === 'codex' ? chatgptReady : authStatus === 'ok'} stavebakDone={stavebakDone} />
           <p className="text-xs text-text-tertiary leading-snug -mt-3 mb-6">{t('onb.how')}</p>
           <PrimaryButton onClick={goNextFromWelcome}>{t('onb.start')}</PrimaryButton>
+        </>
+      )}
+
+      {step === 'assistant' && (
+        <>
+          <StepLabel n={1} />
+          <Heading title={t('onb.assistant.title')} subtitle={t('onb.assistant.desc')} />
+          <div className="space-y-2 mb-4">
+            <AssistantOption
+              name="Claude"
+              desc={t('onb.assistant.claude')}
+              ready={authStatus === 'ok'}
+              onClick={() => { chooseAssistant('claude'); }}
+            />
+            <AssistantOption
+              name="ChatGPT"
+              desc={t('onb.assistant.chatgpt')}
+              ready={codexReady(openai)}
+              onClick={() => { chooseAssistant('codex'); }}
+            />
+          </div>
+          <p className="text-xs text-text-tertiary leading-snug text-center">{t('onb.assistant.later')}</p>
+        </>
+      )}
+
+      {step === 'chatgpt' && (
+        <>
+          <StepLabel n={1} />
+          <Heading title={t('onb.chatgpt.title')} subtitle={t('onb.chatgpt.desc')} />
+          <p className="text-xs text-text-tertiary leading-snug mb-4 text-center">
+            {t('settings.chatgptPrivacy')}{' '}
+            <button onClick={() => openUrl(PRIVACY_URL)}
+              className="underline underline-offset-2 hover:text-text-primary cursor-pointer">
+              {t('onb.chatgpt.privacy')}
+            </button>
+          </p>
+          <ChatGptSignIn />
+          <BackToAssistant />
         </>
       )}
 
@@ -232,6 +301,7 @@ export function SetupWizard() {
               )}
             </div>
           )}
+          <BackToAssistant />
         </>
       )}
 
@@ -264,9 +334,9 @@ export function SetupWizard() {
         <>
           <Heading title={t('onb.done.title')} subtitle={t('onb.done.desc')} />
           <Checklist
-            claudeDone={authStatus === 'ok'}
+            claudeDone={aiProvider === 'codex' ? chatgptReady : authStatus === 'ok'}
             stavebakDone={stavebakDone}
-            claudeNote={accountName ? t('onb.signedInAs').replace('{account}', accountName) : undefined}
+            claudeNote={assistantNote(aiProvider, accountName, openai.status, t)}
             stavebakNote={accountStatus?.plan === 'trial'
               ? t('onb.stavebak.trialUntil').replace('{date}', new Date(accountStatus.trialEndsAt).toLocaleDateString('cs-CZ'))
               : undefined}
@@ -281,6 +351,127 @@ export function SetupWizard() {
 /* ================================================================
    Pieces
    ================================================================ */
+
+/** Na kroku Hotovo: kdo je přihlášený u vybraného asistenta. */
+function assistantNote(
+  provider: Assistant,
+  claudeAccount: string | null,
+  openaiStatus: ReturnType<typeof useOpenAiStore.getState>['status'],
+  t: (key: string) => string,
+): string | undefined {
+  if (provider === 'claude') {
+    return claudeAccount ? `Claude · ${t('onb.signedInAs').replace('{account}', claudeAccount)}` : undefined;
+  }
+  if (openaiStatus?.chatgpt_signed_in) {
+    return `ChatGPT · ${t('onb.signedInAs').replace('{account}', openaiStatus.chatgpt_email ?? 'ChatGPT')}`;
+  }
+  return openaiStatus?.api_key_set ? `ChatGPT · ${t('asst.chatgpt.viaKey')}` : undefined;
+}
+
+function BackToAssistant() {
+  const t = useT();
+  return (
+    <button onClick={() => useSetupStore.getState().setStep('assistant')}
+      className="block mx-auto mt-4 text-xs text-text-tertiary hover:text-text-primary cursor-pointer">
+      {t('onb.assistant.back')}
+    </button>
+  );
+}
+
+function AssistantOption({ name, desc, ready, onClick }: { name: string; desc: string; ready: boolean; onClick: () => void }) {
+  const t = useT();
+  return (
+    <button onClick={onClick}
+      className="w-full text-left rounded-lg border border-border px-4 py-3 hover:bg-bg-secondary cursor-pointer flex gap-3 items-start">
+      <div className="min-w-0 flex-1">
+        <div className="text-sm text-text-primary">{name}</div>
+        <div className="text-xs text-text-tertiary mt-0.5 leading-snug">{desc}</div>
+      </div>
+      {ready && (
+        <span className="inline-flex items-center gap-1 text-xs text-[#0F766E] flex-shrink-0 mt-0.5">
+          <CheckCircle size={14} weight="fill" />{t('asst.signedIn')}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/**
+ * Přihlášení k ChatGPT: hlavně „Continue with ChatGPT“ (plán ChatGPT), méně výrazně API klíč OpenAI.
+ * Codex se mezitím stahuje na pozadí; dál se jde, až je stažený a je čím platit.
+ */
+function ChatGptSignIn() {
+  const t = useT();
+  const { status, codex, busy, error, installPercent, loginChatgpt, installCodex, setApiKey } = useOpenAiStore();
+  const [keyOpen, setKeyOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [showDetails, setShowDetails] = useState(false);
+  const signedIn = !!status && (status.chatgpt_signed_in || status.api_key_set);
+  const installFailed = !codex?.installed && installPercent === null && !!error;
+
+  return (
+    <div className="space-y-2">
+      {status?.siwc_available !== false && (
+        <PrimaryButton onClick={() => { loginChatgpt(); }} disabled={busy || signedIn}>
+          {t('chatgpt.continue')}
+        </PrimaryButton>
+      )}
+      <SecondaryButton onClick={() => openUrl(CHATGPT_PRICING_URL)}>
+        <ArrowSquareOut size={13} />
+        {t('onb.chatgpt.subscribe')}
+      </SecondaryButton>
+      <div className="min-h-5 pt-2 text-center text-xs text-text-tertiary">
+        {busy ? (
+          <Status>{t('onb.claude.waiting')}</Status>
+        ) : installPercent !== null ? (
+          <Status>{t('onb.preparing')}{installPercent > 0 ? ` ${installPercent} %` : ''}</Status>
+        ) : installFailed ? (
+          <span className="text-text-primary">{t('onb.prepareFailed')}</span>
+        ) : error ? (
+          <span className="text-text-primary">{t('onb.chatgpt.failed')}</span>
+        ) : null}
+      </div>
+      {installFailed && (
+        <PrimaryButton onClick={() => { installCodex(); }}>{t('onb.retry')}</PrimaryButton>
+      )}
+      {error && (
+        <>
+          <button onClick={() => setShowDetails(!showDetails)}
+            className="block mx-auto text-xs text-text-tertiary hover:text-text-primary cursor-pointer">
+            {t('onb.details')}
+          </button>
+          {showDetails && (
+            <pre className="text-xs text-text-muted font-mono whitespace-pre-wrap break-all
+              bg-bg-secondary rounded-lg px-3 py-2 max-h-32 overflow-y-auto">{error}</pre>
+          )}
+        </>
+      )}
+      {!signedIn && (
+        keyOpen ? (
+          <div className="pt-2 space-y-2">
+            <p className="text-xs text-text-tertiary leading-snug">{t('onb.chatgpt.keyHint')}</p>
+            <div className="flex items-center gap-2">
+              <input type="password" value={draft} onChange={(e) => setDraft(e.target.value)}
+                placeholder="sk-…" autoComplete="off" spellCheck={false}
+                className="flex-1 h-9 text-sm bg-transparent border border-border rounded-lg px-3 text-text-primary" />
+              <button disabled={busy || !draft.trim()}
+                onClick={async () => { if (await setApiKey(draft.trim())) setDraft(''); }}
+                className="h-9 px-3 rounded-lg text-sm text-text-primary border border-border hover:bg-bg-secondary
+                  disabled:opacity-40 disabled:cursor-default cursor-pointer">
+                {t('settings.apiKeySave')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setKeyOpen(true)}
+            className="block mx-auto text-xs text-text-tertiary hover:text-text-primary underline underline-offset-2 cursor-pointer">
+            {t('onb.chatgpt.useKey')}
+          </button>
+        )
+      )}
+    </div>
+  );
+}
 
 function Heading({ title, subtitle }: { title: string; subtitle: string }) {
   return (

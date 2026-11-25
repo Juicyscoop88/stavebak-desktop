@@ -1,16 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { startStep, nextStep, accessState, daysLeft } from './onboarding';
+import { startStep, afterWelcome, afterAssistant, afterSignIn, accessState, daysLeft } from './onboarding';
 
 describe('onboarding', () => {
-  it('oba účty v pořádku: rovnou do aplikace', () => {
-    expect(startStep({ claudeOk: true, stavebakOk: true })).toBeNull();
+  it('asistent i účet v pořádku: rovnou do aplikace', () => {
+    expect(startStep({ assistantOk: true, stavebakOk: true })).toBeNull();
   });
 
-  it('chybí cokoli: úvod, pak Claude, pak Stavebák, pak hotovo', () => {
-    expect(startStep({ claudeOk: true, stavebakOk: false })).toBe('welcome');
-    expect(nextStep({ claudeOk: false, stavebakOk: false })).toBe('claude');
-    expect(nextStep({ claudeOk: true, stavebakOk: false })).toBe('stavebak');
-    expect(nextStep({ claudeOk: true, stavebakOk: true })).toBe('done');
+  it('chybí cokoli: úvod, pak volba asistenta', () => {
+    expect(startStep({ assistantOk: true, stavebakOk: false })).toBe('welcome');
+    expect(startStep({ assistantOk: false, stavebakOk: true })).toBe('welcome');
+    expect(afterWelcome()).toBe('assistant');
+  });
+
+  it('nepřipravený asistent: přihlášení k tomu, který si projektant vybral', () => {
+    expect(afterAssistant('claude', { assistantOk: false, stavebakOk: false })).toBe('claude');
+    expect(afterAssistant('codex', { assistantOk: false, stavebakOk: false })).toBe('chatgpt');
+  });
+
+  it('připravený asistent: rovnou účet Stavebák, nebo hotovo', () => {
+    expect(afterAssistant('codex', { assistantOk: true, stavebakOk: false })).toBe('stavebak');
+    expect(afterAssistant('claude', { assistantOk: true, stavebakOk: true })).toBe('done');
+    expect(afterSignIn({ stavebakOk: false })).toBe('stavebak');
+    expect(afterSignIn({ stavebakOk: true })).toBe('done');
   });
 });
 
