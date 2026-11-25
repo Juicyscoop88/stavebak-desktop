@@ -34,6 +34,10 @@ describe('přístup podle účtu', () => {
     expect(accessState(true, null, now)).toBe('unknown');
   });
 
+  it('beta zdarma: žádná lišta ani odpočet', () => {
+    expect(accessState(true, { plan: 'beta', trialEndsAt: now.toISOString() }, now)).toBe('beta');
+  });
+
   it('odhlášeno', () => {
     expect(accessState(false, null, now)).toBe('signed-out');
   });

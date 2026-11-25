@@ -337,7 +337,8 @@ export function SetupWizard() {
             claudeDone={aiProvider === 'codex' ? chatgptReady : authStatus === 'ok'}
             stavebakDone={stavebakDone}
             claudeNote={assistantNote(aiProvider, accountName, openai.status, t)}
-            stavebakNote={accountStatus?.plan === 'trial'
+            stavebakNote={accountStatus?.plan === 'beta' ? t('settings.stavebakBeta')
+              : accountStatus?.plan === 'trial'
               ? t('onb.stavebak.trialUntil').replace('{date}', new Date(accountStatus.trialEndsAt).toLocaleDateString('cs-CZ'))
               : undefined}
           />

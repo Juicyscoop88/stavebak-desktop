@@ -166,6 +166,7 @@ function StavebakAccountRow({ linkButton }: { linkButton: string }) {
   const description = !signedIn
     ? (signedIn === false ? t('settings.stavebakSignedOut') : '…')
     : !status ? (error ? t('settings.stavebakError') : '…')
+    : status.plan === 'beta' ? t('settings.stavebakBeta')
     : status.plan === 'trial' ? t('settings.stavebakTrial').replace('{date}', date(status.trialEndsAt))
     : status.plan === 'pro' ? t('settings.stavebakPro').replace('{date}', date(status.currentPeriodEnd))
     : t('settings.stavebakFree');
@@ -175,7 +176,7 @@ function StavebakAccountRow({ linkButton }: { linkButton: string }) {
       {signedIn === false && (
         <button className={linkButton} disabled={busy} onClick={() => { login(); }}>{t('settings.signIn')}</button>
       )}
-      {signedIn && status && (
+      {signedIn && status && status.plan !== 'beta' && (
         <button className={linkButton} disabled={busy} onClick={() => { openBilling(); }}>
           {status.plan === 'pro' ? t('settings.manage') : t('settings.stavebakBuy')}
         </button>

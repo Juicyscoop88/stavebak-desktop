@@ -37,7 +37,8 @@ export function afterSignIn(f: Pick<OnboardingFacts, 'stavebakOk'>): OnboardingS
   return f.stavebakOk ? 'done' : 'stavebak';
 }
 
-export type Plan = 'trial' | 'free' | 'pro';
+/** 'beta': placení je na serveru vypnuté, každý účet má všechno zdarma. */
+export type Plan = 'beta' | 'trial' | 'free' | 'pro';
 
 /** Co aplikace ukáže nad chatem podle účtu Stavebák. */
 export type Access =
@@ -46,7 +47,8 @@ export type Access =
   | 'trial'        // zkušební měsíc, víc než REMINDER_DAYS dní
   | 'trial-ending' // posledních REMINDER_DAYS dní: lišta s Koupit Pro
   | 'expired'      // zkušební měsíc skončil bez platby: lišta s platbou, chat běží bez nástrojů
-  | 'pro';
+  | 'pro'
+  | 'beta';        // beta zdarma: žádná lišta
 
 export const REMINDER_DAYS = 5;
 
@@ -61,6 +63,7 @@ export function accessState(
 ): Access {
   if (signedIn === false) return 'signed-out';
   if (!signedIn || !status) return 'unknown';
+  if (status.plan === 'beta') return 'beta';
   if (status.plan === 'pro') return 'pro';
   if (status.plan === 'free') return 'expired';
   return daysLeft(status.trialEndsAt, now) <= REMINDER_DAYS ? 'trial-ending' : 'trial';
