@@ -1,6 +1,7 @@
 #![allow(unexpected_cfgs)]
 
 mod codex_bridge;
+mod codex_history;
 mod computer_use;
 mod computer_use_native;
 mod computer_use_server;
@@ -2803,7 +2804,7 @@ async fn delete_session(session_id: String, session_path: String) -> Result<(), 
                 .map_err(|e| format!("Failed to canonicalize path: {}", e))?;
             let home = dirs::home_dir().ok_or("Cannot find home dir")?;
             let allowed_dir = home.join(".claude").join("projects");
-            if !canonical.starts_with(&allowed_dir) {
+            if !canonical.starts_with(&allowed_dir) && !codex_history::is_rollout(&canonical) {
                 return Err(format!(
                     "Refusing to delete file outside ~/.claude/projects/: {:?}",
                     canonical
@@ -2822,14 +2823,11 @@ async fn list_sessions() -> Result<Vec<Value>, String> {
     let home = dirs::home_dir().ok_or("Cannot find home dir")?;
     let claude_dir = home.join(".claude").join("projects");
 
-    if !claude_dir.exists() {
-        return Ok(vec![]);
-    }
-
     // Only show sessions tracked by Stavebak
     let tracked = load_tracked_sessions();
 
-    let mut sessions = vec![];
+    // Konverzace s Codexem (ChatGPT) mají vlastní historii v CODEX_HOME
+    let mut sessions = codex_history::list_sessions();
     if let Ok(entries) = std::fs::read_dir(&claude_dir) {
         for entry in entries.flatten() {
             if entry.path().is_dir() {
@@ -3266,6 +3264,9 @@ fn decode_project_name(encoded: &str) -> String {
 #[tauri::command]
 async fn load_session(path: String) -> Result<Vec<Value>, String> {
     use std::io::BufRead;
+    if codex_history::is_rollout(std::path::Path::new(&path)) {
+        return codex_history::load(std::path::Path::new(&path));
+    }
     let file = std::fs::File::open(&path).map_err(|e| format!("Failed to open session: {}", e))?;
     let reader = std::io::BufReader::new(file);
     let mut messages = vec![];

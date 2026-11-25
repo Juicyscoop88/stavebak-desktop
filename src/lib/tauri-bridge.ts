@@ -67,6 +67,8 @@ export interface SessionListItem {
   preview: string;
   /** CLI's own session UUID, used for --resume. Null for new sessions before CLI responds. */
   cliResumeId: string | null;
+  /** 'codex' u konverzací s ChatGPT (vlákno Codexu), jinak historie Claude */
+  provider?: AiProvider;
 }
 
 export interface ContentSearchResult {

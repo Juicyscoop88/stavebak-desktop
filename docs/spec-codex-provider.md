@@ -50,7 +50,7 @@ Parser chatu (`useStreamProcessor.ts`) zůstává. Rust adaptér `codex_session.
 
 Ovládání: další zpráva = `turn/start` na stejném vlákně, Stop = `turn/interrupt` (proces běží dál), změna modelu = `model`/`effort` v příštím `turn/start` (bez respawnu). Resume = `thread/resume` s `excludeTurns`.
 
-Historie konverzací: Codex ukládá vlákna do `$CODEX_HOME/sessions/…/rollout-*.jsonl`. Seznam konverzací v desktopu dostane druhý zdroj (`thread/list` přes app-server, nebo čtení rollout souborů); konverzace nese poskytovatele a otevře se jen u něj.
+Historie konverzací (hotovo, `codex_history.rs`): Codex ukládá vlákna do `$CODEX_HOME/sessions/…/rollout-*.jsonl`. Seznam konverzací čte i rollout soubory vláken, která založil desktop (`originator`), dokončené položky (`item_completed`) převede do tvaru historie Claude Code. Konverzace nese poskytovatele (`provider: codex`), pokračuje se `thread/resume`.
 
 ## Spuštění Codexu
 
