@@ -69,7 +69,7 @@ export async function openConversation(session: SessionListItem): Promise<void> 
   useAgentStore.getState().clearAgents();
   chat.setSessionStatus(sessionId, 'running');
   // No live process yet — only the CLI id for --resume (see TK-329)
-  chat.setSessionMeta(sessionId, { sessionId, stdinId: undefined });
+  chat.setSessionMeta(sessionId, { sessionId, stdinId: undefined, provider: session.provider ?? 'claude' });
   useSessionStore.getState().setCliResumeId(sessionId, sessionId);
 
   try {
